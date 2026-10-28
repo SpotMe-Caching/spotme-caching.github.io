@@ -1,1 +1,14 @@
-
+{
+  "name": "spotme-android-shell",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Capacitor-Hülle für die SpotMe-PWA (Test-APK)",
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/geolocation": "^6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.0.0"
+  }
+}
