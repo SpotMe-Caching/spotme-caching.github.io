@@ -36,6 +36,54 @@ jobs:
           npx cap add android
           npx cap sync android
 
+      - name: Berechtigungen einbauen (Standort, Benachrichtigungen)
+        working-directory: android-app
+        run: |
+          MAN=android/app/src/main/AndroidManifest.xml
+          for p in ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION POST_NOTIFICATIONS; do
+            sed -i "s#</manifest>#    <uses-permission android:name=\"android.permission.$p\" />\n</manifest>#" "$MAN"
+          done
+          DIR=android/app/src/main/java/io/github/spotmecaching/app
+          mkdir -p "$DIR"
+          cat > "$DIR/MainActivity.java" <<'JAVA'
+          package io.github.spotmecaching.app;
+
+          import android.Manifest;
+          import android.content.pm.PackageManager;
+          import android.os.Build;
+          import android.os.Bundle;
+          import androidx.core.app.ActivityCompat;
+          import androidx.core.content.ContextCompat;
+          import com.getcapacitor.BridgeActivity;
+          import java.util.ArrayList;
+
+          public class MainActivity extends BridgeActivity {
+            @Override
+            public void onCreate(Bundle savedInstanceState) {
+              super.onCreate(savedInstanceState);
+              String[] wanted = Build.VERSION.SDK_INT >= 33
+                ? new String[] {
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                    Manifest.permission.POST_NOTIFICATIONS }
+                : new String[] {
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION };
+              ArrayList<String> need = new ArrayList<>();
+              for (String p : wanted) {
+                if (ContextCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
+                  need.add(p);
+                }
+              }
+              if (!need.isEmpty()) {
+                ActivityCompat.requestPermissions(this, need.toArray(new String[0]), 4711);
+              }
+            }
+          }
+          JAVA
+          echo "--- Manifest-Berechtigungen:"
+          grep "uses-permission" "$MAN"
+
       - name: Debug-APK bauen
         working-directory: android-app/android
         run: |
