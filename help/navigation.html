@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Navigation · SpotMe Help</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="help.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-icon">🧭</div>
+  <div class="hero-label">Feature · Navigation</div>
+  <h1 class="hero-title">Kein App-Wechsel.<br><span>Direkt zum Spot.</span></h1>
+  <p class="hero-sub">Vollbild-Navigation direkt in SpotMe – mit Fußweg und Auto-Route gleichzeitig. Live-GPS, kein Google Maps nötig.</p>
+  <div class="hero-tag">🚶 foot-hiking · 🚗 OSRM</div>
+</div>
+
+<div class="content">
+
+  <div>
+    <div class="section-label">Was ist das</div>
+    <div class="feature-card">
+      <div class="feature-card-head">
+        <div class="feature-card-icon">🗺️</div>
+        <div class="feature-card-title">Zwei Routen. Gleichzeitig.</div>
+      </div>
+      <div class="feature-card-body">
+        SpotMe zeigt Fußweg (cyan, gestrichelt) und Auto-Route (amber) auf einmal. Der blaue Dot bist du – er bewegt sich live mit. Karte folgt automatisch.
+      </div>
+    </div>
+  </div>
+
+  <div class="mock-ui">
+    <div class="mock-row">
+      <div style="width:32px;height:3px;background:var(--cyan);border-radius:2px;border-top:1px dashed var(--cyan);"></div>
+      <div class="mock-text" style="margin-left:8px;">Fußweg · ORS foot-hiking</div>
+    </div>
+    <div class="mock-row" style="margin-top:6px;">
+      <div style="width:32px;height:3px;background:var(--acc);border-radius:2px;"></div>
+      <div class="mock-text" style="margin-left:8px;">Auto · OSRM driving</div>
+    </div>
+    <div class="mock-line"></div>
+    <div class="mock-row">
+      <div class="mock-pill">742m</div>
+      <div class="mock-pill cyan" style="margin-left:6px;">🚶 23 min</div>
+      <div class="mock-pill" style="margin-left:6px;background:var(--acc-dim);border-color:var(--acc-glow);color:var(--acc);">🚗 5 min</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="section-label">Besonderheiten</div>
+    <div class="use-cases">
+      <div class="use-case">
+        <div class="use-case-icon">🌿</div>
+        <div class="use-case-text"><strong>Off-Road fähig</strong> – Der Fußweg nutzt OpenRouteService foot-hiking und kennt Wanderwege, Trampelpfade und unbefestigte Pfade.</div>
+      </div>
+      <div class="use-case">
+        <div class="use-case-icon">📍</div>
+        <div class="use-case-text"><strong>25m-Intelligenz</strong> – Die Route wird nur neu berechnet wenn du dich wirklich weiterbewegt hast. Kein ständiges Flackern.</div>
+      </div>
+      <div class="use-case">
+        <div class="use-case-icon">⊕</div>
+        <div class="use-case-text"><strong>Zentrierungsmodus</strong> – Die Karte folgt dir automatisch. Scrollst du manuell stoppt das Folgen. ⊕ holt dich wieder in die Mitte.</div>
+      </div>
+      <div class="use-case">
+        <div class="use-case-icon">✕</div>
+        <div class="use-case-text"><strong>Jederzeit schließbar</strong> – ✕ oben links oder „Navigation beenden" unten. GPS-Watcher wird sauber gestoppt.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tip-box">
+    <div class="tip-box-icon">🔑</div>
+    <div class="tip-box-text"><strong>ORS-Key:</strong> Für den foot-hiking Fußweg wird ein kostenloser OpenRouteService API-Key benötigt. Ohne Key wird automatisch auf OSRM-Fußweg (befestigte Wege) zurückgefallen.</div>
+  </div>
+
+  <div class="highlight">
+    <span>🧭</span><span>Navigation ist in allen Bereichen verfügbar – Spots, Radius-Suche, Wochen-Spots, WayPoints.</span>
+  </div>
+
+  <button class="cta" onclick="window.parent.closeHelpPage()">Verstanden →</button>
+  <div class="spacer"></div>
+</div>
+</body>
+</html>

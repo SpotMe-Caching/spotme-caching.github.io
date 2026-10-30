@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>WayPoint Caching · SpotMe Help</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="help.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-icon">🗺️</div>
+  <div class="hero-label">Feature · WayPoint Caching</div>
+  <h1 class="hero-title">Geocaching.<br><span>Neu gedacht.</span></h1>
+  <p class="hero-sub">Folge einer Route von WayPoint zu WayPoint. An jedem Punkt wartet eine Frage die nur vor Ort beantwortet werden kann.</p>
+  <div class="hero-tag">🏆 Highscore · Ranking</div>
+</div>
+
+<div class="content">
+
+  <div>
+    <div class="section-label">Was ist das</div>
+    <div class="feature-card">
+      <div class="feature-card-head">
+        <div class="feature-card-icon">❓</div>
+        <div class="feature-card-title">Nur vor Ort lösbar</div>
+      </div>
+      <div class="feature-card-body">
+        Jeder WayPoint hat eine Frage mit 3 Antwortoptionen. Die Koordinaten des nächsten WayPoints werden erst freigegeben wenn die Antwort korrekt ist – und korrekte Antworten werden serverseitig geprüft, nicht im Browser.
+      </div>
+    </div>
+  </div>
+
+  <div class="mock-ui">
+    <div class="mock-row">
+      <div class="mock-pill">WP 2/4</div>
+      <div class="mock-text" style="margin-left:8px;">Kaffee am Busbahnhof</div>
+    </div>
+    <div class="mock-line"></div>
+    <div class="mock-row"><div class="mock-dot"></div><div class="mock-text">Was steht auf dem Schild? → 55</div></div>
+    <div class="mock-row" style="margin-top:4px;">
+      <div class="mock-pill cyan">✅ Richtig! WP 3 freigeschaltet</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="section-label">Spielen</div>
+    <div class="feature-card">
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-title">Route im Entdecken-Tab wählen</div>
+            <div class="step-desc">Alle öffentlichen Routen mit Schwierigkeitsgrad, WayPoint-Anzahl und Bestzeit.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-title">Zum ersten WayPoint navigieren</div>
+            <div class="step-desc">Der Amber-Marker zeigt dein Ziel. 🧭 startet die In-App-Navigation direkt.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-title">Frage beantworten</div>
+            <div class="step-desc">Tippe auf „❓ Frage anzeigen". Wähle eine der 3 Optionen. Bei Falsch: nochmal versuchen.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <div class="step-title">Highscore</div>
+            <div class="step-desc">Deine Zeit wird gestoppt und im Highscore der Route gespeichert. Platz 1 ist dein Ziel.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="section-label">Eigene Route erstellen</div>
+    <div class="use-cases">
+      <div class="use-case">
+        <div class="use-case-icon">📍</div>
+        <div class="use-case-text"><strong>Karte antippen</strong> – Ort festlegen, Frage + 3 Optionen eingeben, richtige Antwort markieren.</div>
+      </div>
+      <div class="use-case">
+        <div class="use-case-icon">➕</div>
+        <div class="use-case-text"><strong>Beliebig viele WayPoints</strong> – Ab 2 WayPoints kann die Route veröffentlicht werden.</div>
+      </div>
+      <div class="use-case">
+        <div class="use-case-icon">🚫</div>
+        <div class="use-case-text"><strong>Keine Fotos</strong> – Absichtlich! Bilder könnten googelt werden. Nur echte Ortskenntnis hilft.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="highlight">
+    <span>🏆</span><span>Schnellster Abschluss einer Route landet auf Platz 1 des Highscores.</span>
+  </div>
+
+  <button class="cta" onclick="window.parent.closeHelpPage()">WayPoint Caching öffnen →</button>
+  <div class="spacer"></div>
+</div>
+</body>
+</html>

@@ -1,0 +1,52 @@
+{
+  "name": "Spot - Secure Messenger",
+  "short_name": "Spot",
+  "description": "Verschlüsselter P2P-Messenger für SpotMe – privat, mobil, offline-fähig.",
+  "start_url": "https://spotme-caching.github.io/chat/index.html",
+  "scope": "https://spotme-caching.github.io/chat/",
+  "display": "fullscreen",
+  "orientation": "portrait-primary",
+  "theme_color": "#0a0d12",
+  "background_color": "#0a0d12",
+  "categories": [
+    "social",
+    "communication"
+  ],
+  "lang": "de",
+  "dir": "auto",
+  "icons": [
+    {
+      "src": "https://spotme-caching.github.io/chat/icons/spot_192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://spotme-caching.github.io/chat/icons/spot_512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Neuer Chat",
+      "short_name": "Neuer Chat",
+      "description": "Neuen Chat mit Code starten",
+      "url": "https://spotme-caching.github.io/chat/index.html?action=new",
+      "icons": [
+        {
+          "src": "https://spotme-caching.github.io/chat/icons/shortcut-new.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "display_override": [
+    "standalone",
+    "window-controls-overlay",
+    "fullscreen"
+  ],
+  "id": "spotmessenger"
+}

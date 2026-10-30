@@ -1,0 +1,74 @@
+{
+  "name": "SpotMe Caching V4",
+  "short_name": "SpotMe",
+  "description": "Geocaching für Dates – entdecke geheime Treffpunkte",
+  "start_url": "/index.html",
+  "scope": "/",
+  "display": "fullscreen",
+  "orientation": "portrait-primary",
+  "background_color": "#0a0d12",
+  "theme_color": "#0a0d12",
+  
+  "categories": ["navigation", "travel", "outdoors"],
+
+  "icons": [
+    {
+      "src": "https://spotme-caching.github.io/icons/pwa_72.png",
+      "sizes": "72x72",
+      "type": "image/png"
+    },
+    {
+      "src": "https://spotme-caching.github.io/icons/pwa_96.png",
+      "sizes": "96x96",
+      "type": "image/png"
+    },
+    {
+      "src": "https://spotme-caching.github.io/icons/pwa_128.png",
+      "sizes": "128x128",
+      "type": "image/png"
+    },
+    {
+      "src": "https://spotme-caching.github.io/icons/pwa_144.png",
+      "sizes": "144x144",
+      "type": "image/png"
+    },
+    {
+      "src": "https://spotme-caching.github.io/icons/pwa_152.png",
+      "sizes": "152x152",
+      "type": "image/png"
+    },
+    {
+      "src": "https://spotme-caching.github.io/icons/pwa_192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://spotme-caching.github.io/icons/pwa_384.png",
+      "sizes": "384x384",
+      "type": "image/png"
+    },
+    {
+      "src": "https://spotme-caching.github.io/icons/pwa_512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+
+  "shortcuts": [
+    {
+      "name": "WayPoint Caching",
+      "short_name": "WayPoint",
+      "description": "Starte direkt die Geocaching-Routen-Suche",
+      "url": "/waypoints.html",
+      "icons": [{ "src": "https://spotme-caching.github.io/icons/pwa_192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Neuen Spot anlegen",
+      "short_name": "Spot",
+      "description": "Lege sofort einen neuen Treffpunkt auf der Karte an",
+      "url": "/index.html?create=true",
+      "icons": [{ "src": "https://spotme-caching.github.io/icons/pwa_192.png", "sizes": "192x192" }]
+    }
+  ]
+}

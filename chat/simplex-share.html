@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SimpleX // Code-Login</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root{
+    --bg: #0b0d10;
+    --panel: #12151a;
+    --line: #23282f;
+    --mint: #3ddc97;
+    --mint-dim: #23604a;
+    --text: #e6ebf0;
+    --sub: #7b8794;
+    --danger: #ff5c5c;
+    --mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; background:var(--bg); color:var(--text); font-family:var(--sans); }
+  body{ min-height:100vh; display:flex; align-items:flex-start; justify-content:center; padding:32px 16px; }
+
+  .app{ width:100%; max-width:480px; }
+
+  .brand{ display:flex; align-items:baseline; gap:8px; margin-bottom:24px; }
+  .brand .dot{ width:8px; height:8px; border-radius:50%; background:var(--mint); box-shadow:0 0 8px var(--mint); }
+  .brand h1{ font-size:15px; font-family:var(--mono); font-weight:500; letter-spacing:0.5px; margin:0; color:var(--text); }
+  .brand span{ font-size:12px; color:var(--sub); font-family:var(--mono); }
+
+  .tabs{ display:flex; gap:2px; margin-bottom:16px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:3px; }
+  .tab{ flex:1; text-align:center; padding:10px 0; font-size:13px; font-family:var(--mono); color:var(--sub); cursor:pointer; border-radius:8px; user-select:none; transition:.15s; }
+  .tab.active{ background:var(--mint-dim); color:var(--mint); }
+
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px; }
+
+  label{ display:block; font-size:11px; font-family:var(--mono); color:var(--sub); text-transform:uppercase; letter-spacing:0.6px; margin-bottom:6px; }
+  textarea, input[type=text]{
+    width:100%; background:#0e1116; border:1px solid var(--line); border-radius:8px;
+    color:var(--text); font-family:var(--mono); font-size:13px; padding:10px 12px;
+    resize:vertical; outline:none;
+  }
+  textarea:focus, input[type=text]:focus{ border-color:var(--mint-dim); }
+  textarea{ min-height:80px; }
+
+  .field{ margin-bottom:14px; }
+
+  select{
+    width:100%; background:#0e1116; border:1px solid var(--line); border-radius:8px;
+    color:var(--text); font-family:var(--mono); font-size:13px; padding:10px 12px; outline:none;
+  }
+
+  button.primary{
+    width:100%; padding:12px; border:none; border-radius:8px; background:var(--mint); color:#04150e;
+    font-family:var(--mono); font-weight:600; font-size:13px; letter-spacing:0.4px; cursor:pointer;
+    transition:.15s;
+  }
+  button.primary:hover{ background:#4ee6a6; }
+  button.primary:disabled{ background:var(--line); color:var(--sub); cursor:not-allowed; }
+
+  button.ghost{
+    width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--sub);
+    font-family:var(--mono); font-size:12px; cursor:pointer; margin-top:8px;
+  }
+  button.ghost:hover{ border-color:var(--mint-dim); color:var(--mint); }
+
+  .code-display{
+    text-align:center; padding:22px 0; margin:6px 0 14px;
+    font-family:var(--mono); font-size:28px; letter-spacing:4px; color:var(--mint);
+    background:#0e1116; border:1px dashed var(--mint-dim); border-radius:10px;
+  }
+  .code-display .exp{ display:block; font-size:11px; letter-spacing:0.5px; color:var(--sub); margin-top:8px; }
+
+  .note{ font-size:11.5px; color:var(--sub); line-height:1.5; margin-top:10px; }
+  .note b{ color:var(--text); }
+
+  .code-input-group{ display:flex; gap:6px; }
+  .code-input-group input{ text-align:center; letter-spacing:2px; font-size:15px; }
+
+  .result{ margin-top:16px; }
+  .result .link-box{
+    background:#0e1116; border:1px solid var(--line); border-radius:8px; padding:10px 12px;
+    font-family:var(--mono); font-size:11.5px; word-break:break-all; color:var(--text); margin-bottom:10px;
+    max-height:100px; overflow-y:auto;
+  }
+  .qr-wrap{ display:flex; justify-content:center; padding:16px; background:#fff; border-radius:10px; margin-bottom:10px; }
+
+  .status{ font-family:var(--mono); font-size:12px; padding:8px 10px; border-radius:6px; margin-bottom:12px; display:none; }
+  .status.error{ background:rgba(255,92,92,0.1); border:1px solid rgba(255,92,92,0.3); color:var(--danger); display:block; }
+  .status.ok{ background:rgba(61,220,151,0.08); border:1px solid var(--mint-dim); color:var(--mint); display:block; }
+
+  .footer-hint{ text-align:center; margin-top:18px; font-size:11px; color:#4a535e; font-family:var(--mono); }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="brand">
+    <div class="dot"></div>
+    <h1>simplex // code-login</h1>
+    <span>prototyp</span>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="create">code erstellen</div>
+    <div class="tab" data-tab="redeem">code einlösen</div>
+  </div>
+
+  <!-- CREATE -->
+  <div class="card" id="panel-create">
+    <div id="create-status" class="status"></div>
+
+    <div id="create-form">
+      <div class="field">
+        <label>SimpleX Invite-Link (aus App kopiert)</label>
+        <textarea id="link-input" placeholder="https://simplex.chat/invitation#/?v=... oder simplex:/invitation#/?..."></textarea>
+      </div>
+      <div class="field">
+        <label>Gültigkeit</label>
+        <select id="ttl-select">
+          <option value="600">10 Minuten</option>
+          <option value="900" selected>15 Minuten</option>
+          <option value="1800">30 Minuten</option>
+          <option value="3600">1 Stunde</option>
+        </select>
+      </div>
+      <button class="primary" id="generate-btn">Code generieren</button>
+    </div>
+
+    <div id="create-result" style="display:none;">
+      <div class="code-display">
+        <span id="code-output">000-000-000</span>
+        <span class="exp" id="code-exp"></span>
+      </div>
+      <button class="ghost" id="copy-code-btn">Code kopieren</button>
+      <button class="ghost" id="new-code-btn">Neuen Code erstellen</button>
+      <div class="note">
+        <b>Einmalig & befristet.</b> Nach Einlösung oder Ablauf wird der Eintrag serverseitig gelöscht.
+        Der Link wird mit einem aus dem Code abgeleiteten Schlüssel verschlüsselt gespeichert (PBKDF2 + AES-GCM) —
+        du selbst hältst den Code, nicht den Klartext-Link.
+      </div>
+    </div>
+  </div>
+
+  <!-- REDEEM -->
+  <div class="card" id="panel-redeem" style="display:none;">
+    <div id="redeem-status" class="status"></div>
+
+    <div id="redeem-form">
+      <div class="field">
+        <label>9-stelligen Code eingeben</label>
+        <div class="code-input-group">
+          <input type="text" id="code-input" placeholder="000-000-000" maxlength="11">
+        </div>
+      </div>
+      <button class="primary" id="redeem-btn">Einlösen</button>
+    </div>
+
+    <div class="result" id="redeem-result" style="display:none;">
+      <div class="qr-wrap"><div id="qrcode"></div></div>
+      <div class="link-box" id="link-output"></div>
+      <button class="ghost" id="copy-link-btn">Link kopieren</button>
+    </div>
+  </div>
+
+  <div class="footer-hint">client-seitige Verschlüsselung · window.storage · kein echter Server</div>
+</div>
+
+<script>
+// ---------- Tab handling ----------
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    const target = t.dataset.tab;
+    document.getElementById('panel-create').style.display = target === 'create' ? 'block' : 'none';
+    document.getElementById('panel-redeem').style.display = target === 'redeem' ? 'block' : 'none';
+  });
+});
+
+// ---------- Helpers ----------
+function randomCode() {
+  const n = crypto.getRandomValues(new Uint32Array(1))[0] % 1000000000;
+  return n.toString().padStart(9, '0');
+}
+function formatCode(c) { return c.slice(0,3) + '-' + c.slice(3,6) + '-' + c.slice(6,9); }
+function stripCode(c) { return c.replace(/[^0-9]/g, ''); }
+
+async function sha256hex(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+async function deriveKey(code, saltBytes) {
+  const baseKey = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(code), 'PBKDF2', false, ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: saltBytes, iterations: 150000, hash: 'SHA-256' },
+    baseKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+function bufToB64(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function b64ToBuf(b64) { return Uint8Array.from(atob(b64), c => c.charCodeAt(0)).buffer; }
+
+async function encryptLink(code, link) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKey(code, salt);
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(link));
+  return {
+    ciphertext: bufToB64(ciphertext),
+    salt: bufToB64(salt),
+    iv: bufToB64(iv),
+    created: Date.now()
+  };
+}
+
+async function decryptLink(code, record) {
+  const salt = new Uint8Array(b64ToBuf(record.salt));
+  const iv = new Uint8Array(b64ToBuf(record.iv));
+  const key = await deriveKey(code, salt);
+  const plainBuf = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv }, key, b64ToBuf(record.ciphertext)
+  );
+  return new TextDecoder().decode(plainBuf);
+}
+
+function showStatus(elId, msg, type) {
+  const el = document.getElementById(elId);
+  el.textContent = msg;
+  el.className = 'status ' + type;
+}
+function hideStatus(elId) {
+  const el = document.getElementById(elId);
+  el.className = 'status';
+}
+
+// ---------- Create flow ----------
+document.getElementById('generate-btn').addEventListener('click', async () => {
+  hideStatus('create-status');
+  const link = document.getElementById('link-input').value.trim();
+  const ttl = parseInt(document.getElementById('ttl-select').value, 10);
+
+  if (!link) {
+    showStatus('create-status', 'Fehler: Link fehlt.', 'error');
+    return;
+  }
+  if (!/^(https?:\/\/|simplex:)/i.test(link)) {
+    showStatus('create-status', 'Warnung: sieht nicht wie ein SimpleX-Link aus — trotzdem gespeichert.', 'error');
+  }
+
+  const btn = document.getElementById('generate-btn');
+  btn.disabled = true;
+  btn.textContent = 'Verschlüssele...';
+
+  try {
+    const code = randomCode();
+    const record = await encryptLink(code, link);
+    record.expires = Date.now() + ttl * 1000;
+    record.used = false;
+
+    const lookupKey = 'login:' + await sha256hex(code);
+    await window.storage.set(lookupKey, JSON.stringify(record), true);
+
+    document.getElementById('code-output').textContent = formatCode(code);
+    const expDate = new Date(record.expires);
+    document.getElementById('code-exp').textContent =
+      'gültig bis ' + expDate.toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'});
+
+    document.getElementById('create-form').style.display = 'none';
+    document.getElementById('create-result').style.display = 'block';
+    hideStatus('create-status');
+  } catch (e) {
+    showStatus('create-status', 'Fehler bei Verschlüsselung: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Code generieren';
+  }
+});
+
+document.getElementById('copy-code-btn').addEventListener('click', () => {
+  const code = document.getElementById('code-output').textContent;
+  navigator.clipboard.writeText(code);
+  const b = document.getElementById('copy-code-btn');
+  const orig = b.textContent;
+  b.textContent = 'kopiert ✓';
+  setTimeout(() => b.textContent = orig, 1500);
+});
+
+document.getElementById('new-code-btn').addEventListener('click', () => {
+  document.getElementById('link-input').value = '';
+  document.getElementById('create-result').style.display = 'none';
+  document.getElementById('create-form').style.display = 'block';
+});
+
+// ---------- Redeem flow ----------
+document.getElementById('code-input').addEventListener('input', (e) => {
+  let v = stripCode(e.target.value).slice(0, 9);
+  e.target.value = v.length > 6 ? v.slice(0,3)+'-'+v.slice(3,6)+'-'+v.slice(6)
+                    : v.length > 3 ? v.slice(0,3)+'-'+v.slice(3)
+                    : v;
+});
+
+document.getElementById('redeem-btn').addEventListener('click', async () => {
+  hideStatus('redeem-status');
+  document.getElementById('redeem-result').style.display = 'none';
+
+  const raw = document.getElementById('code-input').value;
+  const code = stripCode(raw);
+
+  if (code.length !== 9) {
+    showStatus('redeem-status', 'Fehler: Code muss 9 Ziffern haben.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('redeem-btn');
+  btn.disabled = true;
+  btn.textContent = 'Prüfe...';
+
+  try {
+    const lookupKey = 'login:' + await sha256hex(code);
+    let stored;
+    try {
+      stored = await window.storage.get(lookupKey, true);
+    } catch {
+      stored = null;
+    }
+
+    if (!stored) {
+      showStatus('redeem-status', 'Code ungültig, bereits benutzt oder abgelaufen.', 'error');
+      return;
+    }
+
+    const record = JSON.parse(stored.value);
+
+    if (record.used) {
+      showStatus('redeem-status', 'Dieser Code wurde bereits eingelöst.', 'error');
+      await window.storage.delete(lookupKey, true);
+      return;
+    }
+    if (Date.now() > record.expires) {
+      showStatus('redeem-status', 'Code ist abgelaufen.', 'error');
+      await window.storage.delete(lookupKey, true);
+      return;
+    }
+
+    const link = await decryptLink(code, record);
+
+    // invalidate immediately (single-use)
+    record.used = true;
+    await window.storage.set(lookupKey, JSON.stringify(record), true);
+    await window.storage.delete(lookupKey, true);
+
+    document.getElementById('link-output').textContent = link;
+    document.getElementById('qrcode').innerHTML = '';
+    new QRCode(document.getElementById('qrcode'), {
+      text: link, width: 200, height: 200,
+      colorDark: '#0b0d10', colorLight: '#ffffff'
+    });
+
+    document.getElementById('redeem-result').style.display = 'block';
+    showStatus('redeem-status', 'Verbindung entschlüsselt. Code ist jetzt ungültig.', 'ok');
+
+  } catch (e) {
+    showStatus('redeem-status', 'Entschlüsselung fehlgeschlagen — falscher Code oder korrupter Eintrag.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Einlösen';
+  }
+});
+
+document.getElementById('copy-link-btn').addEventListener('click', () => {
+  const link = document.getElementById('link-output').textContent;
+  navigator.clipboard.writeText(link);
+  const b = document.getElementById('copy-link-btn');
+  const orig = b.textContent;
+  b.textContent = 'kopiert ✓';
+  setTimeout(() => b.textContent = orig, 1500);
+});
+</script>
+</body>
+</html>

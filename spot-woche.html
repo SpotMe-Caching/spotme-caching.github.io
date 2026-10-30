@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <!-- Eruda – Mobile Console (nur für Debugging)
+  <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+  <script>eruda.init();</script> -->
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>SpotMe · Wochen-Spot</title>
+  <meta name="theme-color" content="#0a0d12">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.css" rel="stylesheet">
+  <style>
+    /* (Dein bestehendes CSS bleibt unverändert) */
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    body {
+      background: #0a0d12;
+      color: #e2e8f0;
+      font-family: 'Outfit', sans-serif;
+      min-height: 100vh;
+      padding: 0 0 env(safe-area-inset-bottom);
+      overflow-x: hidden;
+    }
+    #map { width: 100%; height: 52vmax; max-height: 320px; filter: brightness(0.85); }
+    .maplibregl-ctrl-attrib, .maplibregl-ctrl-logo { display:none !important; }
+    .content { padding: 1.25rem 1.1rem 2rem; max-width: 480px; margin: 0 auto; }
+    .page-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.85rem 1.1rem; padding-top: max(0.85rem, env(safe-area-inset-top));
+      background: rgba(10,13,18,0.9); backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { font-family: 'Space Mono', monospace; font-size: 1rem; font-weight: 700; color: #f59e0b; display: flex; align-items: center; gap: 0.4rem; }
+    .logo-dot { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; box-shadow: 0 0 10px #f59e0b; animation: pulse-dot 2s ease infinite; }
+    @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.7)} }
+    .back-link { font-size: 0.8rem; background: rgba(15,19,24,0.9); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.1); border-radius: 40px; padding: 6px 14px; color: #94a3b8; text-decoration: none; display: inline-flex; align-items: center; gap: 0.3rem; }
+    .spot-name { font-size: 1.5rem; font-weight: 700; margin: 1rem 0 0.4rem; line-height: 1.25; }
+    .spot-tags { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.85rem; }
+    .tag { display: inline-flex; align-items: center; gap: 0.25rem; padding: 4px 12px; border-radius: 100px; font-size: 0.72rem; font-weight: 600; font-family: 'Space Mono', monospace; }
+    .tag-cat { background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.3); color: #f59e0b; }
+    .tag-time { background: rgba(34,211,238,0.08); border: 1px solid rgba(34,211,238,0.2); color: #22d3ee; }
+    .tag-expired { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #ef4444; }
+    .spot-desc { font-size: 0.9rem; color: #94a3b8; line-height: 1.5; margin-bottom: 1rem; }
+    .countdown-bar {
+      background: #141a22; border: 1px solid rgba(255,255,255,0.07); border-radius: 14px;
+      padding: 0.85rem 1rem; display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;
+    }
+    .countdown-icon { font-size: 1.4rem; }
+    .countdown-label { font-size: 0.7rem; color: #64748b; font-weight: 500; margin-bottom: 2px; }
+    .countdown-value { font-family: 'Space Mono', monospace; font-size: 0.9rem; color: #f59e0b; font-weight: 700; }
+    .checkin-count { margin-left: auto; text-align: right; }
+    .checkin-num { font-family: 'Space Mono', monospace; font-size: 1.1rem; font-weight: 700; color: #22d3ee; }
+    .checkin-label { font-size: 0.65rem; color: #64748b; }
+    .btn-row { display: flex; gap: 0.6rem; margin-bottom: 0.6rem; }
+    .btn { flex: 1; padding: 0.85rem; border-radius: 14px; border: none; font-family: 'Outfit', sans-serif; font-size: 0.9rem; font-weight: 700; cursor: pointer; transition: all 0.18s; display: flex; align-items: center; justify-content: center; gap: 0.35rem; }
+    .btn:active { transform: scale(0.96); }
+    .btn-checkin { background: #f59e0b; color: #0a0d12; }
+    .btn-checkin:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .btn-nav { background: rgba(34,211,238,0.12); border: 1px solid rgba(34,211,238,0.3); color: #22d3ee; }
+    .btn-share { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #94a3b8; }
+    .share-box { background: #141a22; border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 0.85rem 1rem; margin-top: 0.6rem; }
+    .share-box-title { font-size: 0.72rem; color: #64748b; font-weight: 500; margin-bottom: 0.5rem; font-family: 'Space Mono', monospace; letter-spacing: 0.06em; }
+    .share-url { background: #0f1318; border: 1px solid rgba(34,211,238,0.2); border-radius: 10px; padding: 0.6rem 0.85rem; font-family: 'Space Mono', monospace; font-size: 0.68rem; color: #22d3ee; word-break: break-all; cursor: pointer; margin-bottom: 0.5rem; letter-spacing: 0.02em; }
+    .loading-state, .error-state { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 50vh; text-align: center; gap: 0.75rem; padding: 2rem; }
+    .state-icon { font-size: 3rem; opacity: 0.5; }
+    .state-title { font-family: 'Space Mono', monospace; font-size: 0.9rem; color: #94a3b8; }
+    .state-sub { font-size: 0.82rem; color: #64748b; }
+    .toast { position: fixed; bottom: max(1.75rem, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%) translateY(12px); background: rgba(20,26,34,0.96); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.12); border-radius: 100px; padding: 0.5rem 1.2rem; font-size: 0.82rem; z-index: 999; opacity: 0; transition: all 0.28s; pointer-events: none; white-space: nowrap; }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .checkin-banner { background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.3); border-radius: 12px; padding: 0.75rem 1rem; font-size: 0.85rem; color: #10b981; font-weight: 600; margin-bottom: 0.75rem; display: none; text-align: center; }
+
+    /* ── Navigation Overlay ── */
+    #naviOverlay{position:fixed;inset:0;z-index:950;background:#0a0d12;display:none;flex-direction:column}
+    #naviOverlay.active{display:flex}
+    #naviMapEl{width:100%;height:100%}
+    .navi-topbar{position:absolute;top:0;left:0;right:0;padding:max(0.85rem,env(safe-area-inset-top)) 1rem 0.85rem;z-index:10;display:flex;align-items:center;gap:0.75rem;background:linear-gradient(to bottom,rgba(10,13,18,0.92) 0%,transparent 100%);pointer-events:none}
+    .navi-topbar>*{pointer-events:auto}
+    .navi-close-btn{width:38px;height:38px;border-radius:50%;background:rgba(15,19,24,0.9);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.12);color:#e2e8f0;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
+    .navi-label{flex:1;min-width:0}
+    .navi-label-name{font-weight:700;font-size:0.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .navi-label-sub{font-size:0.68rem;color:#64748b;font-family:'Space Mono',monospace;margin-top:1px}
+    .navi-recenter{width:38px;height:38px;border-radius:50%;background:rgba(15,19,24,0.9);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.12);color:#22d3ee;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
+    .navi-bottom{position:absolute;bottom:0;left:0;right:0;z-index:10;background:rgba(10,13,18,0.94);backdrop-filter:blur(20px);border-top:1px solid rgba(255,255,255,0.08);border-radius:22px 22px 0 0;padding:1rem 1.1rem;padding-bottom:max(1.1rem,env(safe-area-inset-bottom))}
+    .navi-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;margin-bottom:0.75rem}
+    .navi-stat{background:#141a22;border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:0.55rem 0.5rem;text-align:center}
+    .navi-stat-val{font-family:'Space Mono',monospace;font-size:0.88rem;font-weight:700;color:#22d3ee}
+    .navi-stat-val.amber{color:#f59e0b}
+    .navi-stat-label{font-size:0.6rem;color:#64748b;margin-top:2px}
+    .navi-legend{display:flex;gap:1rem;margin-bottom:0.65rem;font-size:0.68rem;color:#64748b;align-items:center}
+    .navi-legend-dot{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:4px}
+    .navi-stop-btn{width:100%;padding:0.75rem;border-radius:12px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#ef4444;font-family:'Outfit',sans-serif;font-size:0.88rem;font-weight:700;cursor:pointer}
+  </style>
+</head>
+<body>
+
+<div class="page-header">
+  <div class="logo"><div class="logo-dot"></div>SPOT<span style="font-weight:300">ME</span></div>
+  <a href="/" class="back-link">← App öffnen</a>
+</div>
+
+<div id="map"></div>
+<div class="content" id="content">
+  <div class="loading-state"><div class="state-icon">⏳</div><div class="state-title">Lädt Spot…</div></div>
+</div>
+
+<!-- Navigation Overlay -->
+<div id="naviOverlay">
+  <div id="naviMapEl"></div>
+  <div class="navi-topbar">
+    <button class="navi-close-btn" onclick="closeNavOverlay()">✕</button>
+    <div class="navi-label">
+      <div class="navi-label-name" id="naviSpotName">—</div>
+      <div class="navi-label-sub">NAVIGATION · GPS aktiv</div>
+    </div>
+    <button class="navi-recenter" id="naviRecenterBtn">⊕</button>
+  </div>
+  <div class="navi-bottom">
+    <div class="navi-stats">
+      <div class="navi-stat"><div class="navi-stat-val" id="naviDistVal">…</div><div class="navi-stat-label">Entfernung</div></div>
+      <div class="navi-stat"><div class="navi-stat-val" id="naviFootVal">…</div><div class="navi-stat-label">🚶 zu Fuß</div></div>
+      <div class="navi-stat"><div class="navi-stat-val amber" id="naviCarVal">…</div><div class="navi-stat-label">🚗 Auto</div></div>
+    </div>
+    <div class="navi-legend">
+      <span><span class="navi-legend-dot" style="background:#22d3ee;"></span>Fußweg</span>
+      <span><span class="navi-legend-dot" style="background:#f59e0b;"></span>Auto</span>
+    </div>
+    <button class="navi-stop-btn" onclick="closeNavOverlay()">■ Navigation beenden</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
+<script>
+'use strict';
+
+const API = 'https://spotme-chat-obom.onrender.com/api';
+let spotMap = null;
+let countdownTimer = null;
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+function esc(str) {
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+function formatTimeLeft(targetTime) {
+  const rem = targetTime - Date.now();
+  if (rem <= 0) return null;
+  const d = Math.floor(rem / 86400000);
+  const h = Math.floor((rem % 86400000) / 3600000);
+  const m = Math.floor((rem % 3600000) / 60000);
+  if (d > 0) return `${d} Tag${d !== 1 ? 'e' : ''} ${h}h`;
+  if (h > 0) return `${h}h ${m}min`;
+  return `${m} Minuten`;
+}
+
+const CATEGORY_EMOJI = {
+  'Bahnhof':'🚉','Club':'🎉','Einkaufsviertel':'🛍️','Filmtheater':'🎬',
+  'Fitnesscenter':'💪','Industriepark':'🏭','Internetcafé':'💻',
+  'Naturschutzgebiet':'🌿','Park':'🌳','Rastplatz':'🛣️','Restaurant':'🍽️',
+  'Sauna':'🧖','Strand':'🏖️','Sonstiges':'📌','Café':'☕','Aussichtspunkt':'⛰️'
+};
+
+function initMap(lat, lng) {
+  if (spotMap) spotMap.remove();
+  spotMap = new maplibregl.Map({
+    container: 'map',
+    style: 'https://tiles.openfreemap.org/styles/bright',
+    center: [lng, lat],
+    zoom: 14,
+    interactive: false,
+    attributionControl: false
+  });
+  spotMap.on('load', () => {
+    const el = document.createElement('div');
+    el.style.cssText = `width:22px; height:22px; background:#f59e0b; border-radius:50%; border:3px solid white; box-shadow:0 0 18px rgba(245,158,11,0.85);`;
+    new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(spotMap);
+  });
+}
+
+async function loadSpot(token) {
+  const content = document.getElementById('content');
+  let spot;
+  try {
+    const r = await fetch(`${API}/weekly-spots/${encodeURIComponent(token)}`);
+    if (!r.ok) throw new Error('not_found');
+    spot = await r.json();
+  } catch {
+    content.innerHTML = `
+      <div class="error-state">
+        <div class="state-icon">🔍</div>
+        <div class="state-title">Spot nicht gefunden</div>
+        <div class="state-sub">Der Link ist ungültig oder der Spot wurde gelöscht.</div>
+        <a href="/" style="margin-top:1.5rem;color:#f59e0b;font-weight:600;font-size:0.9rem;">← Zur App</a>
+      </div>`;
+    return;
+  }
+
+  const now = Date.now();
+  const meetingTime = spot.meeting_at ? new Date(spot.meeting_at).getTime() : null;
+  const expiresTime = new Date(spot.expires_at).getTime();
+  const spotExpired = expiresTime <= now;
+  const meetingExpired = meetingTime && meetingTime <= now;
+  const countdownTarget = meetingTime || expiresTime;
+  const isMeetingCountdown = !!meetingTime;
+  const countdownLabel = isMeetingCountdown ? (meetingExpired ? 'Treffen vorbei' : 'Treffen in') : (spotExpired ? 'Abgelaufen' : 'Spot verfügbar');
+
+  const catEmoji = CATEGORY_EMOJI[spot.category] || '📍';
+  const shareUrl = window.location.href;
+  initMap(+spot.lat, +spot.lng);
+
+  const checkinKey = `wk_checkin_${token}`;
+  const alreadyCheckedIn = !!sessionStorage.getItem(checkinKey);
+
+  content.innerHTML = `
+    ${alreadyCheckedIn && !spotExpired ? `<div class="checkin-banner" id="checkinBanner" style="display:block;">✅ Du bist eingecheckt!</div>` : ''}
+    <div class="spot-name">${esc(spot.name)}</div>
+    <div class="spot-tags">
+      ${spot.category ? `<span class="tag tag-cat">${catEmoji} ${esc(spot.category)}</span>` : ''}
+      ${!spotExpired ? `<span class="tag tag-time" id="timeTag">${isMeetingCountdown ? (meetingExpired ? '⏰ Treffen beendet' : `⏳ ${formatTimeLeft(meetingTime)}` ) : (spotExpired ? '⚠️ Abgelaufen' : `⏳ ${formatTimeLeft(expiresTime)}`)}</span>` : '<span class="tag tag-expired">⚠️ Abgelaufen</span>'}
+    </div>
+    ${spot.description ? `<div class="spot-desc">${esc(spot.description)}</div>` : ''}
+    <div class="countdown-bar">
+      <div class="countdown-icon">${isMeetingCountdown ? '⏰' : '🗓️'}</div>
+      <div>
+        <div class="countdown-label">${countdownLabel}</div>
+        <div class="countdown-value" id="countdownVal">
+          ${!spotExpired && countdownTarget && !(meetingExpired && isMeetingCountdown) ? formatTimeLeft(countdownTarget) : (meetingExpired ? 'Begonnen' : (spotExpired ? 'Abgelaufen' : 'Kein Datum'))}
+        </div>
+      </div>
+      <div class="checkin-count">
+        <div class="checkin-num" id="checkinNum">${spot.checkin_count}</div>
+        <div class="checkin-label">Check-ins</div>
+      </div>
+    </div>
+    ${!spotExpired ? `
+    <div class="btn-row">
+      <button class="btn btn-checkin" id="checkinBtn" ${alreadyCheckedIn ? 'disabled' : ''}>${alreadyCheckedIn ? '✅ Eingecheckt' : '📍 Einchecken'}</button>
+      <button class="btn btn-nav" id="navBtn">🧭 Route</button>
+    </div>` : ''}
+    <div class="share-box">
+      <div class="share-box-title">🔗 TEILEN</div>
+      <div class="share-url" id="shareUrlBox" onclick="copyLink()" title="Tippen zum Kopieren">${shareUrl}</div>
+      <div class="btn-row" style="margin-bottom:0;">
+        <button class="btn btn-share" onclick="copyLink()">📋 Link kopieren</button>
+        ${navigator.share ? `<button class="btn btn-share" id="nativeShareBtn">↗️ Teilen</button>` : ''}
+      </div>
+    </div>
+  `;
+
+  if (!spotExpired) {
+    document.getElementById('checkinBtn').addEventListener('click', () => doCheckin(token, checkinKey));
+    document.getElementById('navBtn').addEventListener('click', () => navigate(+spot.lat, +spot.lng, spot.name));
+    if (navigator.share) {
+      document.getElementById('nativeShareBtn')?.addEventListener('click', () => {
+        navigator.share({ title: `SpotMe · ${spot.name}`, url: shareUrl }).catch(() => {});
+      });
+    }
+    // Countdown basierend auf dem Ziel (meeting oder expires)
+    if (countdownTarget && !(meetingExpired && isMeetingCountdown)) {
+      startCountdown(countdownTarget, spotExpired, isMeetingCountdown, meetingExpired);
+    }
+  }
+}
+
+async function doCheckin(token, checkinKey) {
+  const btn = document.getElementById('checkinBtn');
+  if (!btn || btn.disabled) return;
+  btn.disabled = true;
+  btn.textContent = '⏳';
+  try {
+    const r = await fetch(`${API}/weekly-spots/${encodeURIComponent(token)}/checkin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Fehler');
+    sessionStorage.setItem(checkinKey, '1');
+    btn.textContent = '✅ Eingecheckt';
+    showToast(`✅ Eingecheckt als ${data.label}`);
+    const numEl = document.getElementById('checkinNum');
+    if (numEl) numEl.textContent = parseInt(numEl.textContent || '0') + 1;
+    const banner = document.getElementById('checkinBanner');
+    if (banner) banner.style.display = 'block';
+  } catch(e) {
+    showToast('❌ ' + (e.message || 'Einchecken fehlgeschlagen'));
+    btn.disabled = false;
+    btn.textContent = '📍 Einchecken';
+  }
+}
+
+function navigate(lat, lng, name) {
+  openNavOverlay(lat, lng, name || 'Wochen-Spot');
+}
+
+// ── Navigation Overlay ────────────────────────────────────────────────────────
+const ORS_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjI5NmQwYWMxYmM0MzQxNjdiOTE2Mjk2ZjFiOTk3MmRjIiwiaCI6Im11cm11cjY0In0='; // ← deinen ORS-Key eintragen
+
+let naviMap=null,naviUserMarker=null,naviWatchId=null,naviLastRoutePos=null,naviRouting=false,naviTarget=null,naviCentered=true;
+
+function haversineKm(lat1,lng1,lat2,lng2){const R=6371,dLat=(lat2-lat1)*Math.PI/180,dLng=(lng2-lng1)*Math.PI/180;const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
+
+function openNavOverlay(lat,lng,name){
+  naviTarget={lat,lng,name:name||'Spot'};
+  naviLastRoutePos=null;naviRouting=false;naviCentered=true;
+  document.getElementById('naviSpotName').textContent=naviTarget.name;
+  ['naviDistVal','naviFootVal','naviCarVal'].forEach(id=>document.getElementById(id).textContent='…');
+  document.getElementById('naviOverlay').classList.add('active');
+  document.getElementById('naviRecenterBtn').onclick=()=>{naviCentered=true;if(naviMap&&naviUserPos)naviMap.flyTo({center:[naviUserPos.lng,naviUserPos.lat],zoom:15,duration:600});};
+  setTimeout(()=>{
+    if(naviMap){naviMap.remove();naviMap=null;}naviUserMarker=null;
+    let naviUserPos=null;
+    naviMap=new maplibregl.Map({container:'naviMapEl',style:'https://tiles.openfreemap.org/styles/bright',center:[lng,lat],zoom:14,attributionControl:false});
+    naviMap.on('dragstart',()=>{naviCentered=false;});
+    naviMap.on('load',()=>{
+      const sEl=document.createElement('div');sEl.style.cssText='width:22px;height:22px;background:#f59e0b;border-radius:50%;border:3px solid white;box-shadow:0 0 16px rgba(245,158,11,0.8);';
+      new maplibregl.Marker({element:sEl}).setLngLat([lng,lat]).addTo(naviMap);
+    });
+    if(navigator.geolocation){
+      naviWatchId=navigator.geolocation.watchPosition(pos=>{
+        naviUserPos={lat:pos.coords.latitude,lng:pos.coords.longitude};
+        if(naviUserMarker)naviUserMarker.setLngLat([naviUserPos.lng,naviUserPos.lat]);
+        else if(naviMap){const uEl=document.createElement('div');uEl.style.cssText='width:18px;height:18px;background:#22d3ee;border-radius:50%;border:3px solid white;box-shadow:0 0 10px rgba(34,211,238,0.9);';naviUserMarker=new maplibregl.Marker({element:uEl}).setLngLat([naviUserPos.lng,naviUserPos.lat]).addTo(naviMap);}
+        if(naviCentered&&naviMap)naviMap.easeTo({center:[naviUserPos.lng,naviUserPos.lat],duration:400});
+        const m=haversineKm(naviUserPos.lat,naviUserPos.lng,lat,lng)*1000;
+        document.getElementById('naviDistVal').textContent=m<1000?`${Math.round(m)} m`:`${(m/1000).toFixed(1)} km`;
+        const moved=naviLastRoutePos?haversineKm(naviLastRoutePos.lat,naviLastRoutePos.lng,naviUserPos.lat,naviUserPos.lng)*1000:999;
+        if(moved>25)naviDoRoute(naviUserPos,lat,lng);
+      },null,{enableHighAccuracy:true,maximumAge:5000,timeout:15000});
+    }
+  },80);
+}
+
+async function naviDoRoute(uPos,lat,lng){
+  if(naviRouting)return;naviRouting=true;naviLastRoutePos={...uPos};
+  const start=`${uPos.lng},${uPos.lat}`,end=`${lng},${lat}`;
+  const base=`${uPos.lng},${uPos.lat};${lng},${lat}?overview=full&geometries=geojson`;
+  const[carData,footRaw]=await Promise.all([
+    fetch(`https://router.project-osrm.org/route/v1/bike/${base}`).then(r=>r.json()).catch(()=>null),
+    ORS_KEY?fetch(`https://api.openrouteservice.org/v2/directions/foot-hiking?api_key=${ORS_KEY}&start=${start}&end=${end}`).then(r=>r.json()).catch(()=>null):fetch(`https://router.project-osrm.org/route/v1/foot/${base}`).then(r=>r.json()).catch(()=>null)
+  ]);
+  naviRouting=false;
+  if(!naviMap)return;
+  ['navi-foot-casing','navi-foot','navi-car-casing','navi-car'].forEach(id=>{if(naviMap.getLayer(id))naviMap.removeLayer(id);});
+  ['navi-src-foot','navi-src-car'].forEach(id=>{if(naviMap.getSource(id))naviMap.removeSource(id);});
+  const fmt=s=>{const m=Math.round(s/60);return m<60?`${m} min`:`${Math.floor(m/60)}h ${m%60}m`;};
+  if(carData?.routes?.length){const r=carData.routes[0];naviMap.addSource('navi-src-car',{type:'geojson',data:{type:'Feature',geometry:r.geometry}});naviMap.addLayer({id:'navi-car-casing',type:'line',source:'navi-src-car',layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':'#0a0d12','line-width':8,'line-opacity':0.7}});naviMap.addLayer({id:'navi-car',type:'line',source:'navi-src-car',layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':'#f59e0b','line-width':5,'line-opacity':0.9}});document.getElementById('naviCarVal').textContent=fmt(r.duration);}
+  let fg=null,fd=null;
+  if(ORS_KEY&&footRaw?.features?.length){fg=footRaw.features[0].geometry;fd=footRaw.features[0].properties?.summary?.duration;}
+  else if(!ORS_KEY&&footRaw?.routes?.length){fg=footRaw.routes[0].geometry;fd=footRaw.routes[0].duration;}
+  if(fg){naviMap.addSource('navi-src-foot',{type:'geojson',data:{type:'Feature',geometry:fg}});naviMap.addLayer({id:'navi-foot-casing',type:'line',source:'navi-src-foot',layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':'#0a0d12','line-width':6,'line-opacity':0.6}});naviMap.addLayer({id:'navi-foot',type:'line',source:'navi-src-foot',layout:{'line-join':'round','line-cap':'butt'},paint:{'line-color':'#22d3ee','line-width':3,'line-opacity':1,'line-dasharray':[2,2]}});if(fd)document.getElementById('naviFootVal').textContent=fmt(fd);}
+}
+
+function closeNavOverlay(){
+  if(naviWatchId){navigator.geolocation.clearWatch(naviWatchId);naviWatchId=null;}
+  if(naviMap){naviMap.remove();naviMap=null;}
+  naviUserMarker=null;naviLastRoutePos=null;naviTarget=null;naviRouting=false;
+  document.getElementById('naviOverlay').classList.remove('active');
+}
+
+function copyLink() {
+  const box = document.getElementById('shareUrlBox');
+  if (!box) return;
+  navigator.clipboard?.writeText(box.textContent.trim())
+    .then(() => showToast('🔗 Link kopiert!'))
+    .catch(() => showToast('⚠️ Kopieren fehlgeschlagen'));
+}
+
+function startCountdown(targetTime, spotExpired, isMeetingCountdown, meetingExpired) {
+  if (countdownTimer) clearInterval(countdownTimer);
+  countdownTimer = setInterval(() => {
+    if (spotExpired) {
+      clearInterval(countdownTimer);
+      const val = document.getElementById('countdownVal');
+      if (val) val.textContent = 'Abgelaufen';
+      document.getElementById('checkinBtn')?.remove();
+      document.getElementById('navBtn')?.remove();
+      return;
+    }
+    if (isMeetingCountdown && meetingExpired) {
+      clearInterval(countdownTimer);
+      const val = document.getElementById('countdownVal');
+      if (val) val.textContent = 'Begonnen';
+      return;
+    }
+    const left = formatTimeLeft(targetTime);
+    const val = document.getElementById('countdownVal');
+    const tag = document.getElementById('timeTag');
+    if (!left) {
+      clearInterval(countdownTimer);
+      if (val) val.textContent = isMeetingCountdown ? 'Begonnen' : 'Abgelaufen';
+      if (tag && !spotExpired) tag.textContent = isMeetingCountdown ? '⏰ Treffen beendet' : '⚠️ Abgelaufen';
+    } else {
+      if (val) val.textContent = left;
+      if (tag && !spotExpired) tag.textContent = `⏳ ${left}`;
+    }
+  }, 30000);
+}
+
+const params = new URLSearchParams(window.location.search);
+const token = params.get('token');
+if (token) {
+  loadSpot(token);
+} else {
+  document.getElementById('content').innerHTML = `
+    <div class="error-state">
+      <div class="state-icon">🗓️</div>
+      <div class="state-title">Kein Token angegeben</div>
+      <div class="state-sub">Öffne SpotMe und erstelle einen Wochen-Spot.</div>
+      <a href="/" style="margin-top:1.5rem;color:#f59e0b;font-weight:600;font-size:0.9rem;">← Zur App</a>
+    </div>`;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<script src="/save-file.js"></script>
+
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>SpotMe · Caching Profil</title>
+  <meta name="theme-color" content="#0a0d12">
+  <style>
+
+  body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+}
+.logo, .mono-text, .tag, .status-pill, .countdown-value, .navi-stat-val {
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+}
+  :root {
+      --bg:      #0a0d12;
+      --sur:     #0f1318;
+      --card:    #141a22;
+      --card2:   #1a2230;
+      --bord:    rgba(255,255,255,0.07);
+      --bord2:   rgba(255,255,255,0.13);
+      --acc:     #f59e0b;
+      --acc-dim: rgba(245,158,11,0.12);
+      --acc-glow:rgba(245,158,11,0.25);
+      --cyan:    #22d3ee;
+      --green:   #10b981;
+      --red:     #ef4444;
+      --text:    #e2e8f0;
+      --muted:   #64748b;
+      --muted2:  #94a3b8;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html { background:var(--bg); }
+    body { background:var(--bg); color:var(--text); font-family:'Outfit',sans-serif; min-height:100vh; padding-bottom:max(5rem, calc(4rem + env(safe-area-inset-bottom))); }
+
+    /* ── TOP BAR ── */
+    .topbar {
+      position:sticky; top:0; z-index:100;
+      display:flex; align-items:center; gap:0.5rem;
+      padding:0.75rem 1rem;
+      padding-top:max(0.75rem, env(safe-area-inset-top));
+      background:rgba(10,13,18,0.97);
+      border-bottom:1px solid var(--bord2);
+    }
+    .logo { font-family:'Space Mono',monospace; font-size:0.95rem; font-weight:700; color:var(--acc); letter-spacing:0.05em; flex:1; display:flex; align-items:center; gap:0.4rem; }
+    .logo-dot { width:7px; height:7px; border-radius:50%; background:var(--acc); box-shadow:0 0 10px var(--acc); animation:blink 2s ease infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .icon-btn { width:38px; height:38px; border-radius:10px; border:1px solid var(--bord2); background:var(--card); color:var(--muted2); font-size:1rem; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s; }
+    .icon-btn:active { background:var(--acc-dim); border-color:var(--acc-glow); color:var(--acc); }
+
+    /* ── TABS ── */
+    .tabs { display:flex; border-bottom:1px solid var(--bord2); background:var(--sur); position:sticky; top:60px; z-index:90; }
+    .tab { flex:1; padding:0.8rem 0.2rem; text-align:center; font-size:0.75rem; font-weight:600; color:var(--muted2); cursor:pointer; border-bottom:2px solid transparent; transition:all 0.2s; white-space:nowrap; }
+    .tab.active { color:var(--acc); border-bottom-color:var(--acc); }
+
+    /* ── CONTENT ── */
+    .tab-panel { display:none; padding:1rem; }
+    .tab-panel.active { display:block; }
+
+    /* ── AVATAR ── */
+    .avatar-wrap { display:flex; flex-direction:column; align-items:center; gap:0.75rem; margin-bottom:1.5rem; padding-top:0.5rem; }
+    .avatar-ring { width:96px; height:96px; border-radius:50%; background:linear-gradient(135deg,var(--acc),#f472b6); display:flex; align-items:center; justify-content:center; font-size:2.5rem; border:2px solid var(--acc-glow); cursor:pointer; overflow:hidden; box-shadow:0 0 24px var(--acc-glow); }
+    .avatar-ring img { width:100%; height:100%; object-fit:cover; border-radius:50%; }
+    .avatar-status { font-size:0.75rem; color:var(--muted2); }
+    .avatar-btns { display:flex; gap:0.5rem; }
+    .av-btn { padding:0.45rem 0.9rem; border-radius:9px; border:1px solid var(--bord2); background:var(--card); color:var(--muted2); font-size:0.78rem; font-weight:600; cursor:pointer; font-family:'Outfit',sans-serif; }
+    .av-btn:active { background:var(--acc-dim); border-color:var(--acc-glow); color:var(--acc); }
+
+    /* ── FIELDS ── */
+    .sec-label { font-family:'Space Mono',monospace; font-size:0.68rem; font-weight:700; color:var(--acc); letter-spacing:0.12em; text-transform:uppercase; margin:1.5rem 0 0.5rem; }
+    .field { margin-bottom:0.75rem; }
+    .field label { font-size:0.78rem; color:var(--muted2); display:block; margin-bottom:0.3rem; font-weight:500; }
+    .finp { width:100%; padding:0.7rem 1rem; background:var(--card); border:1px solid var(--bord2); border-radius:11px; color:var(--text); font-family:'Outfit',sans-serif; font-size:0.92rem; outline:none; transition:border-color 0.2s; }
+    .finp:focus { border-color:rgba(245,158,11,0.5); }
+    textarea.finp { resize:none; min-height:90px; line-height:1.55; }
+    select.finp { cursor:pointer; }
+    select.finp option { background:var(--card2); }
+
+    .char-count { font-size:0.68rem; color:var(--muted); text-align:right; margin-top:3px; }
+    .char-count.warn { color:var(--acc); }
+    .tag-hint { font-size:0.72rem; color:var(--muted); margin-top:4px; }
+    .readonly-hint { display:none; font-size:0.72rem; color:var(--muted); margin-top:4px; }
+
+    .two-col { display:grid; grid-template-columns:1fr 1fr; gap:0.6rem; }
+
+    /* ── CHIP PREVIEW ── */
+    .chip-preview { display:flex; flex-wrap:wrap; gap:0.3rem; margin-top:0.5rem; min-height:28px; }
+    .chip { display:inline-flex; align-items:center; gap:0.3rem; padding:4px 10px; border-radius:100px; background:var(--acc-dim); border:1px solid var(--acc-glow); color:var(--acc); font-size:0.7rem; font-weight:500; }
+    .chip.offer { background:rgba(34,211,238,0.08); border-color:rgba(34,211,238,0.25); color:var(--cyan); }
+
+    /* ── SPOT CARDS ── */
+    .spot-card { background:var(--card); border:1px solid var(--bord); border-radius:14px; padding:0.9rem 1rem; margin-bottom:0.5rem; display:flex; align-items:center; gap:0.75rem; }
+    .sc-icon { width:40px; height:40px; border-radius:10px; background:var(--acc-dim); border:1px solid var(--acc-glow); display:flex; align-items:center; justify-content:center; font-size:1.2rem; flex-shrink:0; }
+    .sc-info { flex:1; min-width:0; }
+    .sc-name { font-weight:600; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .sc-detail { font-size:0.72rem; color:var(--muted2); margin-top:3px; display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+    .sc-tag { display:inline-block; padding:2px 7px; border-radius:100px; background:var(--acc-dim); border:1px solid var(--acc-glow); color:var(--acc); font-size:0.65rem; font-weight:600; font-family:'Space Mono',monospace; }
+    .sc-btn { height:32px; padding:0 0.7rem; border-radius:8px; border:1px solid rgba(239,68,68,0.3); background:rgba(239,68,68,0.1); color:var(--red); font-size:0.75rem; font-weight:600; cursor:pointer; font-family:'Outfit',sans-serif; }
+    .sc-btn:active { opacity:0.7; }
+
+    .empty-state { text-align:center; padding:2.5rem 1rem; color:var(--muted); font-size:0.85rem; }
+    .empty-state .es-icon { font-size:2.5rem; margin-bottom:0.6rem; opacity:0.5; display:block; }
+
+    /* ── SAVE BAR ── */
+    .save-bar { position:fixed; bottom:0; left:0; right:0; padding:0.85rem 1rem; padding-bottom:max(0.85rem, env(safe-area-inset-bottom)); background:rgba(10,13,18,0.97); backdrop-filter:blur(20px); border-top:1px solid var(--bord2); z-index:100; display:flex; gap:0.5rem; align-items:center; max-width:100%; }
+    .btn-back { padding:0.8rem 1rem; border-radius:12px; border:1px solid var(--bord2); background:transparent; color:var(--muted2); font-weight:600; font-size:0.9rem; font-family:'Outfit',sans-serif; cursor:pointer; white-space:nowrap; }
+    .btn-save { flex:1; padding:0.8rem; border-radius:12px; border:none; background:var(--acc); color:#0a0d12; font-weight:700; font-size:0.9rem; font-family:'Outfit',sans-serif; cursor:pointer; }
+    .saved-badge { display:none; align-items:center; gap:0.4rem; font-size:0.78rem; color:var(--green); padding:0.3rem 0.8rem; border-radius:100px; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.25); white-space:nowrap; }
+    .saved-badge.show { display:flex; }
+
+    /* ── TOAST ── */
+    .toast { position:fixed; bottom:5rem; left:50%; transform:translateX(-50%) translateY(10px); background:var(--card2); border:1px solid var(--bord2); border-radius:100px; padding:0.5rem 1.2rem; font-size:0.82rem; z-index:900; opacity:0; pointer-events:none; transition:all 0.3s; white-space:nowrap; }
+    .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+    /* ── CODE BOX ── */
+    .code-box { background:var(--card); border:1px solid var(--bord2); border-radius:14px; padding:1rem; text-align:center; margin-bottom:0.5rem; }
+    .code-val { font-family:'Space Mono',monospace; font-size:1.8rem; font-weight:700; color:var(--acc); letter-spacing:0.15em; }
+    .code-hint { font-size:0.72rem; color:var(--muted); margin-top:0.3rem; }
+  </style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo"><div class="logo-dot"></div>SPOT<span style="color:var(--text);font-weight:400;">ME</span> <span style="color:var(--muted);font-size:0.68rem;font-weight:300;letter-spacing:0.15em;">CACHING</span></div>
+  <button class="icon-btn" onclick="goBack()">‹</button>
+  <div class="saved-badge" id="saved-badge">✓ Gespeichert</div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <div class="tab active" id="tab-profil"  onclick="showTab('profil')">👤 Profil</div>
+  <div class="tab"        id="tab-spots"   onclick="showTab('spots')">📍 Spots</div>
+  <div class="tab"        id="tab-bluesky" onclick="showTab('bluesky')">🦋 Bluesky</div>
+  <div class="tab"        id="tab-account" onclick="showTab('account')">⚙️ Account</div>
+</div>
+
+<!-- ══ TAB: PROFIL ══ -->
+<div class="tab-panel active" id="panel-profil">
+
+  <!-- Avatar -->
+  <div class="avatar-wrap">
+    <div class="avatar-ring" id="avatar-el" onclick="document.getElementById('avatar-input').click()">🧭</div>
+    <div class="avatar-status" id="avatar-status">Tippe zum Ändern</div>
+    <div class="avatar-btns">
+      <button class="av-btn" onclick="document.getElementById('avatar-input').click()">📷 Foto wählen</button>
+      <button class="av-btn" onclick="clearAvatar()">✕ Entfernen</button>
+    </div>
+    <input type="file" id="avatar-input" accept="image/*" style="display:none" onchange="handleAvatar(this)">
+  </div>
+
+  <!-- Anzeigename -->
+  <div class="sec-label">Zur Person</div>
+  <div class="field">
+    <label>Anzeigename *</label>
+    <input type="text" id="f-name" class="finp" placeholder="Wie sollen andere dich nennen?" maxlength="40" oninput="autoSave()">
+  </div>
+  <div class="field">
+    <label>Geburtsjahr <span style="color:var(--muted);font-weight:400;">(optional)</span></label>
+    <input type="number" id="f-year" class="finp" placeholder="z.B. 1985" min="1940" max="2007" oninput="updateAge();autoSave()">
+    <div id="year-hint" class="readonly-hint">Geburtsjahr kann nicht mehr geändert werden.</div>
+    <div id="age-display" style="font-size:0.78rem;color:var(--muted2);margin-top:3px;"></div>
+  </div>
+
+  <!-- Standort -->
+  <div class="sec-label">Standort *</div>
+  <div class="field">
+    <label>Region</label>
+    <select id="f-region" class="finp" onchange="fillProvince();autoSave()">
+      <option value="">Region wählen…</option>
+    </select>
+  </div>
+  <div class="two-col">
+    <div class="field">
+      <label>Provinz</label>
+      <select id="f-province" class="finp" onchange="fillCity();autoSave()">
+        <option value="">Provinz…</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Stadt</label>
+      <select id="f-city" class="finp" onchange="autoSave()">
+        <option value="">Stadt…</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Bio -->
+  <div class="sec-label">Über mich</div>
+  <div class="field">
+    <textarea id="f-bio" class="finp" placeholder="Ein paar Worte zu deiner Person…" maxlength="400" oninput="updateCharCount('f-bio','bio-count',400);autoSave()"></textarea>
+    <div class="char-count" id="bio-count">0 / 400</div>
+  </div>
+
+  <!-- Wünsche -->
+  <div class="sec-label">Meine Wünsche *</div>
+  <div class="field">
+    <textarea id="f-wishes" class="finp" placeholder="Was wünschst du dir? z.B. Kaffee, Strand, Kino, Wandern…" maxlength="300" oninput="updateCharCount('f-wishes','wish-count',300);updateChips('f-wishes','chips-wishes','wish');autoSave()"></textarea>
+    <div class="tag-hint">Mehrere Wünsche mit Komma trennen</div>
+    <div class="char-count" id="wish-count">0 / 300</div>
+    <div class="chip-preview" id="chips-wishes"></div>
+  </div>
+
+  <!-- Angebote -->
+  <div class="sec-label">Was ich biete *</div>
+  <div class="field">
+    <textarea id="f-offers" class="finp" placeholder="Das bringst du mit: Humor, gute Gespräche, Sport…" maxlength="300" oninput="updateCharCount('f-offers','offer-count',300);updateChips('f-offers','chips-offers','offer');autoSave()"></textarea>
+    <div class="tag-hint">Mehrere Angebote mit Komma trennen</div>
+    <div class="char-count" id="offer-count">0 / 300</div>
+    <div class="chip-preview" id="chips-offers"></div>
+  </div>
+
+</div>
+
+<!-- ══ TAB: MEINE SPOTS ══ -->
+<div class="tab-panel" id="panel-spots">
+  <div style="margin-bottom:0.75rem;">
+    <div style="font-size:0.82rem;color:var(--muted2);line-height:1.55;padding:0.75rem;background:var(--card);border-radius:12px;border:1px solid var(--bord);">
+      📍 Deine platzierten Spots auf der Caching-Karte. Andere sehen diese Liste in deinem Profil.
+    </div>
+  </div>
+  <div id="spots-list">
+    <div class="empty-state"><span class="es-icon">⏳</span>Lädt…</div>
+  </div>
+</div>
+
+<!-- ══ TAB: BLUESKY ══ -->
+<div class="tab-panel" id="panel-bluesky">
+  <div style="margin-bottom:0.75rem;">
+    <div style="font-size:0.82rem;color:var(--muted2);line-height:1.55;padding:0.75rem;background:var(--card);border-radius:12px;border:1px solid var(--bord);">
+      🦋 Verbinde dein Profil mit Bluesky, um gefundene Caches und Spots automatisch mit deiner Community im dezentralen Netzwerk zu teilen!
+    </div>
+  </div>
+
+  <div class="sec-label">Schnittstellen-Status</div>
+  <div id="bsky-status-area" style="background:var(--card); border-radius:14px; padding:1rem; border: 1px solid var(--bord);">
+    <div id="bsky-status-text" style="font-size:0.9rem; color:var(--text);">Lädt…</div>
+    
+    <!-- Verbindungs-Formular -->
+    <div id="bsky-connect-form" style="display:none; margin-top:1rem; border-top:1px solid var(--bord); padding-top:1rem;">
+      <div class="field">
+        <label>Bluesky Handle</label>
+        <input type="text" id="bsky-handle" class="finp" placeholder="dein-name.bsky.social" style="margin-bottom:0.5rem;">
+      </div>
+      <div class="field">
+        <label>App-Passwort</label>
+        <input type="password" id="bsky-app-password" class="finp" placeholder="App-Passwort (aus den Bluesky-Einstellungen)">
+      </div>
+      <button id="bsky-connect-btn" class="av-btn" style="margin-top:0.5rem; width:100%; font-weight:700; background:var(--acc-dim); border-color:var(--acc-glow); color:var(--acc);">🔗 Verbindung herstellen</button>
+      <div class="tag-hint" style="margin-top:0.75rem; line-height:1.4;">
+        💡 <strong>Sicherheitshinweis:</strong> Verwende niemals dein normales Hauptpasswort. Erstelle stattdessen ein spezielles App-Passwort in deinem Bluesky-Account unter: <br>
+        <em>Einstellungen → App-Passwörter → App-Passwort erstellen</em>.
+      </div>
+    </div>
+
+    <!-- Verbindung aktiv Info -->
+    <div id="bsky-connected-info" style="display:none; margin-top:1rem; border-top:1px solid var(--bord); padding-top:1rem; text-align:center;">
+      <div style="margin-bottom:1rem; font-size:1rem; color:var(--green); display:flex; align-items:center; justify-content:center; gap:0.5rem;">
+        <span>✅</span> Verbunden als <strong id="bsky-connected-handle" style="color:var(--text);"></strong>
+      </div>
+      <button id="bsky-disconnect-btn" class="av-btn" style="background:rgba(239,68,68,0.1); color:var(--red); border-color:rgba(239,68,68,0.3); width:100%;">🔌 Verbindung trennen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TAB: ACCOUNT ══ -->
+<div class="tab-panel" id="panel-account">
+
+  <div class="sec-label">Dein Code</div>
+  <div class="code-box">
+    <div class="code-val" id="code-display">——</div>
+    <div class="code-hint">Dein einzigartiger SpotMe Code — nicht weitergeben</div>
+  </div>
+
+  <div class="sec-label">Sicherheit</div>
+  <div class="field">
+    <label>Token (automatisch vergeben)</label>
+    <input type="text" id="token-display" class="finp" readonly style="font-family:'Space Mono',monospace;font-size:0.7rem;color:var(--muted);">
+  </div>
+
+  <div class="sec-label">Backup</div>
+  <div style="font-size:0.78rem;color:var(--muted2);line-height:1.55;padding:0.65rem 0.75rem;background:var(--card);border-radius:10px;border:1px solid var(--bord);margin-bottom:0.75rem;">
+    💡 Sichere deinen Account als Datei. Falls du den Cache leerst oder das Gerät wechselst, kannst du mit dieser Datei alles wiederherstellen – dein Profil, deine Spots und deine Einladungen bleiben auf dem Server erhalten.
+  </div>
+  <div style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:1.5rem;">
+
+    <!-- Backup exportieren -->
+    <button onclick="exportBackup()"
+            style="padding:0.8rem;border-radius:12px;border:1px solid rgba(34,211,238,0.3);
+                   background:rgba(34,211,238,0.08);color:var(--cyan);font-size:0.85rem;
+                   font-weight:600;font-family:'Outfit',sans-serif;cursor:pointer;text-align:left;">
+      💾 Backup speichern
+    </button>
+
+    <!-- Backup importieren – löst den versteckten File-Input aus -->
+    <button onclick="document.getElementById('backup-input').click()"
+            style="padding:0.8rem;border-radius:12px;border:1px solid var(--bord2);
+                   background:var(--card);color:var(--muted2);font-size:0.85rem;
+                   font-weight:600;font-family:'Outfit',sans-serif;cursor:pointer;text-align:left;">
+      📥 Backup wiederherstellen
+    </button>
+
+    <!-- Versteckter File-Input – dasselbe Muster wie beim Avatar -->
+    <input type="file" id="backup-input" accept=".json,application/json"
+           style="display:none" onchange="importBackup(this)">
+  </div>
+
+  <div class="sec-label">Daten</div>
+  <div style="display:flex;flex-direction:column;gap:0.5rem;">
+    <button onclick="exportProfile()"
+            style="padding:0.8rem;border-radius:12px;border:1px solid var(--bord2);
+                   background:var(--card);color:var(--muted2);font-size:0.85rem;
+                   font-weight:600;font-family:'Outfit',sans-serif;cursor:pointer;text-align:left;">
+      📤 Profil exportieren (JSON)
+    </button>
+    <button onclick="confirmDeleteProfile()"
+            style="padding:0.8rem;border-radius:12px;border:1px solid rgba(239,68,68,0.3);
+                   background:rgba(239,68,68,0.08);color:var(--red);font-size:0.85rem;
+                   font-weight:600;font-family:'Outfit',sans-serif;cursor:pointer;text-align:left;">
+      🗑️ Profil löschen
+    </button>
+  </div>
+
+</div>
+
+<!-- SAVE BAR -->
+<div class="save-bar">
+  <button class="btn-back" onclick="goBack()">‹ Zurück</button>
+  <button class="btn-save" onclick="saveProfile()">💾 Speichern</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+const SPOT        = 'caching';
+const PROFILE_KEY = 'sm_profile_caching';
+const API_BASE    = 'https://spotme-chat-obom.onrender.com/api';
+
+const GEO = {
+  "Andalusien":{"Almería":["Mojácar","Carboneras","Las Negras","Almería","Roquetas de Mar","Adra"],"Cádiz":["San Roque","La Línea de la Concepción","Algeciras","Tarifa","Barbate","Conil de la Frontera","Chiclana de la Frontera","Cádiz","El Puerto de Santa María","Rota","Chipiona","Sanlúcar de Barrameda"],"Córdoba":["Córdoba","Lucena","Puente Genil"],"Granada":["Motril","Salobreña","Almuñécar"],"Huelva":["Matalascañas","Mazagón","Huelva","Punta Umbría","Isla Cristina","Ayamonte"],"Jaén":["Jaén","Linares","Úbeda","Baeza"],"Málaga":["Nerja","Torrox","Torre del Mar","Málaga","Torremolinos","Benalmádena","Fuengirola","Marbella","Estepona"],"Sevilla":["Sevilla","Dos Hermanas","Écija"]},
+  "Aragón":{"Huesca":["Huesca","Barbastro","Jaca"],"Teruel":["Teruel","Alcañiz"],"Zaragoza":["Zaragoza","Calatayud","Ejea von den Caballeros"]},
+  "Asturien":{"Asturien":["Navia","Luarca","Cudillero","Avilés","Gijón","Villaviciosa","Ribadesella","Llanes"]},
+  "Balearen":{"Balearen":["Palma","Alcúdia","Mahón","Ciutadella","Ibiza Stadt","Sant Antoni de Portmany"]},
+  "Baskenland":{"Álava":["Vitoria-Gasteiz","Llodio"],"Biskaya":["Muskiz","Getxo","Bermeo","Lekeitio","Ondarroa"],"Gipuzkoa":["Zarautz","San Sebastián","Pasaia","Hondarribia"]},
+  "Extremadura":{"Badajoz":["Badajoz","Mérida","Don Benito"],"Cáceres":["Cáceres","Plasencia","Trujillo"]},
+  "Galicien":{"A Coruña":["Ribeira","Muros","Fisterra","Muxía","A Coruña","Ferrol","Cedeira"],"Lugo":["Viveiro","Burela","Ribadeo"],"Ourense":["Ourense","Verín"],"Pontevedra":["A Guarda","Baiona","Vigo","Cangas","Pontevedra","Sanxenxo","Vilagarcía de Arousa"]},
+  "Kanaren":{"Las Palmas":["Las Palmas de Gran Canaria","Maspalomas","Arrecife","Puerto del Rosario"],"Santa Cruz de Tenerife":["Santa Cruz de Tenerife","Puerto de la Cruz","Los Cristianos","San Sebastián de La Gomera","Santa Cruz de La Palma","Valverde"]},
+  "Kantabrien":{"Kantabrien":["San Vicente de la Barquera","Comillas","Suances","Santander","Santoña","Laredo","Castro Urdiales"]},
+  "Kastilien-La Mancha":{"Albacete":["Albacete","Hellín"],"Ciudad Real":["Ciudad Real","Puertollano","Valdepeñas"],"Cuenca":["Cuenca","Tarancón"],"Guadalajara":["Guadalajara","Sigüenza"],"Toledo":["Toledo","Talavera de la Reina"]},
+  "Kastilien-León":{"Ávila":["Ávila","Arévalo"],"Burgos":["Burgos","Aranda de Duero","Miranda de Ebro"],"León":["León","Ponferrada","Astorga"],"Palencia":["Palencia","Aguilar de Campoo"],"Salamanca":["Salamanca","Béjar","Ciudad Rodrigo"],"Segovia":["Segovia","Cuéllar"],"Soria":["Soria","El Burgo de Osma"],"Valladolid":["Valladolid","Medina dem Campo","Tordesillas"],"Zamora":["Zamora","Benavente"]},
+  "Katalonien":{"Barcelona":["Mataró","Badalona","Barcelona","Castelldefels","Sitges","Vilanova i la Geltrú"],"Girona":["Roses","Palamós","Sant Feliu de Guíxols","Lloret de Mar","Blanes"],"Tarragona":["Calafell","Torredembarra","Tarragona","Salou","Cambrils","L'Ametlla de Mar","Sant Carles de la Ràpita"]},
+  "La Rioja":{"La Rioja":["Logroño","Calahorra","Haro"]},
+  "Madrid":{"Madrid":["Madrid","Alcalá de Henares","Getafe","Móstoles","Aranjuez"]},
+  "Murcia":{"Murcia":["San Pedro del Pinatar","San Javier","Cartagena","Mazarrón","Águilas"]},
+  "Navarra":{"Navarra":["Pamplona","Tudela","Estella-Lizarra"]},
+  "Valencia (Region)":{"Alicante":["Denia","Jávea","Calpe","Altea","Benidorm","Villajoyosa","Alicante","Santa Pola","Torrevieja"],"Castellón":["Vinaròs","Peñíscola","Alcossebre","Oropesa del Mar","Benicàssim","Castellón de la Plana"],"Valencia":["Sagunto","Valencia","Cullera","Gandía","Oliva"]}
+};
+
+let avatarData = null;
+let saveTimer  = null;
+let toastTimer;
+
+// ── NAVIGATION ───────────────────────────────────────────────────────────────
+function goBack() { window.location.href = 'index.html'; }
+
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  
+  const targetTab = document.getElementById('tab-' + name);
+  const targetPanel = document.getElementById('panel-' + name);
+  
+  if (targetTab) targetTab.classList.add('active');
+  if (targetPanel) targetPanel.classList.add('active');
+  
+  if (name === 'spots')   loadMySpots();
+  if (name === 'account') loadAccountInfo();
+  if (name === 'bluesky') loadBlueskyStatus();
+  
+  // Save-Bar nur bei Profil-Tab zeigen
+  const saveBar = document.querySelector('.save-bar');
+  if (saveBar) {
+    saveBar.style.display = name === 'profil' ? 'flex' : 'none';
+  }
+}
+
+// ── GEO ──────────────────────────────────────────────────────────────────────
+function fillRegions() {
+  const sel = document.getElementById('f-region');
+  Object.keys(GEO).forEach(r => {
+    const o = document.createElement('option');
+    o.value = o.textContent = r;
+    sel.appendChild(o);
+  });
+}
+function fillProvince() {
+  const region = document.getElementById('f-region').value;
+  const pSel = document.getElementById('f-province');
+  const cSel = document.getElementById('f-city');
+  pSel.innerHTML = '<option value="">Provinz…</option>';
+  cSel.innerHTML = '<option value="">Stadt…</option>';
+  if (!region || !GEO[region]) return;
+  Object.keys(GEO[region]).forEach(p => {
+    const o = document.createElement('option'); o.value = o.textContent = p; pSel.appendChild(o);
+  });
+}
+function fillCity() {
+  const region = document.getElementById('f-region').value;
+  const province = document.getElementById('f-province').value;
+  const cSel = document.getElementById('f-city');
+  cSel.innerHTML = '<option value="">Stadt…</option>';
+  if (!region || !province || !GEO[region]?.[province]) return;
+  GEO[region][province].forEach(c => {
+    const o = document.createElement('option'); o.value = o.textContent = c; cSel.appendChild(o);
+  });
+}
+
+// ── HELPERS ──────────────────────────────────────────────────────────────────
+function updateCharCount(inputId, countId, maxLen) {
+  const input = document.getElementById(inputId);
+  const count = document.getElementById(countId);
+  if (!input || !count) return;
+  const len = input.value.length;
+  count.textContent = `${len} / ${maxLen}`;
+  count.classList.toggle('warn', len > maxLen * 0.85);
+}
+
+function updateChips(inputId, chipContainerId, type) {
+  const val = document.getElementById(inputId).value;
+  const container = document.getElementById(chipContainerId);
+  const chips = val.split(',').map(s => s.trim()).filter(Boolean);
+  container.innerHTML = chips.map(c =>
+    `<span class="chip ${type === 'offer' ? 'offer' : ''}">${esc(c)}</span>`
+  ).join('');
+}
+
+function updateAge() {
+  const y = parseInt(document.getElementById('f-year').value);
+  const d = document.getElementById('age-display');
+  if (!y || y < 1940 || y > 2007) { d.textContent = ''; return; }
+  d.textContent = `(${new Date().getFullYear() - y} Jahre)`;
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = String(s||''); return d.innerHTML; }
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function showSavedBadge() {
+  const b = document.getElementById('saved-badge');
+  b.classList.add('show');
+  setTimeout(() => b.classList.remove('show'), 2500);
+}
+
+function spotAge(ts) {
+  if (!ts) return '';
+  const diff = Date.now() - Number(ts);
+  const min = Math.floor(diff/60000), h = Math.floor(diff/3600000), d = Math.floor(diff/86400000);
+  const col = min < 60 ? '#10b981' : h < 24 ? '#f59e0b' : '#64748b';
+  const lbl = min < 2 ? 'gerade eben' : min < 60 ? `vor ${min} Min` : h < 24 ? `vor ${h}h` : d === 1 ? 'gestern' : `vor ${d} Tagen`;
+  return `<span style="font-size:0.65rem;color:${col};font-family:'Space Mono',monospace;">${min<60?'●':'○'} ${lbl}</span>`;
+}
+
+// ── AVATAR ───────────────────────────────────────────────────────────────────
+function handleAvatar(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 1 * 1024 * 1024) { toast('⚠️ Max. 1 MB'); return; }
+  const statusEl = document.getElementById('avatar-status');
+  statusEl.textContent = '⏳ Komprimiere…';
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = async () => {
+      const canvas = document.createElement('canvas');
+      const maxW = 600; let w = img.width, h = img.height;
+      if (w > maxW) { h = h * maxW / w; w = maxW; }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      avatarData = canvas.toDataURL('image/jpeg', 0.55);
+      renderAvatar();
+      statusEl.textContent = '⏳ Speichere…';
+      await saveProfile();
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function uploadAvatarToServer() {
+  const token = localStorage.getItem('sm_token');
+  const code  = localStorage.getItem('sm_code');
+  const statusEl = document.getElementById('avatar-status');
+  
+  if (!token || !code || !avatarData) {
+    statusEl.textContent = '⚠️ Kein Token – nur lokal'; return;
+  }
+  try {
+    const res = await fetch(`${API_BASE}/avatar`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ code, token, avatar: avatarData, spot: SPOT })
+    });
+    const data = await res.json();
+    statusEl.textContent = data.success ? '✅ Gespeichert' : '⚠️ ' + (data.error || 'Fehler');
+    setTimeout(() => { statusEl.textContent = 'Tippe zum Ändern'; }, 3000);
+  } catch {
+    statusEl.textContent = '⚠️ Server nicht erreichbar';
+  }
+}
+
+async function loadAvatarFromServer() {
+  const code = localStorage.getItem('sm_code');
+  if (!code) return;
+  try {
+    const res = await fetch(`${API_BASE}/avatar/${code}?spot=${SPOT}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.avatar) { avatarData = data.avatar; renderAvatar(); }
+  } catch {}
+}
+
+function renderAvatar() {
+  const el = document.getElementById('avatar-el');
+  el.innerHTML = avatarData ? `<img src="${avatarData}" alt="Avatar">` : '🧭';
+}
+
+async function clearAvatar() {
+  const statusEl = document.getElementById('avatar-status');
+  avatarData = null; renderAvatar();
+  const token = localStorage.getItem('sm_token');
+  const code  = localStorage.getItem('sm_code');
+  if (token && code) {
+    try {
+      await fetch(`${API_BASE}/avatar/${code}`, {
+        method: 'DELETE', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ token, spot: SPOT })
+      });
+    } catch {}
+  }
+  autoSave();
+  statusEl.textContent = '✅ Gelöscht';
+  setTimeout(() => { statusEl.textContent = 'Tippe zum Ändern'; }, 2000);
+}
+
+// ── PROFIL LADEN / SPEICHERN ─────────────────────────────────────────────────
+function loadProfile() {
+  const raw = localStorage.getItem(PROFILE_KEY);
+  if (!raw) return;
+  try {
+    const p = JSON.parse(raw);
+    if (p.name)   document.getElementById('f-name').value = p.name;
+    if (p.bio)    { document.getElementById('f-bio').value = p.bio; updateCharCount('f-bio','bio-count',400); }
+    if (p.wishes) {
+      const val = Array.isArray(p.wishes) ? p.wishes.join(', ') : p.wishes;
+      document.getElementById('f-wishes').value = val;
+      updateCharCount('f-wishes','wish-count',300);
+      updateChips('f-wishes','chips-wishes','wish');
+    }
+    if (p.offers) {
+      const val = Array.isArray(p.offers) ? p.offers.join(', ') : p.offers;
+      document.getElementById('f-offers').value = val;
+      updateCharCount('f-offers','offer-count',300);
+      updateChips('f-offers','chips-offers','offer');
+    }
+    if (p.year) {
+      const yf = document.getElementById('f-year');
+      yf.value = p.year; yf.readOnly = true;
+      document.getElementById('year-hint').style.display = 'block';
+      updateAge();
+    }
+    if (p.region) {
+      document.getElementById('f-region').value = p.region; fillProvince();
+      if (p.province) {
+        document.getElementById('f-province').value = p.province; fillCity();
+        if (p.city) document.getElementById('f-city').value = p.city;
+      }
+    }
+    if (p.avatar) { avatarData = p.avatar; renderAvatar(); }
+    loadAvatarFromServer();
+  } catch(e) { console.warn('Ladefehler', e); }
+}
+
+async function saveProfile() {
+  const name = document.getElementById('f-name').value.trim();
+  if (!name) { toast('⚠️ Anzeigename ist Pflicht'); return; }
+  const wishes = document.getElementById('f-wishes').value.trim();
+  if (!wishes) { toast('⚠️ Mindestens ein Wunsch erforderlich'); return; }
+  const offers = document.getElementById('f-offers').value.trim();
+  if (!offers) { toast('⚠️ Gib an, was du bieten kannst'); return; }
+  const region = document.getElementById('f-region').value;
+  if (!region) { toast('⚠️ Region wählen'); return; }
+
+  const yearVal = document.getElementById('f-year').value;
+  const year = parseInt(yearVal);
+  if (yearVal && (year < 1940 || year > 2007)) { toast('⚠️ Gültiges Geburtsjahr eingeben'); return; }
+
+  const existing    = JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}');
+  const wishArray   = wishes.split(',').map(s => s.trim()).filter(Boolean);
+  const offerArray  = offers.split(',').map(s => s.trim()).filter(Boolean);
+
+  const profile = {
+    name, year: year || existing.year || null,
+    region,
+    province: document.getElementById('f-province').value || null,
+    city:     document.getElementById('f-city').value || null,
+    bio:      document.getElementById('f-bio').value.trim() || '',
+    wishes:   wishArray, offers: offerArray,
+    avatar:   avatarData || null,
+    updated:  Date.now()
+  };
+
+  if (profile.year) {
+    document.getElementById('f-year').readOnly = true;
+    document.getElementById('year-hint').style.display = 'block';
+  }
+
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  localStorage.setItem('sm_name', name);
+
+  // Code generieren falls noch nicht vorhanden
+  let code = localStorage.getItem('sm_code');
+  if (!code) {
+    code = Math.random().toString(36).slice(2,8).toUpperCase();
+    localStorage.setItem('sm_code', code);
+  }
+
+  // Server-Sync — Token holen/bestätigen
+  let token = localStorage.getItem('sm_token');
+  try {
+    const res = await fetch(`${API_BASE}/profile`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        code, name, spot: SPOT,
+        region: profile.region, province: profile.province, city: profile.city,
+        bio: profile.bio, wishTags: wishArray, offerTags: offerArray,
+        token: token || undefined
+      })
+    });
+    const data = await res.json();
+    console.log('Server response:', res.status, JSON.stringify(data));
+    if (res.ok && data.token) {
+      token = data.token;
+      localStorage.setItem('sm_token', token);
+      console.log('Token gespeichert:', token.slice(0,8)+'…');
+    } else if (!res.ok) {
+      toast('⚠️ Server: ' + (data.error || res.status));
+    }
+  } catch(e) {
+    console.error('Fetch error:', e);
+    toast('⚠️ Server nicht erreichbar – nur lokal gespeichert');
+  }
+
+  // Avatar hochladen NACH Token-Erhalt
+  if (avatarData && token && code) {
+    await uploadAvatarToServer();
+  }
+
+  showSavedBadge();
+  toast('✅ Profil gespeichert');
+}
+
+// ── BLUESKY ─────────────────────────────────────────────────────────────────
+async function loadBlueskyStatus() {
+  const code = localStorage.getItem('sm_code');
+  const token = localStorage.getItem('sm_token');
+  const statusText = document.getElementById('bsky-status-text');
+  const connectForm = document.getElementById('bsky-connect-form');
+  const connectedInfo = document.getElementById('bsky-connected-info');
+  
+  if (!code || !token) {
+    statusText.innerHTML = '⚠️ Bitte fülle zuerst dein Profil aus und speichere es, um Bluesky verbinden zu können.';
+    connectForm.style.display = 'none';
+    connectedInfo.style.display = 'none';
+    return;
+  }
+  
+  try {
+    const res = await fetch(`${API_BASE}/bluesky/status/${code}?token=${token}`);
+    const data = await res.json();
+    if (data.connected) {
+      connectForm.style.display = 'none';
+      connectedInfo.style.display = 'block';
+      document.getElementById('bsky-connected-handle').textContent = data.handle;
+      statusText.innerHTML = '✅ Bluesky-Konto ist erfolgreich mit SpotMe verknüpft.';
+    } else {
+      connectForm.style.display = 'block';
+      connectedInfo.style.display = 'none';
+      statusText.innerHTML = '⚡ Dein Account ist aktuell nicht mit Bluesky verbunden.';
+    }
+  } catch(e) {
+    statusText.innerHTML = '⚠️ Bluesky-Status konnte nicht geladen werden (Server-Fehler).';
+  }
+}
+
+async function connectBluesky() {
+  const handle = document.getElementById('bsky-handle').value.trim();
+  const appPassword = document.getElementById('bsky-app-password').value.trim();
+  if (!handle || !appPassword) { toast('⚠️ Bitte Handle und App-Passwort eingeben'); return; }
+  const code = localStorage.getItem('sm_code');
+  const token = localStorage.getItem('sm_token');
+  if (!code || !token) { toast('⚠️ Kein Profil gefunden'); return; }
+  
+  const btn = document.getElementById('bsky-connect-btn');
+  btn.disabled = true; btn.textContent = '⏳ Verbinde…';
+  try {
+    const res = await fetch(`${API_BASE}/bluesky/connect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, token, handle, appPassword })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      toast('✅ Bluesky erfolgreich verbunden');
+      loadBlueskyStatus();
+    } else {
+      toast('❌ ' + (data.error || 'Verbindung fehlgeschlagen'));
+    }
+  } catch(e) {
+    toast('⚠️ Server nicht erreichbar');
+  } finally {
+    btn.disabled = false; btn.textContent = '🔗 Verbindung herstellen';
+    document.getElementById('bsky-app-password').value = '';
+  }
+}
+
+async function disconnectBluesky() {
+  const code = localStorage.getItem('sm_code');
+  const token = localStorage.getItem('sm_token');
+  if (!code || !token) return;
+  if (!confirm('Bluesky-Verbindung wirklich trennen?')) return;
+  try {
+    await fetch(`${API_BASE}/bluesky/disconnect`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, token })
+    });
+    toast('🔌 Verbindung getrennt');
+    loadBlueskyStatus();
+  } catch(e) {
+    toast('⚠️ Fehler beim Trennen');
+  }
+}
+
+// Automatisch speichern nach 1,5 Sekunden Pause
+// Wird von den oninput-Handlern der Felder aufgerufen
+function autoSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    if (!document.getElementById('f-name').value.trim()) return;
+    if (!document.getElementById('f-wishes').value.trim()) return;
+    if (!document.getElementById('f-offers').value.trim()) return;
+    if (!document.getElementById('f-region').value) return;
+    saveProfile(); // async, fire and forget
+  }, 1500);
+}
+
+// ── MEINE SPOTS ──────────────────────────────────────────────────────────────
+async function loadMySpots() {
+  const code = localStorage.getItem('sm_code');
+  const container = document.getElementById('spots-list');
+  container.innerHTML = '<div class="empty-state"><span class="es-icon">⏳</span>Lädt…</div>';
+
+  let spots = [];
+  try {
+    const r = await fetch(`${API_BASE}/userspots/all`);
+    if (r.ok) {
+      const all = await r.json();
+      spots = all.filter(s => s.code === code);
+    }
+  } catch {}
+
+  if (!spots.length) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <span class="es-icon">📍</span>
+        Noch keine Spots angelegt.<br>
+        <span style="font-size:0.78rem;color:var(--muted);margin-top:0.4rem;display:block;">Tippe in der Karte auf 📍 um deinen ersten Spot zu setzen.</span>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = spots
+    .sort((a,b) => Number(b.created_at||b.createdAt||0) - Number(a.created_at||a.createdAt||0))
+    .map(s => `
+      <div class="spot-card">
+        <div class="sc-icon">🟠</div>
+        <div class="sc-info">
+          <div class="sc-name">${esc(s.name)}</div>
+          <div class="sc-detail">
+            <span class="sc-tag">${esc(s.wishTag||'')}</span>
+            ${spotAge(s.created_at||s.createdAt)}
+          </div>
+        </div>
+        <button class="sc-btn" data-del="${s.id}">🗑️</button>
+      </div>
+    `).join('');
+
+  container.querySelectorAll('[data-del]').forEach(btn => {
+    btn.addEventListener('click', () => deleteSpot(+btn.dataset.del));
+  });
+}
+
+async function deleteSpot(id) {
+  const code = localStorage.getItem('sm_code');
+  try {
+    await fetch(`${API_BASE}/userspots/${id}`, {
+      method: 'DELETE', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ code })
+    });
+  } catch {}
+  toast('🗑️ Spot gelöscht');
+  loadMySpots();
+}
+
+// ── ACCOUNT ──────────────────────────────────────────────────────────────────
+function loadAccountInfo() {
+  const code  = localStorage.getItem('sm_code')  || '——';
+  const token = localStorage.getItem('sm_token') || '——';
+  document.getElementById('code-display').textContent = code;
+  document.getElementById('token-display').value =
+    token === '——' ? '—— noch nicht vergeben' : token.slice(0,16) + '…';
+}
+
+function exportProfile() {
+  const data = {
+    profile: JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}'),
+    code:    localStorage.getItem('sm_code'),
+    exported: new Date().toISOString()
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'spotme-caching-profil.json';
+  a.click();
+}
+
+// ── BACKUP EXPORTIEREN ────────────────────────────────────────────────────────
+async function exportBackup() {
+  const code  = localStorage.getItem('sm_code');
+  const token = localStorage.getItem('sm_token');
+
+  if (!code || !token) {
+    toast('⚠️ Kein aktives Profil – erst speichern!');
+    return;
+  }
+
+  toast('⏳ Backup wird erstellt…');
+
+  const chatMessages = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('sm_local_msg_')) {
+      try { chatMessages[key] = JSON.parse(localStorage.getItem(key) || '[]'); }
+      catch { chatMessages[key] = []; }
+    }
+  }
+  const chatUnread = JSON.parse(localStorage.getItem('sm_unread_caching') || '{}');
+
+  const qs = `code=${encodeURIComponent(code)}&token=${encodeURIComponent(token)}`;
+
+  const [spotsRes, weeklyRes] = await Promise.allSettled([
+    fetch(`${API_BASE}/userspots/${code}`).then(r => r.ok ? r.json() : []),
+    fetch(`${API_BASE}/weekly-spots/mine?${qs}`).then(r => r.ok ? r.json() : [])
+  ]);
+
+  const spots       = spotsRes.status   === 'fulfilled' ? (spotsRes.value   || []) : [];
+  const weeklySpots = weeklyRes.status  === 'fulfilled' ? (weeklyRes.value  || []) : [];
+
+  const backup = {
+    version:      2,
+    spot:         SPOT,
+    exported:     new Date().toISOString(),
+    sm_code:      code,
+    sm_token:     token,
+    sm_name:      localStorage.getItem('sm_name') || '',
+    profile:      localStorage.getItem(PROFILE_KEY) || '{}',
+    chatMessages,
+    chatUnread,
+    spots,
+    weeklySpots,
+    stats: {
+      spots:       spots.length,
+      weeklySpots: weeklySpots.length,
+      chatRooms:   Object.keys(chatMessages).length,
+      chatMessages: Object.values(chatMessages).reduce((s, m) => s + m.length, 0)
+    }
+  };
+
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = `spotme-backup-${code}-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+
+  toast(`✅ Backup gespeichert · ${backup.stats.spots} Spots · ${backup.stats.chatMessages} Nachrichten`);
+}
+
+// ── BACKUP IMPORTIEREN ────────────────────────────────────────────────────────
+async function importBackup(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+
+  try {
+    const backup = JSON.parse(await file.text());
+
+    if (!backup.sm_code || !backup.sm_token) {
+      toast('⚠️ Ungültige Backup-Datei'); return;
+    }
+    if (backup.sm_code.length !== 6) {
+      toast('⚠️ Code hat falsches Format'); return;
+    }
+    if (backup.spot && backup.spot !== SPOT) {
+      toast(`⚠️ Backup gehört zu "${backup.spot}", nicht zu "${SPOT}"`); return;
+    }
+
+    const existingCode = localStorage.getItem('sm_code');
+    if (existingCode && existingCode !== backup.sm_code) {
+      const ok = confirm(
+        `Achtung: Aktives Profil (Code: ${existingCode}) wird überschrieben.\n\n` +
+        `Backup von Code "${backup.sm_code}" importieren?\n\nFortfahren?`
+      );
+      if (!ok) return;
+    }
+
+    toast('⏳ Wiederherstelle…');
+
+    localStorage.setItem('sm_code',  backup.sm_code);
+    localStorage.setItem('sm_token', backup.sm_token);
+    if (backup.sm_name) localStorage.setItem('sm_name', backup.sm_name);
+
+    if (backup.profile) {
+      try {
+        const p = JSON.parse(backup.profile);
+        localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+      } catch {}
+    }
+
+    if (backup.version >= 2 && backup.chatMessages) {
+      let restoredRooms = 0, restoredMsgs = 0;
+      for (const [key, msgs] of Object.entries(backup.chatMessages)) {
+        if (!key.startsWith('sm_local_msg_') || !Array.isArray(msgs)) continue;
+
+        const existing = JSON.parse(localStorage.getItem(key) || '[]');
+        const existingIds = new Set(existing.map(m => m.id || m.ts || JSON.stringify(m)));
+        const merged = [...existing];
+        for (const msg of msgs) {
+          const id = msg.id || msg.ts || JSON.stringify(msg);
+          if (!existingIds.has(id)) { merged.push(msg); existingIds.add(id); }
+        }
+        merged.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+        localStorage.setItem(key, JSON.stringify(merged));
+        restoredRooms++;
+        restoredMsgs += msgs.length;
+      }
+
+      if (backup.chatUnread && Object.keys(backup.chatUnread).length) {
+        localStorage.setItem('sm_unread_caching', JSON.stringify(backup.chatUnread));
+      }
+    }
+
+    await saveProfile();
+    loadProfile();
+    loadAccountInfo();
+
+    if (backup.version >= 2 && backup.stats) {
+      const s = backup.stats;
+      toast(`✅ Wiederhergestellt · ${s.spots} Spots · ${s.chatMessages} Nachrichten`);
+    } else {
+      toast('✅ Backup erfolgreich wiederhergestellt!');
+    }
+
+  } catch (e) {
+    console.error('Import-Fehler:', e);
+    toast('⚠️ Fehler beim Lesen der Datei');
+  }
+}
+
+function confirmDeleteProfile() {
+  if (!confirm('Profil wirklich löschen? Alle lokalen Daten werden entfernt.')) return;
+  const code  = localStorage.getItem('sm_code');
+  const token = localStorage.getItem('sm_token');
+  if (code && token) {
+    fetch(`${API_BASE}/profile/${code}`, {
+      method: 'DELETE', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ token, spot: SPOT })
+    }).catch(()=>{});
+  }
+  localStorage.removeItem(PROFILE_KEY);
+  localStorage.removeItem('sm_token');
+  toast('✅ Profil gelöscht');
+  setTimeout(() => goBack(), 1500);
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  fillRegions();
+  loadProfile();
+  
+  // Event-Listener an die neuen/verschobenen Buttons binden
+  document.getElementById('bsky-connect-btn')?.addEventListener('click', connectBluesky);
+  document.getElementById('bsky-disconnect-btn')?.addEventListener('click', disconnectBluesky);
+  
+  updateCharCount('f-wishes','wish-count',300);
+  updateCharCount('f-offers','offer-count',300);
+  updateCharCount('f-bio','bio-count',400);
+});
+</script>
+</body>
+</html>

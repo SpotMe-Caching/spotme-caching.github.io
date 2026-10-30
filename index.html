@@ -1,0 +1,3666 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+
+<meta charset="UTF-8">
+
+  <!-- Eruda – Mobile Console (nur für Debugging)
+  <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+  <script>eruda.init();</script> -->
+
+
+<link rel="stylesheet" href="spotme.css">
+
+<script src="https://unpkg.com/marked@4.3.0/marked.min.js"></script>
+
+<script src="bluesky.js"></script>
+<script src="https://unpkg.com/lucide@0.383.0/dist/umd/lucide.min.js"></script>
+
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0a0d12">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- iPhone X, XS, 11 Pro, 12 Mini, 13 Mini  -->
+<link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)" href="/icons/splash-1125x2436.png">
+<!-- iPhone 8, 7, 6, SE -->
+<link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)" href="/icons/splash-750x1334.png">
+<!-- iPhone 14, 15 Pro -->
+<link rel="apple-touch-startup-image" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)" href="/icons/splash-1179x2556.png">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>SpotMe · 🇪🇺</title>
+  <meta name="theme-color" content="#0a0d12">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.css" rel="stylesheet">
+  <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
+  <script src="nav.js"></script>
+  
+</head>
+<body>
+
+<div id="map"></div>
+<div id="mapGrid"></div>
+<div class="crosshair" id="crosshair"></div>
+<div class="place-mode-bar" id="placeModeBar">
+  <div class="pm-icon">📍</div>
+  <div class="pm-text" data-i18n="place_mode_text">Spot platzieren</div>
+  <div class="pm-sub" data-i18n="place_mode_sub">Tippe auf die Karte</div>
+</div>
+  
+  <!-- Header- Bar (rechts neben Rail) -->
+  <div class="topbar">
+    <div class="logo">
+      <div class="logo-dot"></div>
+      SPOT<span style="color:var(--text);font-weight:300;">ME</span>
+      <span class="logo-sub">· CACHING</span>
+    </div>
+
+  <div style="display:flex;align-items:center;gap:5px;margin-left:auto;overflow-x:auto;">
+    <button class="topbar-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Hell/Dunkel">
+    <i data-lucide="sun" class="nav-icon" id="themeIcon"></i>
+    </button>
+    <button class="topbar-btn" id="filterTopBtn" onclick="toggleFilterStrip()" title="Kategorien">
+    <i data-lucide="layers" class="nav-icon"></i>
+    </button>
+    <button class="topbar-btn" id="radiusTopBtn" onclick="openRadiusSearch()" title="Radius-Suche">
+    <i data-lucide="scan" class="nav-icon"></i>
+    </button>
+    <button class="topbar-btn" id="newsTopBtn" onclick="loadNewsTeaser(true)" title="News">
+    <i data-lucide="newspaper" class="nav-icon"></i>
+    </button>
+    <button class="topbar-btn" id="hikingToggleBtn" onclick="toggleHikingLayer()" title="Wanderwege">🥾</button>
+    <button class="topbar-btn" onclick="donate(7)">❤️</button>
+   </div>
+ </div>
+
+  <!-- Nav-Rail (links, scrollbar) -->
+  <div id="navRail">
+    <div class="rail-logo">S</div>
+    <div class="rail-sep"></div>
+
+    <button class="nav-btn" onclick="location.href='profil-caching.html'" title="Profil">
+      <i data-lucide="user" class="nav-icon"></i>
+    </button>
+    <button class="nav-btn" id="inviteHeaderBtn" onclick="openDrawer('invites')" title="Einladungen">
+      <i data-lucide="mail" class="nav-icon"></i>
+      <span class="badge" id="inviteBadge" style="display:none">0</span>
+    </button>
+    <button class="nav-btn" id="meetingsBtn" onclick="openMeetingsModal()" title="Treffen">
+      <i data-lucide="calendar" class="nav-icon"></i>
+      <span class="badge" id="meetingsBadge" style="display:none;background:var(--green);color:#080b10;">0</span>
+    </button>
+    <button class="nav-btn" id="chatHeaderBtn" onclick="openDrawer('chats')" title="Chat">
+      <i data-lucide="message-circle" class="nav-icon"></i>
+      <span class="badge" id="chatBadge" style="display:none">0</span>
+    </button>
+    <button class="nav-btn" onclick="openDrawer('favorites')" title="Favoriten">
+      <i data-lucide="star" class="nav-icon"></i>
+      <span class="badge" id="favBadge" style="display:none">0</span>
+    </button>
+    <button class="nav-btn" id="weeklyBtn" onclick="openDrawer('weekly')" title="Wochen-Spots">
+      <i data-lucide="calendar-days" class="nav-icon"></i>
+      <span class="badge" id="weeklyBadge" style="display:none;background:var(--cyan);color:#080b10;">0</span>
+    </button>
+
+    <div class="rail-sep"></div>
+
+    <button class="nav-btn" id="pushBtn" onclick="togglePushNotifications()" title="Benachrichtigungen">
+      <i data-lucide="bell" class="nav-icon"></i>
+    </button>
+    <button class="nav-btn" onclick="location.href='waypoints.html'" title="WayPoint Caching">
+      <i data-lucide="map" class="nav-icon"></i>
+    </button>
+    <button class="nav-btn" id="liveBtn" onclick="callWithHelp('livespots', () => openDrawer('live'))" title="Live Spots">
+      <i data-lucide="radio" class="nav-icon"></i>
+      <span class="badge" id="liveBadge" style="display:none;background:var(--green);color:#080b10;">0</span>
+    </button>
+
+    <div class="rail-sep"></div>
+
+    <!-- Neuer Bluesky-Button vor dem Reload-Button -->
+    <button class="nav-btn" id="bskyRailBtn" onclick="openBlueskyShareDialog()" title="Auf Bluesky teilen" style="display:none;">
+      <!-- Custom Inline SVG für das Bluesky Butterfly Logo -->
+      <svg viewBox="0 0 512 512" style="width:20px; height:20px; fill:var(--cyan); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.15)'" onmouseout="this.style.transform='scale(1)'">
+        <path d="M111.8 71.2C159.2 110.1 224 196.8 256 240c32-43.2 96.8-129.9 144.2-168.8C440.1 39.7 512 18.2 512 77.3c0 11.2-5.7 114.7-9 161.8-6.1 86.4-33.1 108.1-109.9 92 115.8 82.2 135 158.3 75.3 158.3-55 0-112.5-121-142.2-177.3C296.3 368.5 238.8 489.5 183.8 489.5 124 489.5 143.3 413.4 259.1 331.1 182.2 347.1 155.3 325.5 149.2 239.1c-3.3-47.1-9-150.6-9-161.8C140.2 18.2 212 39.7 256 71.2z"/>
+      </svg>
+    </button>
+
+    <button class="nav-btn" onclick="manualRefresh()" title="Neu laden">
+      <i data-lucide="refresh-ccw" class="nav-icon"></i>
+    </button>
+
+  </div>
+
+<div class="stats-strip">
+  <div class="stat-pill">SPOTS <span class="val" id="statSpots">0</span></div>
+  <div class="stat-pill">INVITES <span class="val" id="statInvites">0</span></div>
+</div>
+
+<!-- Kategorie-Filter – wird dynamisch aus allSpots befüllt -->
+<div class="filter-strip" id="filterStrip" style="display:none;"></div>
+
+<div class="fab-wrap">
+  <button class="fab" id="fabBtn" onclick="togglePlaceMode()">📍</button>
+  <span class="fab-label" id="fabLabel">SPOT</span>
+</div>
+
+<div class="dock">
+  <button class="dock-btn" onclick="openDrawer('myspots')"><span class="di">🟠</span>Meine Spots</button>
+  <button class="dock-btn" onclick="openDrawer('all')"><span class="di">🌐</span>Alle Spots</button>
+  <button class="dock-btn" id="newSpotsBtn" onclick="openNewSpots()"><span class="di">✨</span>Neue Spots</button>
+</div>
+
+<!-- ── Help Page Overlay (iframe, 80% Screen, scrollable) ──────────────── -->
+<div id="helpPageOverlay" onclick="handleHelpOverlayBg(event)">
+  <div id="helpPageCard">
+    <button id="helpPageClose" onclick="closeHelpPage()">
+      <i data-lucide="x" style="width:16px;height:16px;stroke-width:2.5;"></i>
+    </button>
+    <iframe id="helpPageFrame" src="" scrolling="yes" frameborder="0"></iframe>
+  </div>
+</div>
+<div class="help-longpress-ring" id="helpLongpressRing"></div>
+
+<div class="drawer-overlay" id="drawerOverlay"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-handle"></div>
+  <div class="drawer-head">
+    <div class="drawer-title" id="drawerTitle">Spots</div>
+    <button class="drawer-close" id="drawerCloseBtn">✕</button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+</div>
+
+<div class="modal-overlay" id="spotModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="spotModalTitle">📍 Spot anlegen</div>
+    <span class="finp-label">Name</span>
+    <input id="spotName" class="finp" placeholder="z.B. Schöner Brunnen" maxlength="50">
+    <span class="finp-label">Beschreibung (optional)</span>
+    <input id="spotDesc" class="finp" placeholder="Was macht diesen Spot besonders?" maxlength="120">
+    <span class="finp-label">Wunsch-Tag</span>
+    <select id="spotWish" class="finp"></select>
+    <span class="finp-label">Kategorie</span>
+    <select id="spotCategory" class="finp">
+  <option value="">— keine —</option>
+  <option value="Bahnhof">🚉 Bahnhof</option>
+  <option value="Club">🎉 Club</option>
+  <option value="Einkaufsviertel">🛍️ Einkaufsviertel</option>
+  <option value="Filmtheater">🎬 Filmtheater</option>
+  <option value="Fitnesscenter">💪 Fitnesscenter</option>
+  <option value="Industriepark">🏭 Industriepark</option>
+  <option value="Internetcafé">💻 Internetcafé</option>
+  <option value="Naturschutzgebiet">🌿 Naturschutzgebiet</option>
+  <option value="Park">🌳 Park</option>
+  <option value="Rastplatz">🛣️ Rastplatz</option>
+  <option value="Restaurant">🍽️ Restaurant</option>
+  <option value="Sauna">🧖 Sauna</option>
+  <option value="Strand">🏖️ Strand</option>
+  <option value="Sonstiges">📌 Sonstiges</option>
+</select>
+    <span class="finp-label">Foto (optional)</span>
+    <div id="spotPhotoPreview" style="display:none;margin-bottom:0.6rem;position:relative;">
+      <img id="spotPhotoImg" src="" alt="" style="width:100%;max-height:160px;object-fit:cover;border-radius:11px;border:1px solid var(--bord2);">
+      <button id="spotPhotoClear" style="position:absolute;top:6px;right:6px;width:26px;height:26px;border-radius:50%;border:none;background:rgba(0,0,0,0.6);color:#fff;font-size:0.8rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+    </div>
+    <button id="spotPhotoBtn" style="width:100%;padding:0.65rem;border-radius:11px;border:1px dashed var(--bord2);background:var(--card);color:var(--muted2);font-size:0.82rem;font-weight:500;cursor:pointer;font-family:'Outfit',sans-serif;margin-bottom:0.6rem;">
+      📷 Foto hinzufügen
+    </button>
+    <input type="file" id="spotPhotoInput" accept="image/*" style="display:none">
+    <!-- Status-Hinweis für Bild-Moderation – wird von openSpotEdit() befüllt -->
+    <div id="spotPhotoHint"
+         style="display:none;font-size:0.7rem;color:var(--muted);
+                font-family:'Space Mono',monospace;margin-bottom:0.5rem;
+                padding:0.3rem 0.5rem;background:var(--card);
+                border-radius:8px;border:1px solid var(--bord);">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="spotModalCancel">Abbrechen</button>
+      <button class="btn-primary" id="spotModalSave">💾 Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- Persistenter Toast für dringende Treffen (< 2h) -->
+<div id="urgentToast" onclick="openMeetingsModal()">
+  <span style="font-size:1.2rem;">⏰</span>
+  <div style="flex:1;">
+    <div id="urgentToastText" style="font-weight:600;"></div>
+    <div style="font-size:0.7rem;opacity:0.85;">Tippen für Details →</div>
+  </div>
+  <button onclick="event.stopPropagation();dismissUrgentToast()"
+          style="background:none;border:none;color:#fff;font-size:1.1rem;
+                 cursor:pointer;padding:0.2rem;opacity:0.7;">✕</button>
+</div>
+
+<!-- Bevorstehende Treffen Modal -->
+<div class="modal-overlay" id="meetingsModal" style="z-index:700;">
+  <div class="modal meetings-modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📅 Bevorstehende Treffen</div>
+    <div id="meetingsContent">
+      <div class="empty-state"><div class="es-icon">⏳</div>Lädt…</div>
+    </div>
+    <div class="modal-actions" style="margin-top:0.5rem;">
+      <button class="btn-ghost" onclick="closeModals()">Schließen</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="inviteModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📨 Einladung senden</div>
+    <div id="inviteSpotInfo" style="font-size:0.85rem;color:var(--muted2);margin-bottom:0.8rem;"></div>
+    <span class="finp-label">Von</span>
+    <input type="datetime-local" id="inviteStart" class="finp">
+    <span class="finp-label">Bis</span>
+    <input type="datetime-local" id="inviteEnd" class="finp">
+    <div class="modal-actions">
+      <button class="btn-ghost" id="inviteModalCancel">Abbrechen</button>
+      <button class="btn-primary" id="inviteModalSend">Senden</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="spotDetailModal" style="z-index:650;">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div id="spotDetailMap"></div>
+    <div id="spotDetailContent"><div class="empty-state"><div class="es-icon">⏳</div>Lädt…</div></div>
+     <div style="display:flex;gap:0.5rem;margin-top:1rem;">
+       <button class="btn-ghost" style="flex:1;" id="spotDetailClose">Schließen</button>
+       <button id="spotFavoriteBtn" title="Als Favorit speichern">⭐</button>
+       <button class="btn-primary" style="flex:1;background:var(--cyan);border-color:var(--cyan);" 
+          id="spotDetailChatBtn">💬 Chat</button>
+       <button class="btn-primary" style="flex:2;" id="spotDetailInviteBtn">📨 Einladung</button>
+     </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="profileModal" style="z-index:700;">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div id="profileModalContent"><div class="empty-state"><div class="es-icon">⏳</div>Lädt…</div></div>
+    <div style="margin-top:1rem;">
+      <button class="btn-ghost" style="width:100%;" id="profileModalClose">Schließen</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="radiusModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🔍 Radius-Suche</div>
+    <p style="font-size:0.82rem;color:var(--muted2);margin-bottom:0.75rem;">Spots anderer Profile in deiner Umgebung.</p>
+
+    <!-- Kategorie-Filter -->
+    <span style="font-size:0.7rem;color:var(--muted);font-weight:500;display:block;margin-bottom:0.35rem;">Kategorie</span>
+    <div id="rsCatStrip" class="rs-cat-strip"></div>
+
+    <!-- Radius-Auswahl -->
+    <span style="font-size:0.7rem;color:var(--muted);font-weight:500;display:block;margin-bottom:0.35rem;">Umkreis</span>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;margin-bottom:0.8rem;">
+      <button class="radius-choice" id="rc2">2 km</button>
+      <button class="radius-choice" id="rc5">5 km</button>
+      <button class="radius-choice" id="rc10">10 km</button>
+    </div>
+
+    <div id="radiusResult" style="font-size:0.8rem;color:var(--muted2);text-align:center;min-height:1.2rem;"></div>
+    <div class="modal-actions" style="margin-top:0.8rem;">
+      <button class="btn-ghost" id="radiusClear">✕ Löschen</button>
+      <button class="btn-primary" id="radiusClose">Schließen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Wochen-Spot Modal (Erstellen + Share in einem) ───────────────── -->
+<div class="modal-overlay" id="weeklyModal" style="z-index:660;">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div id="weeklyModalContent">
+      <!-- Wird per JS befüllt: create-State oder share-State -->
+    </div>
+  </div>
+</div>
+
+<!-- ── Bluesky Share Modal ───────────────── -->
+<div class="modal-overlay" id="blueskyShareModal" style="z-index: 750;">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🦋 Auf Bluesky teilen</div>
+    <p style="font-size:0.8rem;color:var(--muted2);margin-bottom:0.75rem;">
+      Wähle einen deiner platzierten Spots aus, um ihn direkt auf Bluesky zu posten!
+    </p>
+    <span class="finp-label">Wähle einen Spot</span>
+    <select id="bskySpotSelect" class="finp" style="margin-bottom:0.75rem;"></select>
+    
+    <span class="finp-label">Zusatznachricht (optional)</span>
+    <textarea id="bskyCustomMessage" class="finp" placeholder="Füge deiner Community eine persönliche Nachricht hinzu..." maxlength="200" style="resize:none; min-height:80px; margin-bottom:0.5rem;"></textarea>
+    <div id="bskyCharCount" style="font-size:0.68rem; color:var(--muted); text-align:right; margin-bottom:0.75rem;">0 / 200</div>
+
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModals()">Abbrechen</button>
+      <button class="btn-primary" id="bskyPostBtn" style="background:var(--cyan); border-color:var(--cyan); color:#0a0d12;" onclick="postToBluesky()">🦋 Posten</button>
+    </div>
+  </div>
+</div>
+
+<div class="match-screen" id="matchScreen">
+  <div class="match-ring">🎯</div>
+  <div class="match-label">Match gefunden</div>
+  <div class="match-name" id="matchName"></div>
+  <div class="match-spot" id="matchSpot"></div>
+  <button class="match-btn" id="matchCloseBtn">✨ Weiter</button>
+</div>
+
+<div class="img-fullscreen" id="imgFullscreen" onclick="this.classList.remove('show')">
+  <img id="imgFullscreenSrc" src="" alt="">
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ── News Teaser (neu platziert, außerhalb von naviOverlay) ── -->
+<div id="newsOverlay">
+  <div class="news-card">
+    <div class="news-emoji" id="newsEmoji">🆕</div>
+    <div class="news-title" id="newsTitle"></div>
+    <div class="news-body" id="newsBody"></div>
+    <button class="news-close-btn" onclick="closeNewsTeaser()">Weiter →</button>
+  </div>
+</div>
+
+<!-- ── Navigation Overlay ── -->
+<div id="naviOverlay">
+  <div id="naviMap"></div>
+  <div class="navi-topbar">
+    <button class="navi-close-btn" onclick="closeNavOverlay()" title="Schließen">✕</button>
+    <div class="navi-spot-label">
+      <div class="navi-spot-label-name" id="naviSpotName">—</div>
+      <div class="navi-spot-label-sub" id="naviSpotSub">NAVIGATION</div>
+    </div>
+    <button class="navi-recenter-btn" id="naviRecenterBtn" title="Neu zentrieren">⊕</button>
+  </div>
+  <div class="navi-bottom">
+    <div class="navi-stats">
+      <div class="navi-stat"><div class="navi-stat-val" id="naviDistVal">…</div><div class="navi-stat-label">Entfernung</div></div>
+      <div class="navi-stat"><div class="navi-stat-val" id="naviFootVal">…</div><div class="navi-stat-label">🚶 zu Fuß</div></div>
+      <div class="navi-stat"><div class="navi-stat-val amber" id="naviCarVal">…</div><div class="navi-stat-label">🚲 Fahrrad</div></div>
+    </div>
+    <div class="navi-legend">
+      <span><span class="navi-legend-dot" style="background:#22d3ee;"></span>Fußweg</span>
+      <span><span class="navi-legend-dot" style="background:#f59e0b;"></span>Fahrrad</span>
+    </div>
+    <button class="navi-stop-btn" onclick="closeNavOverlay()">■ Navigation beenden</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+const API  = 'https://spotme-chat-obom.onrender.com/api';
+const CODE = localStorage.getItem('sm_code') || '000000';
+
+// ── OpenRouteService API-Key ──────────────────────────────────────────────────
+// (Wurde entfernt, da nav.js den Key selbst definiert)
+// const ORS_KEY = '...';
+
+let map, userPos, userMarker, placeMode = false, tempLatLng = null;
+let mySpots = [], allSpots = [], markers = [];
+let onlineSet = new Set();
+let selectedInviteSpot = null;
+let invitePollInterval = null, knownInviteCount = 0;
+let toastTimer, currentDrawer = null;
+let activeRadius = null, detailSpot = null, detailMiniMap = null;
+let radiusCatFilter = null;
+let weeklyMiniMap = null, weeklyMarker = null, weeklyCoords = null;
+let urlSpotChecked = false; // Verhindert mehrfaches Fliegen zum Spot beim Laden
+
+// Wanderwege einblenden //
+let hikingLayerActive = false;
+
+function toggleHikingLayer() {
+  const btn = document.getElementById('hikingToggleBtn');
+  if (!map) return;
+
+  if (!hikingLayerActive) {
+    if (!map.getSource('hiking-overlay')) {
+      map.addSource('hiking-overlay', {
+        type: 'raster',
+        tiles: ['https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png'],
+        tileSize: 256,
+        attribution: '© <a href="https://hiking.waymarkedtrails.org">Waymarked Trails</a>'
+      });
+    }
+    if (!map.getLayer('hiking-layer')) {
+      map.addLayer({
+        id: 'hiking-layer',
+        type: 'raster',
+        source: 'hiking-overlay',
+        paint: { 'raster-opacity': 0.75 }
+      });
+    }
+    hikingLayerActive = true;
+    btn?.classList.add('active');
+    toast('🥾 Wanderwege eingeblendet');
+  } else {
+    if (map.getLayer('hiking-layer')) map.removeLayer('hiking-layer');
+    hikingLayerActive = false;
+    btn?.classList.remove('active');
+    toast('🥾 Wanderwege ausgeblendet');
+  }
+}
+
+// ═══════════════════════════════════════════════
+// SIMPLE JSON i18n TRANSLATION HELPER
+// ═══════════════════════════════════════════════
+const i18n = {
+  locale: 'de',
+  data: {},
+
+// Sprache initialisieren & laden
+async init() {
+  const browserLang = (navigator.language || 'de-DE').split('-')[0];
+  this.locale = ['de', 'en', 'es'].includes(browserLang) ? browserLang : 'de';
+
+  try {
+    const res = await fetch(`/locales/${this.locale}.json`);
+    if (res.ok) this.data = await res.json();
+  } catch (e) {
+    console.warn('Übersetzungsdatei nicht gefunden, verwende Default.');
+    this.locale = 'de';
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // 0. Browser Tab Titel setzen (NEU)
+  document.title = this.t('app_title_flag');
+  // ═══════════════════════════════════════════════════════════════
+
+  // 1. Statische HTML-Elemente übersetzen
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.dataset.i18n;
+    el.textContent = this.t(key);
+  });
+
+  // 2. Tooltip-Titel (data-i18n-title) übersetzen
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    const key = el.dataset.i18nTitle;
+    el.title = this.t(key);
+  });
+},
+
+  // Übersetzung abrufen (Fallback: Wenn Key nicht existiert, zeige Key an)
+  t(key) {
+    return this.data[key] || key;
+  }
+};
+// Übersetzung im Hintergrund laden (blockiert nicht die Karte)
+i18n.init().catch(err => console.warn('i18n Fehler:', err));
+// ═══════════════════════════════════════════════
+
+// Baut die Kategorie-Pills im Radius-Modal aus den vorhandenen Spots.
+function buildRadiusCatPills() {
+  const strip = document.getElementById('rsCatStrip');
+  if (!strip) return;
+
+  const counts = {};
+  allSpots.filter(s => s.code !== CODE).forEach(s => {
+    if (s.area_type) counts[s.area_type] = (counts[s.area_type] || 0) + 1;
+  });
+  const categories = Object.keys(counts).sort();
+  const totalOthers = allSpots.filter(s => s.code !== CODE).length;
+
+  strip.innerHTML = `
+    <div class="rs-cat-pill ${radiusCatFilter === null ? 'active' : ''}" data-cat="">
+      Alle <span style="opacity:0.55;font-size:0.68rem;">${totalOthers}</span>
+    </div>
+    ${categories.map(cat => `
+      <div class="rs-cat-pill ${radiusCatFilter === cat ? 'active' : ''}" data-cat="${cat}">
+        ${CATEGORY_EMOJI[cat] || '📌'} ${cat}
+        <span style="opacity:0.55;font-size:0.68rem;">${counts[cat]}</span>
+      </div>
+    `).join('')}
+  `;
+
+  strip.querySelectorAll('.rs-cat-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      radiusCatFilter = pill.dataset.cat || null;
+      buildRadiusCatPills();
+      if (activeRadius) selectRadius(activeRadius);
+    });
+  });
+}
+let spotPhotoData = null;
+let editSpotId    = null;
+let activeFilter  = null;
+
+// IndexedDB Wrapper Start
+const DB_NAME = 'SpotMeDB';
+const DB_VERSION = 1;
+let db;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('spots')) {
+        db.createObjectStore('spots', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('invites')) {
+        db.createObjectStore('invites', { keyPath: 'id' });
+      }
+    };
+    request.onsuccess = () => { db = request.result; resolve(db); };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('sm_theme', theme);
+  const icon = document.getElementById('themeIcon');
+  if (icon) icon.setAttribute('data-lucide', theme === 'light' ? 'moon' : 'sun');
+  if (window.lucide) lucide.createIcons();
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  applyTheme(current === 'light' ? 'dark' : 'light');
+}
+applyTheme(localStorage.getItem('sm_theme') || 'dark');
+  
+async function saveSpotsOffline(spots) {
+  const db = await openDB();
+  const tx = db.transaction('spots', 'readwrite');
+  spots.forEach(spot => tx.objectStore('spots').put(spot));
+  await tx.done;
+}
+
+async function loadSpotsOffline() {
+  const db = await openDB();
+  return new Promise((resolve) => {
+    const tx = db.transaction('spots', 'readonly');
+    const all = tx.objectStore('spots').getAll();
+    all.onsuccess = () => resolve(all.result || []);
+    all.onerror = () => resolve([]);
+  });
+}
+
+// IndexedDB Wrapper End
+
+function openSpotEdit(s) {
+  const profile=JSON.parse(localStorage.getItem('sm_profile_caching')||'{}');
+  const wishes=profile.wishes?.length?profile.wishes:['Kaffee','Strand','Park','Wandern','Kino'];
+  document.getElementById('spotWish').innerHTML=wishes.map(w=>`<option value="${w}">${w}</option>`).join('');
+
+  editSpotId = s.id;
+  document.getElementById('spotModalTitle').textContent = '✏️ Spot bearbeiten';
+  document.getElementById('spotName').value = s.name || '';
+  document.getElementById('spotDesc').value = s.description || '';
+  document.getElementById('spotWish').value = s.wishTag || '';
+  document.getElementById('spotCategory').value = s.area_type || '';
+  spotPhotoData = null;
+  if (s.image) {
+    spotPhotoData = s.image;
+    document.getElementById('spotPhotoImg').src = s.image;
+    document.getElementById('spotPhotoPreview').style.display = 'block';
+    document.getElementById('spotPhotoBtn').style.display = 'none';
+
+    const hint = document.getElementById('spotPhotoHint');
+    if (hint) {
+      if (s.image_status === 'pending') {
+        hint.textContent = '⏳ Bild wird noch moderiert';
+        hint.style.display = 'block';
+      } else if (s.image_status === 'approved') {
+        hint.textContent = '✅ Bild freigegeben';
+        hint.style.display = 'block';
+      } else {
+        hint.style.display = 'none';
+      }
+    }
+  } else {
+    document.getElementById('spotPhotoPreview').style.display = 'none';
+    document.getElementById('spotPhotoBtn').style.display = 'block';
+    const hint = document.getElementById('spotPhotoHint');
+    if (hint) hint.style.display = 'none';
+  }
+  document.getElementById('spotPhotoInput').value = '';
+  document.getElementById('spotModal').classList.add('show');
+}
+
+// ── HELPERS ──────────────────────────────────────────────────────────────────
+function esc(s) { const d=document.createElement('div'); d.textContent=String(s||''); return d.innerHTML; }
+
+function haversineKm(a,b,c,d) {
+  const R=6371, dL=(c-a)*Math.PI/180, dG=(d-b)*Math.PI/180;
+  const x=Math.sin(dL/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dG/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+
+function spotAge(ts) {
+  if (!ts) return null;
+  const diff=Date.now()-Number(ts), min=Math.floor(diff/60000), h=Math.floor(diff/3600000), d=Math.floor(diff/86400000);
+  if (min<2)  return {label:'gerade eben',color:'#10b981',fresh:true};
+  if (min<60) return {label:`vor ${min} Min`,color:'#10b981',fresh:true};
+  if (h<6)    return {label:`vor ${h}h`,color:'#f59e0b',fresh:false};
+  if (h<24)   return {label:`vor ${h}h`,color:'#94a3b8',fresh:false};
+  if (d===1)  return {label:'gestern',color:'#64748b',fresh:false};
+  return {label:`vor ${d} Tagen`,color:'#475569',fresh:false};
+}
+function spotAgeHtml(ts) {
+  const a=spotAge(ts); if(!a) return '';
+  return `<span style="font-size:0.65rem;color:${a.color};font-family:'Space Mono',monospace;">${a.fresh?'● ':'○ '}${a.label}</span>`;
+}
+function formatDateTime(ts) {
+  const d=new Date(Number(ts)); if(isNaN(d)) return '–';
+  return d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+}
+function formatCountdown(ts) {
+  const diff=Number(ts)-Date.now(); if(diff<=0) return 'jetzt';
+  const h=Math.floor(diff/3600000), m=Math.floor((diff%3600000)/60000);
+  return h>=24?`in ${Math.floor(h/24)}d`:h>0?`in ${h}h ${m}min`:`in ${m}min`;
+}
+function toast(msg) {
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.remove('show'),3000);
+}
+function closeModals() { document.querySelectorAll('.modal-overlay').forEach(m=>m.classList.remove('show')); }
+
+function openImg(src) {
+  document.getElementById('imgFullscreenSrc').src = src;
+  document.getElementById('imgFullscreen').classList.add('show');
+}
+
+// ── MAP ──────────────────────────────────────────────────────────────────────
+function initMap() {
+  map = new maplibregl.Map({
+    container: 'map',
+    style: 'https://tiles.openfreemap.org/styles/liberty',
+    center: [-0.38, 39.47],
+    zoom: 14,
+    attributionControl: false
+  });
+
+  map.on('load', () => {
+    loadAllSpots();
+    startInvitePolling();
+    checkBlueskyStatusForRail();
+
+    // setTimeout(() => loadNewsTeaser(), 1500);
+
+    // Navi-Deep-Link prüfen
+    const urlParams = new URLSearchParams(window.location.search);
+    const navLat = urlParams.get('navlat');
+    if (navLat) {
+      openNavOverlay(parseFloat(navLat), parseFloat(urlParams.get('navlng')), urlParams.get('navname'));
+    }
+  });
+
+  navigator.geolocation?.getCurrentPosition(pos => {
+    userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+
+    // Nur zentrieren, wenn wir nicht über einen geteilten Link reingekommen sind
+    const urlParams = new URLSearchParams(window.location.search);
+    if (!urlParams.get('spot')) {
+      map.setCenter([userPos.lng, userPos.lat]);
+      map.setZoom(15);
+    }
+
+    const el = document.createElement('div');
+    el.className = 'user-marker';
+    userMarker = new maplibregl.Marker({ element: el })   // ← Fix: zuweisen statt nur erstellen
+      .setLngLat([userPos.lng, userPos.lat])
+      .addTo(map);
+  });
+
+  map.on('click', e => {
+    if (placeMode) {
+      tempLatLng = { lat: e.lngLat.lat, lng: e.lngLat.lng };
+      const el = document.createElement('div');
+      el.style.cssText='width:14px;height:14px;border-radius:50%;background:var(--acc);border:2.5px solid rgba(255,255,255,0.85);box-shadow:0 0 0 4px rgba(255,159,0,0.2),0 0 18px rgba(255,159,0,0.7);';
+      new maplibregl.Marker({element:el}).setLngLat([e.lngLat.lng,e.lngLat.lat]).addTo(map);
+      placeMode=false; hidePlaceModeUI();
+      window.location.href = `spot-erstellen.html?lat=${tempLatLng.lat}&lng=${tempLatLng.lng}`;
+    } else {
+      if (currentDrawer) closeDrawer();
+    }
+  });
+
+  if ('Notification' in window) Notification.requestPermission();
+}
+
+async function loadNewsTeaser(force = false) {
+  let raw;
+  try {
+    raw = await fetch('news.md', { cache: 'no-store' }).then(r => r.ok ? r.text() : null);
+  } catch { raw = null; }
+  if (!raw) { if (force) toast('⚠️ Keine News verfügbar'); return; }
+
+  const [meta, ...rest] = raw.split('\n---\n');
+  const body = rest.join('\n---\n').trim();
+  const fields = {};
+  meta.split('\n').forEach(line => {
+    const idx = line.indexOf(':');
+    if (idx === -1) return;
+    fields[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
+  });
+
+  if (!fields.id || (!force && !shouldShowNews(fields.id))) return;
+
+  window.__currentNewsId = fields.id;
+  document.getElementById('newsEmoji').textContent = fields.emoji || '🆕';
+  document.getElementById('newsTitle').textContent = fields.title || '';
+
+  let html;
+  try {
+    html = (typeof marked !== 'undefined') ? marked.parse(body) : body;
+  } catch (err) {
+    console.warn('[News] marked.parse fehlgeschlagen:', err);
+    html = body;
+  }
+  document.getElementById('newsBody').innerHTML = html;
+  document.getElementById('newsOverlay').classList.add('active');
+}
+
+
+function shouldShowNews(id) {
+  const s = JSON.parse(localStorage.getItem('sm_news_state') || 'null');
+  if (!s) return true;
+  if (s.id !== id) return true;
+  return Date.now() - s.shownAt > 1*60*60*1000;
+}
+
+function closeNewsTeaser() {
+  localStorage.setItem('sm_news_state', JSON.stringify({ id: window.__currentNewsId, shownAt: Date.now() }));
+  document.getElementById('newsOverlay').classList.remove('active');
+}
+
+// Auto Reload der Karte uns Spots 
+function manualRefresh() {
+  lastAutoRefresh = Date.now();
+  navigator.geolocation?.getCurrentPosition(pos => {
+    userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    userMarker?.setLngLat([userPos.lng, userPos.lat]);
+    loadAllSpots();
+  }, () => loadAllSpots(), { enableHighAccuracy: true });
+}
+
+let lastAutoRefresh = Date.now();
+const AUTO_REFRESH_INTERVAL = 3 * 60 * 1000;
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (!map) return;
+  if (Date.now() - lastAutoRefresh < AUTO_REFRESH_INTERVAL) return;
+  manualRefresh(); // ← beide Wege über dieselbe Funktion
+});
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => console.log('✅ Service Worker registriert:', reg.scope))
+      .catch(err => console.warn('Service Worker fehlgeschlagen:', err));
+  });
+}
+
+// ── DEEP-LINK CHECK FÜR GETEILTE SPOTS ───────────────────────────────────────
+function checkUrlForSpot() {
+  if (urlSpotChecked) return;
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlSpotId = urlParams.get('spot');
+  if (urlSpotId && allSpots.length) {
+    const targetSpot = allSpots.find(s => String(s.id) === String(urlSpotId));
+    if (targetSpot) {
+      urlSpotChecked = true;
+      map.setCenter([targetSpot.lng, targetSpot.lat]);
+      map.setZoom(16);
+      setTimeout(() => {
+        openSpotDetail(targetSpot.id);
+      }, 800);
+    }
+  }
+}
+
+// ── BLUESKY RAIL CHECK & SHARING ─────────────────────────────────────────────
+async function checkBlueskyStatusForRail() {
+  const btn = document.getElementById('bskyRailBtn');
+  if (!btn) return;
+  try {
+    const status = await window.getBlueskyStatus();
+    if (status && status.connected) {
+      btn.style.display = 'flex'; // Nur anzeigen, wenn Bluesky im Profil verknüpft wurde
+    } else {
+      btn.style.display = 'none';
+    }
+  } catch {
+    btn.style.display = 'none';
+  }
+}
+
+// Öffnet den Share-Dialog für Bluesky
+async function openBlueskyShareDialog() {
+  const select = document.getElementById('bskySpotSelect');
+  if (!select) return;
+  
+  select.innerHTML = '<option value="">Lade Spots…</option>';
+  document.getElementById('bskyCustomMessage').value = '';
+  document.getElementById('bskyCharCount').textContent = '0 / 200';
+  
+  document.getElementById('blueskyShareModal').classList.add('show');
+  
+  try {
+    // Eigene Spots vom Server laden
+    const res = await fetch(`${API}/userspots/${CODE}`);
+    if (res.ok) {
+      const spots = await res.json();
+      if (!spots.length) {
+        select.innerHTML = '<option value="">Keine Spots vorhanden</option>';
+        return;
+      }
+      select.innerHTML = spots.map(s => `<option value="${s.id}">${esc(s.name)} (${s.wishTag || 'Spot'})</option>`).join('');
+    } else {
+      select.innerHTML = '<option value="">Fehler beim Laden</option>';
+    }
+  } catch {
+    select.innerHTML = '<option value="">Server nicht erreichbar</option>';
+  }
+}
+
+// Behandelt die Echtzeit-Zeichenzählung der Zusatznachricht
+document.getElementById('bskyCustomMessage')?.addEventListener('input', function() {
+  const len = this.value.length;
+  const counter = document.getElementById('bskyCharCount');
+  if (counter) {
+    counter.textContent = `${len} / 200`;
+    counter.classList.toggle('warn', len > 170);
+  }
+});
+
+// Postet den ausgewählten Spot mit Custom Message und Direktlink auf Bluesky
+async function postToBluesky() {
+  const select = document.getElementById('bskySpotSelect');
+  const spotId = select?.value;
+  if (!spotId) { toast('⚠️ Bitte wähle einen Spot aus'); return; }
+  
+  const customMessage = document.getElementById('bskyCustomMessage').value.trim();
+  const btn = document.getElementById('bskyPostBtn');
+  
+  btn.disabled = true;
+  btn.textContent = '⏳ Poste…';
+  
+  // Direkt-Link zum Spot dynamisch konstruieren
+  const spotUrl = `${window.location.origin}${window.location.pathname}?spot=${spotId}`;
+  const finalMessage = customMessage 
+    ? `${customMessage}\n\n📍 Zum Spot: \n\n ${spotUrl}` 
+    : `📍 Mein Spot auf SpotMe Caching: \n\n ${spotUrl}`;
+  
+  try {
+    const res = await window.shareSpotOnBluesky(spotId, finalMessage);
+    if (res.success) {
+      toast('🦋 Erfolgreich auf Bluesky geteilt!');
+      closeModals();
+    } else {
+      toast('❌ ' + (res.error || 'Fehler beim Teilen'));
+    }
+  } catch(e) {
+    toast('⚠️ Fehler: Verbindung abgebrochen');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🦋 Posten';
+  }
+}
+
+// ── SPOTS ────────────────────────────────────────────────────────────────────
+async function loadAllSpots() {
+  const offlineSpots = await loadSpotsOffline();
+  if (offlineSpots.length) {
+    allSpots = offlineSpots;
+    mySpots = allSpots.filter(s => s.code === CODE);
+    document.getElementById('statSpots').textContent = mySpots.length;
+    await renderMarkers();
+    checkUrlForSpot(); // Deep-Link prüfen (Offline-Daten)
+  }
+
+  try {
+    const r = await fetch(`${API}/userspots/all?noimage=1`);
+    if (r.ok) {
+      const freshSpots = await r.json();
+      allSpots = freshSpots;
+      document.getElementById('statSpots').textContent =
+        allSpots.filter(s => s.code === CODE).length;
+      await renderMarkers();
+      await saveSpotsOffline(allSpots);
+      checkUrlForSpot(); // Deep-Link prüfen (Live-Daten)
+    }
+
+    const r2 = await fetch(`${API}/userspots/${CODE}`);
+    if (r2.ok) {
+      mySpots = await r2.json();
+      document.getElementById('statSpots').textContent = mySpots.length;
+    } else {
+      mySpots = allSpots.filter(s => s.code === CODE);
+    }
+  } catch (err) {
+    mySpots = allSpots.filter(s => s.code === CODE);
+    console.warn('Kein Netzwerk, verwende Cache-Daten');
+  }
+}
+
+// ── KATEGORIE-FILTER ─────────────────────────────────────────────────────────
+const CATEGORY_EMOJI = {
+  'Bahnhof':          '🚉',
+  'Club':             '🎉',
+  'Einkaufsviertel':  '🛍️',
+  'Filmtheater':      '🎬',
+  'Fitnesscenter':    '💪',
+  'Industriepark':    '🏭',
+  'Internetcafé':     '💻',
+  'Naturschutzgebiet':'🌿',
+  'Park':             '🌳',
+  'Rastplatz':        '🛣️',
+  'Restaurant':       '🍽️',
+  'Sauna':            '🧖',
+  'Strand':           '🏖️',
+  'Sonstiges':        '📌',
+};
+
+function toggleFilterStrip() {
+  const strip = document.getElementById('filterStrip');
+  const btn   = document.getElementById('filterTopBtn');
+  if (!strip) return;
+  const visible = strip.style.display !== 'none';
+  strip.style.display = visible ? 'none' : 'flex';
+  btn?.classList.toggle('active', !visible);
+}
+
+function buildFilterStrip() {
+  const strip = document.getElementById('filterStrip');
+  if (!strip) return;
+
+  const counts = {};
+  allSpots.forEach(s => {
+    if (s.area_type) {
+      counts[s.area_type] = (counts[s.area_type] || 0) + 1;
+    }
+  });
+
+  const categories = Object.keys(counts);
+
+  if (!categories.length) {
+     strip.innerHTML = '';
+     strip.style.display = 'none';
+     document.getElementById('filterTopBtn')?.classList.remove('active');
+     return;
+  }
+  const wasVisible = strip.style.display === 'flex';
+
+  const allCount = allSpots.length;
+  strip.innerHTML = `
+    <div class="filter-pill all-pill ${activeFilter === null ? 'active' : ''}"
+         data-cat="">
+      Alle <span class="pill-count">${allCount}</span>
+    </div>
+    ${categories.sort().map(cat => `
+      <div class="filter-pill ${activeFilter === cat ? 'active' : ''}"
+           data-cat="${cat}">
+        ${CATEGORY_EMOJI[cat] || '📌'} ${cat}
+        <span class="pill-count">${counts[cat]}</span>
+      </div>
+    `).join('')}`;
+
+  strip.style.display = wasVisible ? 'flex' : 'none'; // ← nur wiederherstellen, nicht erzwingen
+
+  strip.querySelectorAll('.filter-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const cat = pill.dataset.cat || null;
+      activeFilter = cat === '' ? null : cat;
+      buildFilterStrip();
+      applyFilter();
+    });
+  });
+}
+
+function applyFilter() {
+  allSpots.forEach((s, i) => {
+    const marker = markers[i];
+    if (!marker) return;
+    const el = marker.getElement();
+    if (!el) return;
+
+    const show = activeFilter === null
+      || s.code === CODE
+      || s.area_type === activeFilter;
+
+    el.style.display = show ? '' : 'none';
+  });
+}
+
+async function renderMarkers() {
+  markers.forEach(m => m.remove());
+  markers = [];
+  onlineSet = new Set();
+
+  await Promise.all(allSpots.filter(s=>s.code!==CODE).map(async s => {
+    try {
+      const r=await fetch(`${API}/online/${s.code}?spot=caching`);
+      if (r.ok) { const d=await r.json(); if(d.online) onlineSet.add(s.code); }
+    } catch {}
+  }));
+
+  allSpots.forEach(s => {
+    const isMine=s.code===CODE, isOnline=!isMine&&onlineSet.has(s.code);
+    const el=document.createElement('div');
+    el.className=isMine?'my-spot-marker':`other-spot-marker${isOnline?' is-online':''}`;
+    const marker=new maplibregl.Marker({element:el}).setLngLat([s.lng,s.lat]).addTo(map);
+    markers.push(marker);
+    el.addEventListener('click', e => { e.stopPropagation(); openMarkerDrawer(s,isMine,isOnline); });
+  });
+
+  buildFilterStrip();
+  applyFilter();
+}
+
+function openMarkerDrawer(s, isMine, isOnline) {
+  document.getElementById('drawerOverlay').classList.add('show');
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawerTitle').textContent = isMine ? 'MEIN SPOT' : 'SPOT';
+  currentDrawer = 'marker';
+
+  const onlineBadge = isOnline
+    ? `<span style="font-size:0.72rem;color:var(--green);font-weight:600;font-family:'Space Mono',monospace;">● Online</span>`
+    : `<span style="font-size:0.72rem;color:var(--muted);font-family:'Space Mono',monospace;">○ Offline</span>`;
+
+  document.getElementById('drawerBody').innerHTML = `
+    <div class="spot-card" style="margin-bottom:1rem;">
+      <div class="sc-icon">${isMine?'🟠':'📍'}</div>
+      <div class="sc-info">
+        <div class="sc-name">${esc(s.name)}</div>
+        <div class="sc-detail">
+          <span class="sc-tag">${s.wishTag||''}</span>
+          ${onlineBadge}
+          ${spotAgeHtml(s.createdAt||s.created_at)}
+        </div>
+        ${s.description ? `<div style="font-size:0.78rem;color:var(--muted2);margin-top:5px;line-height:1.45;">${esc(s.description)}</div>` : ''}
+        ${s.image ? `<img src="${s.image}" alt="" onclick="openImg('${s.image}')" style="width:100%;max-height:120px;object-fit:cover;border-radius:9px;margin-top:8px;border:1px solid var(--bord);cursor:zoom-in;">` : ''}
+      </div>
+    </div>
+    ${isMine
+      ? `<div style="display:flex;gap:0.5rem;">
+           <button id="md-edit" class="sc-btn navigate" style="flex:1;padding:0.8rem;font-size:0.9rem;border-radius:12px;">✏️ Bearbeiten</button>
+           <button id="md-del"  class="sc-btn danger"   style="flex:1;padding:0.8rem;font-size:0.9rem;border-radius:12px;">🗑️ Löschen</button>
+         </div>`
+      : `<div style="display:flex;gap:0.5rem;margin-bottom:0.5rem;">
+           <button id="md-nav"  class="sc-btn navigate" style="flex:1;padding:0.8rem;border-radius:12px;">🧭 Route</button>
+           <button id="md-prof" class="sc-btn"          style="flex:1;padding:0.8rem;border-radius:12px;">👤 Profil</button>
+         </div>
+         <button id="md-det" class="sc-btn primary" style="width:100%;padding:0.8rem;font-size:0.9rem;border-radius:12px;">📋 Details & Einladung</button>`
+    }
+  `;
+
+  if (isMine) {
+    document.getElementById('md-edit').addEventListener('click', () => { closeDrawer(); setTimeout(() => openSpotEdit(s), 300); });
+    document.getElementById('md-del').addEventListener('click', () => { deleteSpot(s.id); closeDrawer(); });
+  } else {
+    document.getElementById('md-nav').addEventListener('click', () => { navigateToSpot(s.lat, s.lng, s.name); closeDrawer(); });
+    document.getElementById('md-prof').addEventListener('click', () => { closeDrawer(); setTimeout(()=>showSpotOwnerProfile(s.code),300); });
+    document.getElementById('md-det').addEventListener('click', () => { closeDrawer(); setTimeout(()=>openSpotDetail(s.id),300); });
+  }
+}
+
+async function saveSpot() {
+  const name=document.getElementById('spotName').value.trim();
+  const desc=document.getElementById('spotDesc').value.trim();
+  const wish=document.getElementById('spotWish').value;
+  const category=document.getElementById('spotCategory').value;   // ← neu
+  if (!name) { toast('⚠️ Name eingeben'); return; }
+
+  if (editSpotId) {
+    closeModals();
+    try {
+      await fetch(`${API}/userspots/${editSpotId}`, {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ code:CODE, name, description:desc, wishTag:wish, area_type:category||null, image:spotPhotoData||null })
+      });
+    } catch {}
+    toast('✅ Spot aktualisiert');
+    editSpotId=null; spotPhotoData=null;
+    loadAllSpots();
+  } else {
+    if (!tempLatLng) { toast('⚠️ Kein Standort'); return; }
+    closeModals();
+    try {
+      await fetch(`${API}/userspots`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ code:CODE, lat:tempLatLng.lat, lng:tempLatLng.lng, name, description:desc, wishTag:wish, image:spotPhotoData||null })
+      });
+    } catch {}
+    toast('✅ Spot gespeichert');
+    spotPhotoData=null;
+    loadAllSpots();
+  }
+}
+
+async function deleteSpot(id) {
+  try {
+    await fetch(`${API}/userspots/${id}`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:CODE})});
+  } catch {}
+  toast('🗑️ Spot gelöscht');
+  loadAllSpots();
+}
+
+// ── PLACE MODE ───────────────────────────────────────────────────────────────
+function togglePlaceMode() {
+  placeMode=!placeMode;
+  const fab=document.getElementById('fabBtn'), label=document.getElementById('fabLabel');
+  if (placeMode) {
+    fab.classList.add('active'); fab.textContent='✕'; label.textContent='ABBRUCH';
+    document.getElementById('placeModeBar').classList.add('show');
+    document.getElementById('crosshair').classList.add('show');
+    toast('Tippe auf die Karte');
+  } else { hidePlaceModeUI(); }
+}
+function hidePlaceModeUI() {
+  placeMode=false;
+  const fab=document.getElementById('fabBtn'), label=document.getElementById('fabLabel');
+  fab.classList.remove('active'); fab.textContent='📍'; label.textContent='SPOT';
+  document.getElementById('placeModeBar').classList.remove('show');
+  document.getElementById('crosshair').classList.remove('show');
+}
+function openSpotForm() {
+  const profile=JSON.parse(localStorage.getItem('sm_profile_caching')||'{}');
+  const wishes=profile.wishes?.length?profile.wishes:['Kaffee','Strand','Park','Wandern','Kino'];
+  document.getElementById('spotWish').innerHTML=wishes.map(w=>`<option value="${w}">${w}</option>`).join('');
+  editSpotId = null;
+  document.getElementById('spotModalTitle').textContent = '📍 Spot anlegen';
+  document.getElementById('spotName').value='';
+  document.getElementById('spotDesc').value='';
+  spotPhotoData=null;
+  document.getElementById('spotPhotoPreview').style.display='none';
+  document.getElementById('spotPhotoBtn').style.display='block';
+  document.getElementById('spotPhotoInput').value='';
+  document.getElementById('spotModal').classList.add('show');
+}
+
+// ── DRAWER ───────────────────────────────────────────────────────────────────
+function openDrawer(type) {
+  currentDrawer = type;
+
+  if (type === 'chats')   showChatBadge(0);
+  if (type === 'invites') updateInviteBadge(0);
+
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawerOverlay').classList.add('show');
+  const title = document.getElementById('drawerTitle');
+  const body  = document.getElementById('drawerBody');
+
+  if (type === 'chats') {
+    title.textContent = '💬 CHATS';
+    loadChatListIntoDrawer(body);
+
+  } else if (type === 'favorites') {
+    title.textContent = '⭐ FAVORITEN';
+    document.getElementById('favBadge').style.display = 'none';
+    loadFavoritesIntoDrawer(body);
+
+  } else if (type === 'myspots') {
+    title.textContent = 'MEINE SPOTS';
+    body.innerHTML = mySpots.length
+      ? mySpots.map(s => {
+          const isActive = s.active !== false;
+          return `<div class="spot-card" style="opacity:${isActive ? '1' : '0.55'};">
+            <div class="sc-icon">
+              <span style="color:${isActive ? 'var(--acc)' : 'var(--muted)'};">🟠</span>
+            </div>
+            <div class="sc-info">
+              <div class="sc-name">${esc(s.name)}</div>
+              <div class="sc-detail">
+                <span class="sc-tag">${s.wishTag || ''}</span>
+                ${spotAgeHtml(s.createdAt || s.created_at)}
+                <span style="font-size:0.62rem;font-weight:600;
+                             color:${isActive ? '#10b981' : 'var(--muted)'};
+                             font-family:'Space Mono',monospace;">
+                  ${isActive ? '● Aktiv' : '○ Pausiert'}
+                </span>
+                ${s.image_status === 'pending'
+                  ? `<span style="font-size:0.62rem;color:var(--acc);
+                                  font-family:'Space Mono',monospace;">⏳ Bild pending</span>`
+                  : ''}
+              </div>
+            </div>
+            <div class="sc-actions">
+              <button class="sc-btn navigate" data-lat="${s.lat}" data-lng="${s.lng}">🧭</button>
+              <button class="sc-btn" data-edit="${s.id}"
+                      style="background:rgba(245,158,11,0.08);
+                             border-color:rgba(245,158,11,0.3);
+                             color:var(--acc);"
+                      title="Spot bearbeiten">✏️</button>
+              <button class="sc-btn" data-toggle="${s.id}"
+                      style="background:${isActive
+                        ? 'rgba(245,158,11,0.12)'
+                        : 'rgba(16,185,129,0.12)'};
+                             border-color:${isActive
+                        ? 'rgba(245,158,11,0.35)'
+                        : 'rgba(16,185,129,0.35)'};
+                             color:${isActive ? 'var(--acc)' : '#10b981'};"
+                      title="${isActive ? 'Spot pausieren' : 'Spot aktivieren'}">
+                ${isActive ? '⏸' : '▶'}
+              </button>
+              <button class="sc-btn danger" data-del="${s.id}">🗑️</button>
+            </div>
+          </div>`;
+        }).join('')
+      : `<div class="empty-state"><div class="es-icon">🗺️</div>Noch keine Spots.</div>`;
+
+    body.querySelectorAll('[data-lat]').forEach(b =>
+      b.addEventListener('click', () => navigateToSpot(+b.dataset.lat, +b.dataset.lng))
+    );
+
+    body.querySelectorAll('[data-edit]').forEach(b =>
+      b.addEventListener('click', async () => {
+        const spotId = +b.dataset.edit;
+        try {
+          const r = await fetch(`${API}/userspots/${CODE}`);
+          if (r.ok) {
+            const spots = await r.json();
+            const spot  = spots.find(s => s.id === spotId);
+            if (spot) {
+              closeDrawer();
+              setTimeout(() => openSpotEdit(spot), 300);
+            }
+          }
+        } catch {
+          toast('⚠️ Fehler beim Laden');
+        }
+      })
+    );
+
+    body.querySelectorAll('[data-toggle]').forEach(b =>
+      b.addEventListener('click', async () => {
+        const token = localStorage.getItem('sm_token');
+        try {
+          const res = await fetch(`${API}/userspots/${b.dataset.toggle}/toggle`, {
+            method:  'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ code: CODE, token })
+          });
+          const data = await res.json();
+          if (data.success) {
+            const spot = mySpots.find(s => s.id == b.dataset.toggle);
+            if (spot) spot.active = data.active;
+            openDrawer('myspots');
+            toast(data.active ? '▶ Spot aktiviert' : '⏸ Spot pausiert');
+            await loadAllSpots();
+          }
+        } catch (e) {
+          toast('⚠️ Fehler beim Umschalten');
+        }
+      })
+    );
+
+    body.querySelectorAll('[data-del]').forEach(b =>
+      b.addEventListener('click', () => { deleteSpot(+b.dataset.del); closeDrawer(); })
+    );
+
+  } else if (type === 'all') {
+    title.textContent='ALLE SPOTS';
+    const others=allSpots.filter(s=>s.code!==CODE);
+    body.innerHTML=others.length
+      ? others.map(s=>`<div class="spot-card">
+          <div class="sc-icon" style="position:relative;">⚪${onlineSet.has(s.code)?'<span style="position:absolute;top:-3px;right:-3px;width:9px;height:9px;border-radius:50%;background:#10b981;border:1.5px solid var(--bg);"></span>':''}</div>
+          <div class="sc-info"><div class="sc-name">${esc(s.name)}</div>
+          <div class="sc-detail"><span class="sc-tag">${s.wishTag||''}</span>
+          ${onlineSet.has(s.code)?'<span style="font-size:0.65rem;color:#10b981;font-weight:600;">● Online</span>':''}
+          ${spotAgeHtml(s.createdAt||s.created_at)}</div></div>
+          <div class="sc-actions">
+            <button class="sc-btn navigate" data-lat="${s.lat}" data-lng="${s.lng}">🧭</button>
+            <button class="sc-btn primary" data-det="${s.id}">📋</button>
+          </div></div>`).join('')
+      : `<div class="empty-state"><div class="es-icon">🌐</div>Keine Spots.</div>`;
+    body.querySelectorAll('[data-lat]').forEach(b=>b.addEventListener('click',()=>navigateToSpot(+b.dataset.lat,+b.dataset.lng)));
+    body.querySelectorAll('[data-det]').forEach(b=>b.addEventListener('click',()=>{const s=allSpots.find(x=>x.id==b.dataset.det);if(s){closeDrawer();setTimeout(()=>openSpotDetail(s.id),300);}}));
+
+  } else if (type === 'invites') {
+    title.textContent='EINLADUNGEN';
+    loadInvitesIntoDrawer(body);
+
+  } else if (type === 'weekly') {
+    title.textContent = '🗓️ WOCHEN-SPOTS';
+    loadWeeklyDrawer(body);
+
+  } else if (type === 'live') {
+    title.textContent = '📡 LIVE SPOTS';
+    loadLiveDrawer(body);
+  }
+}
+
+function closeDrawer() {
+  stopChatPolling();
+  chatMyCode      = null;
+  chatPartnerCode = null;
+  chatPartnerName = null;
+  chatRoom        = null;
+  chatPollTimer   = null;
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('drawerOverlay').classList.remove('show');
+  if (currentDrawer === 'newspots') {
+    newSpotMarkers.forEach(m => m.remove());
+    newSpotMarkers = [];
+    document.getElementById('newSpotsBtn')?.classList.remove('active');
+  }
+  const nt=document.getElementById('navToast'); if(nt) nt.remove();
+  currentDrawer = null;
+}
+
+// ── INVITES ──────────────────────────────────────────────────────────────────
+async function loadInvitesIntoDrawer(body) {
+  body.innerHTML = `<div class="empty-state"><div class="es-icon">⏳</div>Lädt…</div>`;
+  let invites = [];
+  try {
+    const r = await fetch(`${API}/spotcache/invites/${CODE}`);
+    if (r.ok) invites = await r.json();
+  } catch {}
+
+  document.getElementById('statInvites').textContent = invites.length;
+  updateInviteBadge(0);
+  document.getElementById('inviteHeaderBtn').classList.remove('active');
+
+  if (!invites.length) {
+    body.innerHTML = `<div class="empty-state"><div class="es-icon">📨</div>Keine Einladungen.</div>`;
+    return;
+  }
+
+  const now = Date.now();
+  const active  = invites.filter(inv =>
+    inv.status !== 'expired' && (inv.time_end || 0) >= now
+  );
+  const expired = invites.filter(inv =>
+    inv.status === 'expired' || (inv.time_end || 0) < now
+  );
+
+  const renderInvite = (inv, isExpired = false) => {
+    const isSender  = inv.from_code === CODE;
+    const timeStart = inv.time_start || 0;
+    const timeEnd   = inv.time_end   || 0;
+
+    let statusHtml = inv.status === 'pending'
+      ? `<span class="status-pill pending">⏳ Ausstehend</span>`
+      : inv.status === 'accepted'
+        ? (timeStart <= now && timeEnd >= now
+          ? `<span class="status-pill now">🟢 JETZT!</span>`
+          : `<span class="status-pill accepted">✅ Akzeptiert</span>`)
+          : inv.status === 'expired'
+          ? `<span class="status-pill"
+                   style="background:rgba(100,116,139,0.2);
+                          color:#64748b;
+                          border-color:rgba(100,116,139,0.3);">
+               📁 Abgelaufen</span>`
+          : '';
+
+    const cd = timeStart > now
+      ? `<span style="font-size:0.65rem;color:var(--muted);">
+           ⏰ ${formatCountdown(timeStart)}</span>`
+      : '';
+
+    const cardStyle = isExpired
+      ? 'flex-direction:column;align-items:stretch;opacity:0.5;'
+      : 'flex-direction:column;align-items:stretch;';
+
+    return `
+      <div class="spot-card" style="${cardStyle}">
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+          <div class="sc-icon">${isSender ? '📤' : '📨'}</div>
+          <div class="sc-info">
+            <div class="sc-name">${esc(inv.spot_name || 'Spot')}</div>
+            <div class="sc-detail">${statusHtml} ${cd}</div>
+            <div class="sc-detail">
+              ${formatDateTime(timeStart)} – ${formatDateTime(timeEnd)}
+            </div>
+            ${!isSender
+              ? `<div class="sc-detail" style="font-size:0.72rem;color:var(--muted2);">
+                   📨 Von: <strong>${esc(inv.from_name || inv.from_code)}</strong>
+                 </div>`
+              : `<div class="sc-detail" style="font-size:0.72rem;color:var(--muted2);">
+                   📤 An: <strong>${esc(inv.to_name || inv.to_code)}</strong>
+                 </div>`
+            }
+          </div>
+        </div>
+
+        ${inv.status === 'pending' && !isSender && !isExpired
+          ? `<div style="margin-top:0.75rem;">
+               <button class="sc-btn success" style="width:100%;padding:0.65rem;"
+                       data-acc="${inv.id}">✅ Akzeptieren</button>
+             </div>`
+          : ''}
+
+        ${inv.status === 'accepted' && !isExpired
+          ? `<div style="display:flex;gap:0.5rem;margin-top:0.75rem;">
+               <button class="sc-btn navigate" style="flex:1;padding:0.65rem;"
+                       data-nav-spot="${inv.spot_id || ''}">🧭 Route</button>
+               <button class="sc-btn primary" style="flex:1;padding:0.65rem;"
+                       data-ci="${inv.id}">📍 Check-in</button>
+               <button class="sc-btn success" style="padding:0.65rem 0.9rem;"
+                       data-chat="${inv.from_code === CODE ? inv.to_code : inv.from_code}"
+                       data-chatname="${esc(inv.spot_name || '')}">💬</button>
+             </div>
+             <div id="invWeather_${inv.id}"
+                  style="margin-top:0.5rem;font-size:0.7rem;color:var(--muted);
+                         font-family:'Space Mono',monospace;">
+               ⏳ Wetter wird geladen…
+             </div>`
+          : ''}
+      </div>`;
+  };
+
+  let html = '';
+
+  if (active.length) {
+    html += active.map(inv => renderInvite(inv, false)).join('');
+  } else {
+    html += `<div class="empty-state" style="padding:1rem 0;">
+      <div class="es-icon">📭</div>Keine aktiven Einladungen.</div>`;
+  }
+
+  if (expired.length) {
+    html += `
+      <details style="margin-top:1rem;">
+        <summary style="cursor:pointer;font-size:0.75rem;color:var(--muted);
+                        font-family:'Space Mono',monospace;padding:0.5rem 0;
+                        list-style:none;display:flex;align-items:center;gap:0.5rem;">
+          📁 Vergangene Treffen (${expired.length})
+          <span style="font-size:0.6rem;opacity:0.6;">▼ tippen zum öffnen</span>
+        </summary>
+        <div style="margin-top:0.5rem;display:flex;flex-direction:column;gap:0.5rem;">
+          ${expired.map(inv => renderInvite(inv, true)).join('')}
+        </div>
+      </details>`;
+  }
+
+  body.innerHTML = html;
+
+  body.querySelectorAll('[data-acc]').forEach(b =>
+    b.addEventListener('click', () => acceptInvite(+b.dataset.acc))
+  );
+  body.querySelectorAll('[data-nav-spot]').forEach(b =>
+    b.addEventListener('click', () => {
+      const s = allSpots.find(x => x.id == b.dataset.navSpot);
+      if (s) navigateToSpot(s.lat, s.lng);
+    })
+  );
+  body.querySelectorAll('[data-ci]').forEach(b =>
+    b.addEventListener('click', () => checkIn(+b.dataset.ci))
+  );
+  body.querySelectorAll('[data-chat]').forEach(b =>
+    b.addEventListener('click', () => {
+      openChatDrawer(b.dataset.chat, b.dataset.chatname || b.dataset.chat);
+    })
+  );
+
+  active
+    .filter(inv => inv.status === 'accepted')
+    .forEach(inv => {
+      const spot = allSpots.find(s => s.id == inv.spot_id);
+      if (spot) {
+        renderMeetingWeather(inv.id, spot.lat, spot.lng, inv.time_start);
+      } else if (inv.spot_lat && inv.spot_lng) {
+        renderMeetingWeather(inv.id, inv.spot_lat, inv.spot_lng, inv.time_start);
+      } else {
+        loadAllSpots().then(() => {
+          const s = allSpots.find(x => x.id == inv.spot_id);
+          if (s) renderMeetingWeather(inv.id, s.lat, s.lng, inv.time_start);
+          else {
+            const el = document.getElementById(`mtgWeather_${inv.id}`);
+            if (el) el.style.display = 'none';
+          }
+        });
+      }
+    });
+}
+
+// ── CHAT-LISTE ────────────────────────────────────────────────────────────────
+function loadChatListIntoDrawer(body) {
+  const chats = [];
+
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(CHAT_PREFIX)) continue;
+
+    let msgs = [];
+    try { msgs = JSON.parse(localStorage.getItem(key) || '[]'); } catch {}
+    if (!msgs.length) continue;
+
+    const room        = key.replace(CHAT_PREFIX, '');
+    const codes       = room.split('-');
+    const partnerCode = codes.find(c => c !== CODE);
+    if (!partnerCode) continue;
+
+    const lastMsg = msgs[msgs.length - 1];
+
+    let unread = {};
+    try { unread = JSON.parse(localStorage.getItem('sm_unread_caching') || '{}'); } catch {}
+
+    chats.push({
+      partnerCode,
+      lastText: lastMsg.text     || '',
+      lastTs:   lastMsg.ts       || 0,
+      lastFrom: lastMsg.from     || '',
+      fromName: lastMsg.fromName || partnerCode,
+      unread:   unread[partnerCode] || 0
+    });
+  }
+
+  chats.sort((a, b) => b.lastTs - a.lastTs);
+
+  if (!chats.length) {
+    body.innerHTML = `
+      <div class="empty-state">
+        <div class="es-icon">💬</div>
+        Noch keine Chats.
+        <div style="font-size:0.78rem;color:var(--muted);margin-top:0.5rem;text-align:center;line-height:1.5;">
+          Tippe auf einen Spot auf der Karte<br>und starte ein Gespräch.
+        </div>
+      </div>`;
+    return;
+  }
+
+  body.innerHTML = chats.map(c => {
+    const time    = new Date(c.lastTs).toLocaleTimeString('de-DE',
+                    { hour: '2-digit', minute: '2-digit' });
+    const isMine  = c.lastFrom === CODE;
+    const preview = c.lastText.length > 40
+      ? c.lastText.slice(0, 40) + '…'
+      : c.lastText;
+
+    return `
+      <div class="spot-card"
+           data-partner="${c.partnerCode}"
+           data-name="${esc(c.fromName)}"
+           style="cursor:pointer;align-items:center;">
+
+        <div class="sc-icon"
+             style="background:rgba(34,211,238,0.15);
+                    border-color:rgba(34,211,238,0.4);
+                    color:var(--cyan);
+                    font-weight:700;
+                    font-size:1rem;
+                    flex-shrink:0;">
+          ${(c.fromName[0] || '?').toUpperCase()}
+        </div>
+
+        <div class="sc-info" style="flex:1;min-width:0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;">
+            <div class="sc-name" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+              ${esc(c.fromName)}
+            </div>
+            <div style="font-size:0.62rem;color:var(--muted);
+                        font-family:'Space Mono',monospace;flex-shrink:0;">
+              ${time}
+            </div>
+          </div>
+          <div style="font-size:0.76rem;color:var(--muted2);margin-top:2px;
+                      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+            ${isMine
+              ? `<span style="color:var(--muted);">Du: </span>`
+              : ''}${esc(preview)}
+          </div>
+        </div>
+
+        ${c.unread > 0
+          ? `<div style="min-width:20px;height:20px;border-radius:10px;
+                         background:var(--cyan);color:#0a0d12;
+                         font-size:0.62rem;font-weight:700;
+                         display:flex;align-items:center;justify-content:center;
+                         padding:0 4px;flex-shrink:0;margin-left:0.25rem;">
+               ${c.unread > 9 ? '9+' : c.unread}
+             </div>`
+          : ''}
+      </div>`;
+  }).join('');
+
+  body.querySelectorAll('[data-partner]').forEach(card => {
+    card.addEventListener('click', () => {
+      const partnerCode = card.dataset.partner;
+      const partnerName = card.dataset.name || partnerCode;
+      closeDrawer();
+      setTimeout(() => openChatDrawer(partnerCode, partnerName), 300);
+    });
+  });
+}
+
+function openInviteFromSpot(spotId, name, wish) {
+  selectedInviteSpot={id:spotId,name,wish};
+  document.getElementById('inviteSpotInfo').textContent=`Spot: ${name} · ${wish}`;
+  document.getElementById('inviteStart').value='';
+  document.getElementById('inviteEnd').value='';
+  document.getElementById('inviteModal').classList.add('show');
+}
+
+async function sendInvite() {
+  if (!selectedInviteSpot) return;
+
+  const start = new Date(document.getElementById('inviteStart').value).getTime();
+  const end   = new Date(document.getElementById('inviteEnd').value).getTime();
+
+  if (!start || !end || isNaN(start) || isNaN(end)) {
+    toast('⚠️ Zeitraum wählen'); return;
+  }
+
+  const spot = allSpots.find(s => s.id === selectedInviteSpot.id);
+  if (!spot) return;
+
+  closeModals();
+
+  try {
+    const res = await fetch(`${API}/spotcache/invite`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        from:       CODE,
+        to:         spot.code,
+        spot_id:    spot.id,
+        time_start: start,
+        time_end:   end
+      })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      toast('✅ Einladung gesendet');
+    } else {
+      toast('⚠️ Fehler: ' + (data.error || res.status));
+    }
+  } catch (e) {
+    toast('⚠️ Server nicht erreichbar');
+  }
+}
+
+async function acceptInvite(id) {
+  try {
+    const res = await fetch(`${API}/spotcache/invite/respond`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ id, code: CODE, action: 'accept' })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      toast('✅ Akzeptiert');
+    } else {
+      toast('⚠️ Fehler: ' + (data.error || res.status));
+    }
+  } catch (e) {
+    toast('⚠️ Server nicht erreichbar');
+  }
+
+  loadInvitesIntoDrawer(document.getElementById('drawerBody'));
+}
+
+async function checkIn(inviteId) {
+  if (!navigator.geolocation) { toast('❌ Kein GPS'); return; }
+  navigator.geolocation.getCurrentPosition(async pos=>{
+    try {
+      const r=await fetch(`${API}/spotcache/checkin`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:inviteId,code:CODE,lat:pos.coords.latitude,lng:pos.coords.longitude})});
+      const data=await r.json();
+      if (data.error) { toast('⚠️ '+data.error); return; }
+      if (data.bothCheckedIn) showMatch('Match!','Du hast jemanden getroffen 🎉');
+      else toast('✅ Eingecheckt – warte auf Partner…');
+    } catch { toast('✅ Eingecheckt'); }
+    loadInvitesIntoDrawer(document.getElementById('drawerBody'));
+  },null,{enableHighAccuracy:true});
+}
+
+function startInvitePolling() {
+  if (invitePollInterval) clearInterval(invitePollInterval);
+  invitePollInterval = setInterval(async () => {
+    try {
+      const r = await fetch(`${API}/spotcache/invites/${CODE}`);
+      if (!r.ok) return;
+      const invites = await r.json();
+      const count   = invites.length;
+
+      document.getElementById('statInvites').textContent = count;
+
+      if (count > knownInviteCount && knownInviteCount >= 0) {
+        updateInviteBadge(count - knownInviteCount);
+        document.getElementById('inviteHeaderBtn').classList.add('active');
+        if (Notification.permission === 'granted') {
+          new Notification('🧭 Neue Einladung!', {
+            body: 'Jemand möchte sich an deinem Spot treffen.'
+          });
+        }
+      }
+      knownInviteCount = count;
+      checkUpcomingMeetings(invites);
+
+    } catch {}
+  }, 8000);
+}
+
+let globalChatPollTimer = null;
+
+function startGlobalChatPolling() {
+  if (globalChatPollTimer) clearInterval(globalChatPollTimer);
+
+  globalChatPollTimer = setInterval(async () => {
+    if (!CODE || CODE === '000000') return;
+
+    try {
+      const r = await fetch(`${API}/messages/${CODE}?spot_type=caching_chat`);
+      if (!r.ok) return;
+      const newMsgs = await r.json();
+      if (!newMsgs.length) return;
+
+      let unread = {};
+      try { unread = JSON.parse(localStorage.getItem('sm_unread_caching') || '{}'); } catch {}
+      let hadNewMessages = false;
+
+      newMsgs.forEach(m => {
+        const room = buildChatRoom(CODE, m.sender_code);
+        const key  = CHAT_PREFIX + room;
+
+        let existing = [];
+        try { existing = JSON.parse(localStorage.getItem(key) || '[]'); } catch {}
+
+        const isDuplicate = existing.some(e =>
+          e.from === m.sender_code &&
+          e.text === m.message &&
+          Math.abs(e.ts - new Date(m.created_at).getTime()) < 5000
+        );
+
+        if (!isDuplicate) {
+          existing.push({
+            from:     m.sender_code,
+            fromName: m.sender_name,
+            text:     m.message,
+            ts:       new Date(m.created_at).getTime()
+          });
+          localStorage.setItem(key, JSON.stringify(existing));
+
+          const isCurrentChat = (currentDrawer === 'chat' && chatPartnerCode === m.sender_code);
+          if (!isCurrentChat) {
+            unread[m.sender_code] = (unread[m.sender_code] || 0) + 1;
+            hadNewMessages = true;
+          }
+        }
+      });
+
+      if (hadNewMessages) {
+        localStorage.setItem('sm_unread_caching', JSON.stringify(unread));
+        updateChatBadgeFromStorage();
+      }
+
+      if (currentDrawer === 'chat' && chatPartnerCode) {
+        renderChatMessages();
+      }
+
+      checkFavoriteNotifications();
+
+    } catch {}
+
+  }, 10000);
+}
+
+function updateChatBadgeFromStorage() {
+  try {
+    const unread = JSON.parse(localStorage.getItem('sm_unread_caching') || '{}');
+    const count = Object.values(unread).filter(n => n > 0).length;
+    showChatBadge(count);
+  } catch {
+    showChatBadge(0);
+  }
+}
+
+function showChatBadge(count) {
+  const badge  = document.getElementById('chatBadge');
+  const btn    = document.getElementById('chatHeaderBtn');
+  if (!badge || !btn) return;
+
+  if (count > 0) {
+    badge.textContent = count > 9 ? '9+' : count;
+    badge.style.display = 'inline-block';
+    btn.classList.add('has-new');
+  } else {
+    badge.style.display = 'none';
+    btn.classList.remove('has-new');
+  }
+}
+
+function updateInviteBadge(n) {
+  const b=document.getElementById('inviteBadge');
+  if(n>0){b.style.display='flex';b.textContent=n;}else{b.style.display='none';}
+}
+
+// ── CHAT INTEGRATION ──────────────────────────────────────────────────────────
+const CHAT_PREFIX = 'sm_local_msg_';
+let chatMyCode      = null;
+let chatPartnerCode = null;
+let chatPartnerName = null;
+let chatRoom        = null;
+let chatPollTimer   = null;
+
+function buildChatRoom(a, b) {
+  return [a, b].sort().join('-');
+}
+
+function getChatMessages() {
+  if (!chatRoom) return [];
+  try {
+    return JSON.parse(localStorage.getItem(CHAT_PREFIX + chatRoom) || '[]');
+  } catch { return []; }
+}
+
+function saveChatMessages(msgs) {
+  if (!chatRoom) return;
+  localStorage.setItem(CHAT_PREFIX + chatRoom, JSON.stringify(msgs));
+}
+
+function renderChatMessages() {
+  const container = document.getElementById('chatMsgs');
+  if (!container) return;
+
+  const msgs = getChatMessages();
+  if (!msgs.length) {
+    container.innerHTML = `<div class="empty-state" style="padding:1rem 0;">
+      <div class="es-icon">💬</div>Noch keine Nachrichten.</div>`;
+    return;
+  }
+
+  container.innerHTML = msgs.map(m => {
+    const isMine = m.from === chatMyCode;
+    const time   = new Date(m.ts).toLocaleTimeString('de-DE',
+                   { hour: '2-digit', minute: '2-digit' });
+    return `<div class="chat-bubble ${isMine ? 'mine' : 'theirs'}">
+      ${!isMine
+        ? `<span class="chat-bubble-author">${esc(m.fromName || chatPartnerCode)}</span>`
+        : ''}
+      ${esc(m.text)}
+      <div class="chat-bubble-time">${time}</div>
+    </div>`;
+  }).join('');
+
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendChatMsg() {
+  const input = document.getElementById('chatInput');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text || !chatPartnerCode) return;
+
+  const myName = JSON.parse(localStorage.getItem('sm_profile_caching') || '{}').name || chatMyCode;
+
+  const msgs = getChatMessages();
+  msgs.push({ from: chatMyCode, fromName: myName, text, ts: Date.now() });
+  saveChatMessages(msgs);
+  input.value = '';
+  renderChatMessages();
+
+  try {
+    await fetch(`${API}/message`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipient:   chatPartnerCode,
+        sender_code: chatMyCode,
+        sender_name: myName,
+        message:     text,
+        spot_type:   'caching_chat'
+      })
+    });
+  } catch {}
+}
+
+function startChatPolling() {
+  stopChatPolling();
+  chatPollTimer = setInterval(async () => {
+    if (!chatPartnerCode || !chatMyCode) return;
+    try {
+      const r = await fetch(`${API}/messages/${chatMyCode}?spot_type=caching_chat`);
+      if (!r.ok) return;
+      const newMsgs = await r.json();
+
+      const fromPartner = newMsgs.filter(m => m.sender_code === chatPartnerCode);
+      if (!fromPartner.length) return;
+
+      const existing = getChatMessages();
+      let hasNew = false;
+
+      fromPartner.forEach(m => {
+        const isDuplicate = existing.some(e =>
+          e.from === m.sender_code &&
+          e.text === m.message &&
+          Math.abs(e.ts - new Date(m.created_at).getTime()) < 5000
+        );
+        if (!isDuplicate) {
+          existing.push({
+            from:     m.sender_code,
+            fromName: m.sender_name,
+            text:     m.message,
+            ts:       new Date(m.created_at).getTime()
+          });
+          hasNew = true;
+        }
+      });
+
+      if (hasNew) {
+        saveChatMessages(existing);
+        renderChatMessages();
+      }
+    } catch {}
+  }, 4000);
+}
+
+function stopChatPolling() {
+  if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
+}
+
+function openChatDrawer(partnerCode, partnerName) {
+  chatMyCode      = CODE;
+  chatPartnerCode = partnerCode;
+  chatPartnerName = partnerName || partnerCode;
+  chatRoom        = buildChatRoom(CODE, partnerCode);
+  currentDrawer   = 'chat';
+
+  try {
+    const unread = JSON.parse(localStorage.getItem('sm_unread_caching') || '{}');
+    delete unread[partnerCode];
+    localStorage.setItem('sm_unread_caching', JSON.stringify(unread));
+    updateChatBadgeFromStorage();
+  } catch {}
+
+  document.getElementById('drawerTitle').textContent = '💬 CHAT';
+  document.getElementById('drawerOverlay').classList.add('show');
+  document.getElementById('drawer').classList.add('open');
+
+  document.getElementById('drawerBody').innerHTML = `
+    <div class="chat-wrap">
+      <div class="chat-partner-bar">
+        💬 ${esc(chatPartnerName)}
+        <span style="color:var(--muted);font-weight:400;"> · ${partnerCode}</span>
+      </div>
+      <div class="chat-messages" id="chatMsgs"></div>
+      <div class="chat-input-row">
+        <input class="chat-input" id="chatInput"
+               placeholder="Nachricht…" maxlength="280"
+               onkeydown="if(event.key==='Enter') sendChatMsg()">
+        <button class="chat-send-btn" onclick="sendChatMsg()">➤</button>
+      </div>
+    </div>
+  `;
+
+  renderChatMessages();
+  startChatPolling();
+}
+
+// ── FAVORITEN ────────────────────────────────────────────────────────────────
+const favoritesCache = new Set();
+let favoritesLoaded  = false;
+
+async function loadFavoritesCache() {
+  try {
+    const r = await fetch(`${API}/favorites/${CODE}`);
+    if (!r.ok) return;
+    const favs = await r.json();
+    favoritesCache.clear();
+    favs.forEach(f => favoritesCache.add(String(f.spot_id)));
+    favoritesLoaded = true;
+  } catch {}
+}
+
+async function loadFavoritesIntoDrawer(body) {
+  body.innerHTML = `<div class="empty-state"><div class="es-icon">⏳</div>Lädt…</div>`;
+
+  let favs = [];
+  try {
+    const r = await fetch(`${API}/favorites/${CODE}`);
+    if (r.ok) favs = await r.json();
+  } catch {}
+
+  if (!favs.length) {
+    body.innerHTML = `<div class="empty-state">
+      <div class="es-icon">⭐</div>
+      Noch keine Favoriten.
+      <div style="font-size:0.78rem;color:var(--muted);margin-top:0.5rem;text-align:center;line-height:1.5;">
+        Öffne einen Spot auf der Karte<br>und tippe auf ⭐ um ihn zu speichern.
+      </div>
+    </div>`;
+    return;
+  }
+
+  const checkinsBySpot = {};
+  await Promise.all(favs.map(async f => {
+    try {
+      const r = await fetch(`${API}/checkins/public/${f.spot_id}`);
+      if (r.ok) checkinsBySpot[f.spot_id] = await r.json();
+    } catch {}
+  }));
+
+  body.innerHTML = favs.map(f => {
+    const lastCheckin = f.last_checkin
+      ? `Letzter Check-in: ${f.last_checkin_name || f.last_checkin_code || '?'} · ${formatDateTime(+f.last_checkin)}`
+      : 'Noch kein Check-in';
+
+    const upcoming = checkinsBySpot[f.spot_id] || [];
+    const upcomingHtml = upcoming.length
+      ? `<div style="margin-top:0.5rem;display:flex;flex-direction:column;gap:0.3rem;">
+           ${upcoming.map(c => `
+             <div style="display:flex;align-items:center;gap:0.5rem;
+                         padding:0.35rem 0.5rem;background:rgba(16,185,129,0.08);
+                         border:1px solid rgba(16,185,129,0.2);border-radius:8px;">
+               <span style="font-size:0.8rem;">📍</span>
+               <div style="flex:1;min-width:0;">
+                 <div style="font-size:0.72rem;font-weight:600;color:#10b981;">
+                   ${esc(c.profile_name || c.code)}
+                 </div>
+                 <div style="font-size:0.65rem;color:var(--muted);
+                             font-family:'Space Mono',monospace;">
+                   ${formatDateTime(c.checkin_at)}
+                   ${c.note ? `· ${esc(c.note)}` : ''}
+                 </div>
+               </div>
+               <button class="sc-btn success" style="padding:0.3rem 0.5rem;font-size:0.75rem;"
+                       data-chat-fav="${c.code}"
+                       data-chatname-fav="${esc(c.profile_name || c.code)}">💬</button>
+             </div>`).join('')}
+         </div>`
+      : '';
+
+    return `<div class="fav-card" style="flex-direction:column;align-items:stretch;">
+      <div style="display:flex;align-items:center;gap:0.75rem;">
+        <div class="fav-icon">📍</div>
+        <div class="fav-info" style="flex:1;min-width:0;">
+          <div class="fav-name">${esc(f.spot_name || 'Spot')}</div>
+          <div class="fav-meta">${esc(f.wishTag || '')}</div>
+          <div class="fav-checkin">${lastCheckin}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:0.35rem;">
+          <button class="sc-btn navigate" style="padding:0.5rem 0.6rem;"
+                  data-fav-lat="${f.lat}" data-fav-lng="${f.lng}">🧭</button>
+          <button class="sc-btn" style="padding:0.5rem 0.6rem;font-size:0.7rem;
+                  background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.3);color:var(--red);"
+                  data-unfav="${f.spot_id}">✕</button>
+        </div>
+      </div>
+
+      ${upcomingHtml}
+
+      <div id="favWeather_${f.spot_id}"
+           style="font-size:0.68rem;color:var(--muted);margin-top:0.4rem;
+                  font-family:'Space Mono',monospace;">
+        ⏳ Wetter…
+      </div>
+
+      <button class="sc-btn success"
+              style="margin-top:0.5rem;width:100%;padding:0.6rem;font-size:0.78rem;"
+              data-announce="${f.spot_id}" data-spotname="${esc(f.spot_name || 'Spot')}">
+        📍 Check-in ankündigen
+      </button>
+    </div>`;
+  }).join('');
+
+  body.querySelectorAll('[data-fav-lat]').forEach(b =>
+    b.addEventListener('click', () => navigateToSpot(+b.dataset.favLat, +b.dataset.favLng))
+  );
+  body.querySelectorAll('[data-unfav]').forEach(b =>
+    b.addEventListener('click', async () => {
+      await toggleFavorite(+b.dataset.unfav, false);
+      loadFavoritesIntoDrawer(body);
+    })
+  );
+  body.querySelectorAll('[data-chat-fav]').forEach(b =>
+    b.addEventListener('click', () => {
+      closeDrawer();
+      setTimeout(() => openChatDrawer(b.dataset.chatFav, b.dataset.chatnameFav), 300);
+    })
+  );
+  body.querySelectorAll('[data-announce]').forEach(b =>
+    b.addEventListener('click', () => openCheckinAnnouncement(+b.dataset.announce, b.dataset.spotname, body))
+  );
+
+  favs.forEach(f => renderFavWeather(f.spot_id, f.lat, f.lng));
+}
+
+async function renderFavWeather(spotId, lat, lng) {
+  const el = document.getElementById(`favWeather_${spotId}`);
+  if (!el) return;
+  const w = await fetchWeather(lat, lng);
+  if (!w || !w.current) { el.style.display = 'none'; return; }
+  const temp = Math.round(w.current.temperature_2m);
+  const code = w.current.weather_code;
+  const wind = Math.round(w.current.wind_speed_10m);
+  el.innerHTML = `${weatherEmoji(code)} ${temp}°C · ${weatherDesc(code)} · 💨 ${wind} km/h`;
+}
+
+function openCheckinAnnouncement(spotId, spotName, drawerBody) {
+  const minTime = new Date(Date.now() + 4 * 60 * 60 * 1000);
+  const minTimeStr = new Date(minTime.getTime() - minTime.getTimezoneOffset() * 60000)
+    .toISOString().slice(0, 16);
+
+  const existing = document.getElementById('checkinAnnounceForm');
+  if (existing) existing.remove();
+
+  const formHtml = `
+    <div id="checkinAnnounceForm"
+         style="position:fixed;bottom:0;left:0;right:0;z-index:900;
+                background:var(--card2);border-top:1px solid var(--bord);
+                padding:1rem;border-radius:16px 16px 0 0;
+                box-shadow:0 -4px 20px rgba(0,0,0,0.3);">
+      <div style="font-weight:700;margin-bottom:0.75rem;">
+        📍 Check-in bei: ${esc(spotName)}
+      </div>
+      <div style="font-size:0.75rem;color:var(--muted2);margin-bottom:0.75rem;">
+        Wähle einen Zeitpunkt mindestens 4 Stunden in der Zukunft.<br>
+        Alle Favoriten dieses Spots werden benachrichtigt.
+      </div>
+      <input type="datetime-local" id="checkinTime"
+             min="${minTimeStr}"
+             style="width:100%;padding:0.65rem;background:var(--card);
+                    border:1px solid var(--bord2);border-radius:10px;
+                    color:var(--text);font-size:0.88rem;margin-bottom:0.5rem;">
+      <input type="text" id="checkinNote" placeholder="Kurze Notiz (optional)"
+             maxlength="80"
+             style="width:100%;padding:0.65rem;background:var(--card);
+                    border:1px solid var(--bord2);border-radius:10px;
+                    color:var(--text);font-size:0.88rem;margin-bottom:0.75rem;">
+      <div style="display:flex;gap:0.5rem;">
+        <button class="btn-ghost" style="flex:1;"
+                onclick="document.getElementById('checkinAnnounceForm').remove()">
+          Abbrechen
+        </button>
+        <button class="btn-primary" style="flex:2;"
+                onclick="submitCheckinAnnouncement(${spotId})">
+          📍 Ankündigen
+        </button>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', formHtml);
+  setTimeout(() => document.getElementById('checkinTime')?.focus(), 100);
+}
+
+async function submitCheckinAnnouncement(spotId) {
+  const timeVal = document.getElementById('checkinTime')?.value;
+  const note    = document.getElementById('checkinNote')?.value?.trim();
+
+  if (!timeVal) { toast('⚠️ Bitte einen Zeitpunkt wählen'); return; }
+
+  const checkinAt = new Date(timeVal).getTime();
+  const minTime   = Date.now() + 4 * 60 * 60 * 1000;
+  if (checkinAt < minTime) {
+    toast('⚠️ Mindestens 4 Stunden in der Zukunft'); return;
+  }
+
+  try {
+    const res = await fetch(`${API}/checkins/public`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ code: CODE, spot_id: spotId, checkin_at: checkinAt, note })
+    });
+    const data = await res.json();
+    if (data.success) {
+      document.getElementById('checkinAnnounceForm')?.remove();
+      toast('✅ Check-in angekündigt – alle Favoriten wurden benachrichtigt!');
+      loadFavoritesIntoDrawer(document.getElementById('drawerBody'));
+    } else {
+      toast('⚠️ ' + (data.error || 'Fehler'));
+    }
+  } catch {
+    toast('⚠️ Server nicht erreichbar');
+  }
+}
+
+async function toggleFavorite(spotId, isFav) {
+  const id = String(spotId);
+  try {
+    if (isFav) {
+      await fetch(`${API}/favorites`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ code: CODE, spot_id: spotId })
+      });
+      favoritesCache.add(id);
+      toast('⭐ Favorit gespeichert');
+    } else {
+      await fetch(`${API}/favorites/${spotId}`, {
+        method:  'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ code: CODE })
+      });
+      favoritesCache.delete(id);
+      toast('✕ Favorit entfernt');
+    }
+  } catch {
+    toast('⚠️ Fehler beim Speichern');
+  }
+}
+
+async function checkFavoriteNotifications() {
+  try {
+    const r = await fetch(`${API}/messages/${CODE}?spot_type=favorite_checkin`);
+    if (!r.ok) return;
+    const msgs = await r.json();
+    if (msgs.length > 0) {
+      const badge = document.getElementById('favBadge');
+      badge.textContent = msgs.length > 9 ? '9+' : msgs.length;
+      badge.style.display = 'inline-block';
+    }
+  } catch {}
+}
+
+// SumUp Donate
+async function donate(amount) {
+  try {
+    const r = await fetch(`${API}/donate/checkout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount })
+    });
+    const data = await r.json();
+    if (!data.url) { toast('⚠️ Spende gerade nicht möglich'); return; }
+    window.location.href = data.url;
+  } catch {
+    toast('⚠️ Verbindungsfehler');
+  }
+}
+
+// ── WETTER (Open-Meteo) ──────────────────────────────────────────────────────
+const weatherCache = new Map();
+
+function weatherEmoji(code) {
+  if (code === 0)          return '☀️';
+  if (code <= 2)           return '🌤️';
+  if (code === 3)          return '☁️';
+  if (code <= 48)          return '🌫️';
+  if (code <= 55)          return '🌦️';
+  if (code <= 65)          return '🌧️';
+  if (code <= 77)          return '❄️';
+  if (code <= 82)          return '🌦️';
+  if (code <= 86)          return '🌨️';
+  if (code <= 99)          return '⛈️';
+  return '🌡️';
+}
+
+function weatherDesc(code) {
+  if (code === 0)          return 'Klarer Himmel';
+  if (code <= 2)           return 'Überwiegend klar';
+  if (code === 3)          return 'Bedeckt';
+  if (code <= 48)          return 'Neblig';
+  if (code <= 55)          return 'Nieselregen';
+  if (code <= 65)          return 'Regen';
+  if (code <= 77)          return 'Schneefall';
+  if (code <= 82)          return 'Regenschauer';
+  if (code <= 86)          return 'Schneeschauer';
+  if (code <= 99)          return 'Gewitter';
+  return 'Unbekannt';
+}
+
+async function fetchWeather(lat, lng) {
+  const key = `${lat.toFixed(3)},${lng.toFixed(3)}`;
+  const now  = Date.now();
+
+  if (weatherCache.has(key)) {
+    const cached = weatherCache.get(key);
+    if (now - cached.ts < 10 * 60 * 1000) return cached.data;
+  }
+
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast` +
+      `?latitude=${lat}&longitude=${lng}` +
+      `&current=temperature_2m,weather_code,wind_speed_10m,precipitation` +
+      `&hourly=temperature_2m,weather_code,precipitation_probability` +
+      `&wind_speed_unit=kmh` +
+      `&timezone=auto` +
+      `&forecast_days=2`;
+
+    const res  = await fetch(url);
+    if (!res.ok) return null;
+    const json = await res.json();
+
+    const data = { current: json.current, hourly: json.hourly };
+    weatherCache.set(key, { data, ts: now });
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+async function renderWeatherBar(lat, lng) {
+  const el = document.getElementById('spotWeatherBar');
+  if (!el) return;
+
+  el.innerHTML = `<div class="weather-loading">⏳ Wetter wird geladen…</div>`;
+
+  const w = await fetchWeather(lat, lng);
+  if (!w) { el.style.display = 'none'; return; }
+
+  const cur  = w.current;
+  const temp = Math.round(cur.temperature_2m);
+  const wind = Math.round(cur.wind_speed_10m);
+  const code = cur.weather_code;
+  const rain = cur.precipitation > 0
+    ? `· 🌧 ${cur.precipitation.toFixed(1)} mm`
+    : '';
+
+  let forecastHtml = '';
+  if (w.hourly) {
+    const nowISO   = new Date().toISOString().slice(0, 13);
+    const startIdx = w.hourly.time.findIndex(t => t.startsWith(nowISO));
+
+    if (startIdx >= 0) {
+      const hours = w.hourly.time.slice(startIdx, startIdx + 8);
+
+      forecastHtml = `<div class="weather-forecast">` +
+        hours.map((timeStr, i) => {
+          const idx      = startIdx + i;
+          const hourTemp = Math.round(w.hourly.temperature_2m[idx]);
+          const hourCode = w.hourly.weather_code[idx];
+          const rainProb = w.hourly.precipitation_probability[idx] || 0;
+          const hourLabel = i === 0 ? 'Jetzt' : timeStr.slice(11, 16);
+          const isNow = i === 0 ? 'now' : '';
+
+          return `<div class="wf-card ${isNow}">
+            <div class="wf-hour">${hourLabel}</div>
+            <div class="wf-emoji">${weatherEmoji(hourCode)}</div>
+            <div class="wf-temp">${hourTemp}°</div>
+            ${rainProb > 0
+              ? `<div class="wf-rain">${rainProb}%</div>`
+              : '<div class="wf-rain" style="visibility:hidden">0%</div>'}
+          </div>`;
+        }).join('') +
+      `</div>`;
+    }
+  }
+
+  const barClass = forecastHtml
+    ? 'weather-bar'
+    : 'weather-bar weather-bar-standalone';
+
+  el.innerHTML = `
+    <div class="${barClass}">
+      <div class="weather-icon">${weatherEmoji(code)}</div>
+      <div class="weather-temp">${temp}°C</div>
+      <div class="weather-details">
+        <div class="weather-desc">${weatherDesc(code)}</div>
+        <div class="weather-wind">💨 ${wind} km/h ${rain}</div>
+      </div>
+    </div>
+    ${forecastHtml}`;
+}
+
+async function renderInviteWeather(invId, lat, lng, timeStart) {
+  const el = document.getElementById(`invWeather_${invId}`);
+  if (!el) return;
+
+  const w = await fetchWeather(lat, lng);
+  if (!w || !w.hourly) { el.style.display = 'none'; return; }
+
+  const meetingDate = new Date(timeStart);
+  const meetingISO  = meetingDate.toISOString().slice(0, 13);
+  const centerIdx   = w.hourly.time.findIndex(t => t.startsWith(meetingISO));
+
+  if (centerIdx < 0) {
+    el.innerHTML = `<span style="color:var(--muted);font-size:0.65rem;">
+      ⚠️ Vorhersage nur bis 48h verfügbar</span>`;
+    return;
+  }
+
+  const startIdx = Math.max(0, centerIdx - 2);
+  const endIdx   = Math.min(w.hourly.time.length, centerIdx + 7);
+  const hours    = w.hourly.time.slice(startIdx, endIdx);
+
+  const cards = hours.map((timeStr, i) => {
+    const idx      = startIdx + i;
+    const hourTemp = Math.round(w.hourly.temperature_2m[idx]);
+    const hourCode = w.hourly.weather_code[idx];
+    const rainProb = w.hourly.precipitation_probability[idx] || 0;
+    const hourLabel = timeStr.slice(11, 16);
+    const isMeeting = idx === centerIdx;
+
+    return `<div class="wf-card ${isMeeting ? 'now' : ''}">
+      <div class="wf-hour">${isMeeting ? '📍' : hourLabel}</div>
+      <div class="wf-emoji">${weatherEmoji(hourCode)}</div>
+      <div class="wf-temp">${hourTemp}°</div>
+      ${rainProb > 0
+        ? `<div class="wf-rain">${rainProb}%</div>`
+        : '<div class="wf-rain" style="visibility:hidden">0%</div>'}
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `<div class="weather-forecast" style="border-radius:8px;border:1px solid var(--bord);">
+    ${cards}
+  </div>`;
+}
+
+// ── BEVORSTEHENDE TREFFEN ────────────────────────────────────────────────────
+const shownUrgentToasts = new Set();
+
+async function openMeetingsModal() {
+  document.getElementById('meetingsModal').classList.add('show');
+  const content = document.getElementById('meetingsContent');
+  content.innerHTML = `<div class="empty-state"><div class="es-icon">⏳</div>Lädt…</div>`;
+
+  let invites = [];
+  try {
+    const r = await fetch(`${API}/spotcache/invites/${CODE}`);
+    if (r.ok) invites = await r.json();
+  } catch {}
+
+  const now = Date.now();
+  const upcoming = invites
+    .filter(inv => inv.status === 'accepted' && (inv.time_end || 0) > now)
+    .sort((a, b) => (a.time_start || 0) - (b.time_start || 0));
+
+  if (!upcoming.length) {
+    content.innerHTML = `<div class="empty-state">
+      <div class="es-icon">📅</div>
+      Keine bevorstehenden Treffen.
+      <div style="font-size:0.78rem;color:var(--muted);margin-top:0.5rem;text-align:center;">
+        Akzeptierte Einladungen erscheinen hier.
+      </div>
+    </div>`;
+    return;
+  }
+
+  content.innerHTML = upcoming.map(inv => {
+    const timeStart  = inv.time_start || 0;
+    const timeEnd    = inv.time_end   || 0;
+    const diffMs     = timeStart - now;
+    const diffHours  = diffMs / 3600000;
+
+    const urgency = diffHours < 2      ? 'urgent'
+                  : diffHours < 24     ? 'today'
+                  : 'upcoming';
+
+    const countdown = formatCountdown(timeStart);
+    const isSender  = inv.from_code === CODE;
+
+    return `<div class="meeting-card ${urgency}">
+      <div class="meeting-spot">${esc(inv.spot_name || 'Spot')}</div>
+      <div class="meeting-time">
+        ${formatDateTime(timeStart)} – ${formatDateTime(timeEnd)}
+      </div>
+      <div class="meeting-countdown">${countdown}</div>
+
+      <div id="mtgWeather_${inv.id}"
+           style="font-size:0.68rem;color:var(--muted);font-family:'Space Mono',monospace;
+                  margin-bottom:0.4rem;">
+        ⏳ Wetter…
+      </div>
+
+      <div class="meeting-actions">
+        <button class="sc-btn navigate" style="flex:1;"
+                data-nav-inv="${inv.spot_id}">🧭 Route</button>
+        <button class="sc-btn primary" style="flex:1;"
+                data-ci="${inv.id}">📍 Check-in</button>
+        <button class="sc-btn success" style="padding:0.65rem 0.8rem;"
+                data-chat="${isSender ? inv.to_code : inv.from_code}"
+                data-chatname="${esc(inv.spot_name || '')}">💬</button>
+        <button class="sc-btn danger" style="padding:0.65rem 0.8rem;"
+                data-cancel="${inv.id}"
+                title="Treffen stornieren">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  content.querySelectorAll('[data-nav-inv]').forEach(b =>
+    b.addEventListener('click', () => {
+      const spot = allSpots.find(s => s.id == b.dataset.navInv);
+      if (spot) { closeModals(); navigateToSpot(spot.lat, spot.lng); }
+    })
+  );
+  content.querySelectorAll('[data-ci]').forEach(b =>
+    b.addEventListener('click', () => checkIn(+b.dataset.ci))
+  );
+  content.querySelectorAll('[data-chat]').forEach(b =>
+    b.addEventListener('click', () => {
+      closeModals();
+      setTimeout(() => openChatDrawer(b.dataset.chat, b.dataset.chatname || b.dataset.chat), 300);
+    })
+  );
+  content.querySelectorAll('[data-cancel]').forEach(b =>
+    b.addEventListener('click', () => cancelInvite(+b.dataset.cancel))
+  );
+
+  upcoming.forEach(inv => {
+    const spot = allSpots.find(s => s.id == inv.spot_id);
+    if (spot) renderMeetingWeather(inv.id, spot.lat, spot.lng, inv.time_start);
+  });
+}
+
+async function renderMeetingWeather(invId, lat, lng, timeStart) {
+  const el = document.getElementById(`mtgWeather_${invId}`);
+  if (!el) return;
+  const w = await fetchWeather(lat, lng);
+  if (!w || !w.hourly) { el.style.display = 'none'; return; }
+
+  const meetingISO = new Date(timeStart).toISOString().slice(0, 13);
+  const centerIdx  = w.hourly.time.findIndex(t => t.startsWith(meetingISO));
+  if (centerIdx < 0) { el.innerHTML = '<span style="opacity:0.5;">Vorhersage nicht verfügbar</span>'; return; }
+
+  const startIdx = Math.max(0, centerIdx - 1);
+  const hours    = w.hourly.time.slice(startIdx, centerIdx + 5);
+
+  el.innerHTML = `<div class="weather-forecast"
+       style="border-radius:8px;border:1px solid var(--bord);margin-top:0.25rem;">
+    ${hours.map((t, i) => {
+      const idx      = startIdx + i;
+      const temp     = Math.round(w.hourly.temperature_2m[idx]);
+      const code     = w.hourly.weather_code[idx];
+      const rain     = w.hourly.precipitation_probability[idx] || 0;
+      const label    = idx === centerIdx ? '📍' : t.slice(11, 16);
+      const isCenter = idx === centerIdx ? 'now' : '';
+      return `<div class="wf-card ${isCenter}">
+        <div class="wf-hour">${label}</div>
+        <div class="wf-emoji">${weatherEmoji(code)}</div>
+        <div class="wf-temp">${temp}°</div>
+        ${rain > 0
+          ? `<div class="wf-rain">${rain}%</div>`
+          : '<div class="wf-rain" style="visibility:hidden">0%</div>'}
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+async function cancelInvite(id) {
+  const ok = confirm('Treffen wirklich stornieren?\nDer andere wird automatisch benachrichtigt.');
+  if (!ok) return;
+
+  const token = localStorage.getItem('sm_token');
+  try {
+    const res = await fetch(`${API}/spotcache/invite/${id}/cancel`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ code: CODE, token })
+    });
+    const data = await res.json();
+    if (data.success) {
+      toast('✅ Treffen storniert – Partner wurde informiert');
+      openMeetingsModal();
+    } else {
+      toast('⚠️ ' + (data.error || 'Fehler beim Stornieren'));
+    }
+  } catch {
+    toast('⚠️ Server nicht erreichbar');
+  }
+}
+
+function dismissUrgentToast() {
+  document.getElementById('urgentToast').classList.remove('show');
+}
+
+function checkUpcomingMeetings(invites) {
+  const now = Date.now();
+  const twoHours = 2 * 60 * 60 * 1000;
+
+  const urgent = invites.find(inv =>
+    inv.status === 'accepted' &&
+    (inv.time_start || 0) > now &&
+    (inv.time_start || 0) - now < twoHours &&
+    !shownUrgentToasts.has(inv.id)
+  );
+
+  if (urgent) {
+    shownUrgentToasts.add(urgent.id);
+    const countdown = formatCountdown(urgent.time_start);
+    document.getElementById('urgentToastText').textContent =
+      `Treffen bei "${urgent.spot_name || 'Spot'}" ${countdown}`;
+    document.getElementById('urgentToast').classList.add('show');
+  }
+}
+
+// ── SPOT DETAIL ──────────────────────────────────────────────────────────────
+async function openSpotDetail(spotId) {
+  const spot = allSpots.find(s => s.id === spotId);
+  if (!spot) { toast('⚠️ Nicht gefunden'); return; }
+
+  detailSpot = spot;
+
+  document.getElementById('spotDetailContent').innerHTML =
+    `<div class="empty-state"><div class="es-icon">⏳</div>Lädt…</div>`;
+  document.getElementById('spotDetailModal').classList.add('show');
+
+  const mapEl = document.getElementById('spotDetailMap');
+  mapEl.innerHTML = ''; mapEl.style.display = 'block';
+  if (detailMiniMap) { detailMiniMap.remove(); detailMiniMap = null; }
+  setTimeout(() => {
+    detailMiniMap = new maplibregl.Map({
+      container: 'spotDetailMap',
+      style: 'https://tiles.openfreemap.org/styles/liberty',
+      center: [spot.lng, spot.lat],
+      zoom: 14,
+      interactive: false,
+      attributionControl: false
+    });
+    detailMiniMap.on('load', () => {
+      const el = document.createElement('div');
+      el.className = 'my-spot-marker';
+      new maplibregl.Marker({ element: el }).setLngLat([spot.lng, spot.lat]).addTo(detailMiniMap);
+      if (userPos) {
+        const uel = document.createElement('div');
+        uel.className = 'user-marker';
+        new maplibregl.Marker({ element: uel }).setLngLat([userPos.lng, userPos.lat]).addTo(detailMiniMap);
+        const bounds = new maplibregl.LngLatBounds([spot.lng, spot.lat], [userPos.lng, userPos.lat]);
+        detailMiniMap.fitBounds(bounds, { padding: 40, duration: 0 });
+      }
+    });
+  }, 100);
+
+  const isOnline = onlineSet.has(spot.code);
+  let profile = null, avatarData = null, spotImage = spot.image || null;
+
+  const fetches = [
+    fetch(`${API}/profile/${spot.code}?spot=caching`),
+    fetch(`${API}/avatar/${spot.code}?spot=caching`)
+  ];
+  if (!spotImage) {
+    fetches.push(fetch(`${API}/userspots/${spot.code}`).then(r => r.ok ? r.json() : null));
+  }
+  try {
+    const results = await Promise.all(fetches);
+    if (results[0]?.ok) profile    = await results[0].json();
+    if (results[1]?.ok) avatarData = await results[1].json();
+    if (fetches.length === 3 && results[2]) {
+      const spotData = await results[2];
+      const match = Array.isArray(spotData) ? spotData.find(s => s.id === spotId) : null;
+      if (match?.image) spotImage = match.image;
+    }
+  } catch {}
+
+  const dist = userPos ? (() => {
+    const d = Math.round(haversineKm(userPos.lat, userPos.lng, spot.lat, spot.lng) * 1000);
+    return d < 1000 ? `${d}m` : `${(d / 1000).toFixed(1)}km`;
+  })() : null;
+
+  const avHtml = avatarData?.avatar
+    ? `<img src="${avatarData.avatar}" alt="">`
+    : ((profile?.name?.[0] || '?').toUpperCase());
+
+  const wishes = (profile?.wishTags || profile?.wishes || []).filter(Boolean);
+  const offers = (profile?.offerTags || profile?.offers || []).filter(Boolean);
+
+  document.getElementById('spotDetailContent').innerHTML = `
+    ${spotImage
+      ? `<img src="${spotImage}" alt="" onclick="openImg('${spotImage}')"
+             style="width:100%;max-height:200px;object-fit:cover;border-radius:12px;
+                    margin-bottom:0.75rem;border:1px solid var(--bord2);cursor:zoom-in;">`
+      : ''}
+    <div style="display:flex;gap:0.75rem;align-items:flex-start;margin-bottom:0.75rem;">
+      <div class="spot-detail-avatar">${avHtml}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:1rem;">${esc(spot.name)}</div>
+        ${profile?.name
+          ? `<div style="font-size:0.78rem;color:var(--muted2);margin-top:2px;">
+               👤 ${esc(profile.name)}${profile.age ? ` · ${profile.age} J.` : ''}
+             </div>`
+          : ''}
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:5px;">
+          <span class="sc-tag">${spot.wishTag || ''}</span>
+          ${isOnline
+            ? '<span style="font-size:0.68rem;color:var(--green);font-weight:600;font-family:\'Space Mono\',monospace;">● Online</span>'
+            : '<span style="font-size:0.68rem;color:var(--muted);font-family:\'Space Mono\',monospace;">○ Offline</span>'}
+          ${spotAgeHtml(spot.createdAt || spot.created_at)}
+          ${dist ? `<span style="font-size:0.65rem;color:var(--muted);">📍 ${dist}</span>` : ''}
+        </div>
+      </div>
+    </div>
+
+    <div id="spotWeatherBar"></div>
+
+    ${profile?.bio
+      ? `<div style="font-size:0.82rem;color:var(--muted2);line-height:1.55;padding:0.65rem;
+                     background:var(--card);border-radius:10px;border:1px solid var(--bord);
+                     margin-bottom:0.6rem;">${esc(profile.bio)}</div>`
+      : ''}
+    ${wishes.length
+      ? `<div style="margin-bottom:0.5rem;">
+           ${wishes.map(w => `<span class="profile-chip">💭 ${esc(w)}</span>`).join('')}
+         </div>`
+      : ''}
+    ${offers.length
+      ? `<div>${offers.map(o => `<span class="profile-chip offer">🎁 ${esc(o)}</span>`).join('')}</div>`
+      : ''}
+  `;
+
+  renderWeatherBar(spot.lat, spot.lng);
+
+  const isOwnSpot = spot.code === CODE;
+  const chatBtn = document.getElementById('spotDetailChatBtn');
+  const invBtn  = document.getElementById('spotDetailInviteBtn');
+  const favBtn  = document.getElementById('spotFavoriteBtn');
+
+  if (isOwnSpot) {
+    chatBtn.style.display = 'none';
+    invBtn.style.display  = 'none';
+    favBtn.style.display  = 'none';
+    return;
+  }
+
+  const isFav = favoritesCache.has(String(spot.id));
+  favBtn.textContent = isFav ? '⭐' : '☆';
+  favBtn.classList.toggle('active', isFav);
+  favBtn.style.display = '';
+  favBtn.onclick = async () => {
+    const newFav = !favoritesCache.has(String(spot.id));
+    await toggleFavorite(spot.id, newFav);
+    favBtn.textContent = newFav ? '⭐' : '☆';
+    favBtn.classList.toggle('active', newFav);
+  };
+
+  chatBtn.onclick = () => {
+    closeModals();
+    openChatDrawer(spot.code, profile?.name || spot.code);
+  };
+
+  let existingInvite = null;
+  const now = Date.now();
+  try {
+    const ir = await fetch(`${API}/spotcache/invites/${CODE}`);
+    if (ir.ok) {
+      const allInvites = await ir.json();
+      existingInvite = allInvites.find(inv =>
+        (inv.from_code === spot.code || inv.to_code === spot.code) &&
+        inv.status === 'accepted' &&
+        (inv.time_end || 0) > now &&
+        inv.spot_id == spot.id
+      );
+    }
+  } catch {}
+
+  if (existingInvite) {
+    invBtn.textContent = '✅ Verbunden';
+    invBtn.style.opacity = '0.6';
+    invBtn.style.cursor  = 'default';
+  } else {
+    invBtn.textContent = '📨 Einladung';
+    invBtn.onclick = () => {
+      closeModals();
+      setTimeout(() => openInviteFromSpot(spot.id, spot.name, spot.wishTag), 300);
+    };
+  }
+}
+
+// ── PROFILE ──────────────────────────────────────────────────────────────────
+async function showSpotOwnerProfile(ownerCode) {
+  document.getElementById('profileModalContent').innerHTML=`<div class="empty-state"><div class="es-icon">⏳</div>Lädt…</div>`;
+  document.getElementById('profileModal').classList.add('show');
+  try {
+    const [pRes,aRes,vRes]=await Promise.all([fetch(`${API}/profile/${ownerCode}?spot=caching`),fetch(`${API}/avatar/${ownerCode}?spot=caching`),fetch(`${API}/verifications/${ownerCode}?spot=caching`)]);
+    const p=pRes.ok?await pRes.json():null, a=aRes.ok?await aRes.json():null, v=vRes.ok?await vRes.json():[];
+    if (!p?.name) { document.getElementById('profileModalContent').innerHTML=`<div class="empty-state"><div class="es-icon">👤</div>Nicht gefunden.</div>`; return; }
+    const personal=v.filter(x=>x.type==='personal').length;
+    const avHtml=a?.avatar?`<img src="${a.avatar}" alt="">`:(p.name[0]?.toUpperCase()||'?');
+    const wishes=(p.wishTags||p.wishes||[]).filter(Boolean), offers=(p.offerTags||p.offers||[]).filter(Boolean);
+    document.getElementById('profileModalContent').innerHTML=`
+      <div style="text-align:center;margin-bottom:1rem;">
+        <div class="profile-avatar-lg">${avHtml}</div>
+        <div style="font-family:'Space Mono',monospace;font-size:1rem;font-weight:700;color:var(--acc);">${esc(p.name)}</div>
+        ${p.age||p.city||p.region?`<div style="font-size:0.78rem;color:var(--muted2);margin-top:3px;">${[p.age?p.age+' J.':'',p.city,p.region].filter(Boolean).join(' · ')}</div>`:''}
+        ${personal>0?`<div style="color:var(--green);font-size:0.78rem;font-weight:600;margin-top:4px;">✓ Persönlich getroffen · ${personal}×</div>`:''}
+      </div>
+      ${p.bio?`<div style="font-size:0.85rem;color:var(--muted2);line-height:1.5;padding:0.75rem;background:var(--card);border-radius:10px;border:1px solid var(--bord);margin-bottom:0.6rem;">${esc(p.bio)}</div>`:''}
+      ${wishes.length?`<div style="margin-bottom:0.5rem;">${wishes.map(w=>`<span class="profile-chip">💭 ${esc(w)}</span>`).join('')}</div>`:''}
+      ${offers.length?`<div>${offers.map(o=>`<span class="profile-chip offer">🎁 ${esc(o)}</span>`).join('')}</div>`:''}
+    `;
+  } catch { document.getElementById('profileModalContent').innerHTML=`<div class="empty-state"><div class="es-icon">⚠️</div>Fehler.</div>`; }
+}
+
+// ── NEUE SPOTS ───────────────────────────────────────────────────────────────
+let newSpotMarkers = [];
+
+function openNewSpots() {
+  if (!userPos) { toast('❌ Kein Standort verfügbar'); return; }
+
+  const RADIUS_KM = 2;
+  const since = Date.now() - 24 * 60 * 60 * 1000;
+
+  const nearby = allSpots.filter(s =>
+    s.code !== CODE &&
+    haversineKm(userPos.lat, userPos.lng, s.lat, s.lng) <= RADIUS_KM &&
+    Number(s.created_at || s.createdAt || 0) >= since
+  );
+
+  newSpotMarkers.forEach(m => m.remove());
+  newSpotMarkers = [];
+
+  nearby.forEach(s => {
+    const el = document.createElement('div');
+    el.className = 'new-spot-marker';
+    const marker = new maplibregl.Marker({ element: el })
+      .setLngLat([s.lng, s.lat])
+      .addTo(map);
+    newSpotMarkers.push(marker);
+    el.addEventListener('click', e => { e.stopPropagation(); openMarkerDrawer(s, false, onlineSet.has(s.code)); });
+  });
+
+  document.getElementById('drawerOverlay').classList.add('show');
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawerTitle').textContent = `✨ NEUE SPOTS (2 KM)`;
+  currentDrawer = 'newspots';
+  document.getElementById('newSpotsBtn').classList.add('active');
+
+  const body = document.getElementById('drawerBody');
+
+  if (!nearby.length) {
+    body.innerHTML = `<div class="empty-state"><div class="es-icon">✨</div>Keine neuen Spots<br>in den letzten 24h in 2 km.</div>`;
+    return;
+  }
+
+  body.innerHTML = nearby
+    .sort((a,b) => Number(b.created_at||b.createdAt||0) - Number(a.created_at||a.createdAt||0))
+    .map(s => {
+      const dist = haversineKm(userPos.lat, userPos.lng, s.lat, s.lng);
+      const dl   = dist < 1 ? `${Math.round(dist*1000)}m` : `${dist.toFixed(1)}km`;
+      return `<div class="spot-card">
+        <div class="sc-icon" style="background:rgba(16,185,129,0.15);border-color:rgba(16,185,129,0.4);">✨</div>
+        <div class="sc-info">
+          <div class="sc-name">${esc(s.name)}</div>
+          <div class="sc-detail">
+            <span class="sc-tag" style="background:rgba(16,185,129,0.15);border-color:rgba(16,185,129,0.4);color:#10b981;">${s.wishTag||''}</span>
+            <span style="font-size:0.65rem;color:var(--muted);">~${dl}</span>
+            ${spotAgeHtml(s.createdAt||s.created_at)}
+          </div>
+        </div>
+        <div class="sc-actions">
+          <button class="sc-btn navigate" data-lat="${s.lat}" data-lng="${s.lng}">🧭</button>
+          <button class="sc-btn primary" data-det="${s.id}">📋</button>
+        </div>
+      </div>`;
+    }).join('');
+
+  body.querySelectorAll('[data-lat]').forEach(b =>
+    b.addEventListener('click', () => navigateToSpot(+b.dataset.lat, +b.dataset.lng))
+  );
+  body.querySelectorAll('[data-det]').forEach(b =>
+    b.addEventListener('click', () => {
+      const s = allSpots.find(x => x.id == b.dataset.det);
+      if (s) { closeDrawer(); setTimeout(() => openSpotDetail(s.id), 300); }
+    })
+  );
+
+  if (nearby.length) {
+    const bounds = new maplibregl.LngLatBounds();
+    nearby.forEach(s => bounds.extend([s.lng, s.lat]));
+    bounds.extend([userPos.lng, userPos.lat]);
+    map.fitBounds(bounds, { padding: 60 });
+  }
+}
+
+// ── RADIUS ───────────────────────────────────────────────────────────────────
+function openRadiusSearch() {
+  document.querySelectorAll('.radius-choice').forEach(b=>b.classList.remove('selected'));
+  if (activeRadius) document.getElementById(`rc${activeRadius}`)?.classList.add('selected');
+
+  buildRadiusCatPills();
+
+  if (activeRadius) {
+    const nearby = allSpots.filter(s =>
+      s.code !== CODE &&
+      haversineKm(userPos?.lat, userPos?.lng, s.lat, s.lng) <= activeRadius &&
+      (radiusCatFilter === null || s.area_type === radiusCatFilter)
+    );
+    const catSuffix = radiusCatFilter ? ` · ${CATEGORY_EMOJI[radiusCatFilter]||'📌'} ${radiusCatFilter}` : '';
+    document.getElementById('radiusResult').textContent =
+      `${nearby.length} Spot${nearby.length!==1?'s':''} innerhalb ${activeRadius} km${catSuffix}`;
+  } else {
+    document.getElementById('radiusResult').textContent = '';
+  }
+
+  document.getElementById('radiusModal').classList.add('show');
+}
+
+function selectRadius(km) {
+  if (!userPos) { toast('❌ Kein Standort'); return; }
+  document.querySelectorAll('.radius-choice').forEach(b=>b.classList.remove('selected'));
+  document.getElementById(`rc${km}`)?.classList.add('selected');
+  activeRadius=km;
+
+  if (map.getLayer('radius-fill')) map.removeLayer('radius-fill');
+  if (map.getLayer('radius-line')) map.removeLayer('radius-line');
+  if (map.getSource('radius')) map.removeSource('radius');
+
+  const steps=64; const coords=[];
+  for (let i=0;i<=steps;i++) {
+    const angle=(i/steps)*2*Math.PI;
+    const dx=km/111*Math.cos(angle);
+    const dy=km/(111*Math.cos(userPos.lat*Math.PI/180))*Math.sin(angle);
+    coords.push([userPos.lng+dy,userPos.lat+dx]);
+  }
+  map.addSource('radius',{type:'geojson',data:{type:'Feature',geometry:{type:'Polygon',coordinates:[coords]}}});
+  map.addLayer({id:'radius-fill',type:'fill',source:'radius',paint:{'fill-color':'#f59e0b','fill-opacity':0.06}});
+  map.addLayer({id:'radius-line',type:'line',source:'radius',paint:{'line-color':'#f59e0b','line-width':2,'line-dasharray':[4,3]}});
+
+  const bounds=new maplibregl.LngLatBounds(); coords.forEach(c=>bounds.extend(c));
+  map.fitBounds(bounds,{padding:20});
+
+  const nearby = allSpots
+    .filter(s =>
+      s.code !== CODE &&
+      haversineKm(userPos.lat, userPos.lng, s.lat, s.lng) <= km &&
+      (radiusCatFilter === null || s.area_type === radiusCatFilter)
+    )
+    .sort((a, b) =>
+      haversineKm(userPos.lat, userPos.lng, a.lat, a.lng) -
+      haversineKm(userPos.lat, userPos.lng, b.lat, b.lng)
+    );
+
+  const catSuffix = radiusCatFilter ? ` · ${CATEGORY_EMOJI[radiusCatFilter]||'📌'} ${radiusCatFilter}` : '';
+  document.getElementById('radiusResult').textContent =
+    `${nearby.length} Spot${nearby.length!==1?'s':''} innerhalb ${km} km${catSuffix}`;
+  document.getElementById('radiusTopBtn').classList.add('active');
+  setTimeout(()=>{closeModals();openDrawerFiltered(nearby,km);},600);
+}
+
+function clearRadius() {
+  if (map.getLayer('radius-fill')) map.removeLayer('radius-fill');
+  if (map.getLayer('radius-line')) map.removeLayer('radius-line');
+  if (map.getSource('radius')) map.removeSource('radius');
+  activeRadius=null;
+  document.getElementById('radiusTopBtn').classList.remove('active');
+}
+
+async function openDrawerFiltered(spots, km) {
+  document.getElementById('drawerOverlay').classList.add('show');
+  document.getElementById('drawer').classList.add('open');
+
+  const catSuffix = radiusCatFilter ? ` · ${CATEGORY_EMOJI[radiusCatFilter]||'📌'} ${radiusCatFilter}` : '';
+  document.getElementById('drawerTitle').textContent = `RADIUS ${km} KM${catSuffix}`;
+  currentDrawer = 'radius';
+  const body = document.getElementById('drawerBody');
+
+  if (!spots.length) {
+    const catNote = radiusCatFilter ? ` in der Kategorie „${radiusCatFilter}"` : '';
+    body.innerHTML = `<div class="empty-state"><div class="es-icon">🔍</div>Keine Spots${catNote} innerhalb ${km} km.</div>`;
+    return;
+  }
+
+  body.innerHTML = spots.map(s => {
+    const dist = haversineKm(userPos.lat, userPos.lng, s.lat, s.lng);
+    const distLabel = dist < 1 ? Math.round(dist * 1000) + 'm' : dist.toFixed(1) + 'km';
+    const catIcon = CATEGORY_EMOJI[s.area_type] || '📍';
+    return `<div class="spot-card" data-sid="${s.id}">
+      <div class="sc-icon">${catIcon}</div>
+      <div class="sc-info">
+        <div class="sc-name">${esc(s.name)}</div>
+        <div class="sc-detail">
+          <span class="sc-tag">${s.wishTag || ''}</span>
+          <span style="font-size:0.68rem;color:var(--acc);font-weight:700;font-family:'Space Mono',monospace;">~${distLabel}</span>
+          <span class="sc-weather" id="sw-${s.id}">⏳</span>
+          ${spotAgeHtml(s.createdAt || s.created_at)}
+        </div>
+      </div>
+      <div class="sc-actions">
+        <button class="sc-btn navigate" data-lat="${s.lat}" data-lng="${s.lng}" title="Route">🧭</button>
+        <button class="sc-btn primary" data-det="${s.id}" title="Details">📋</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  body.querySelectorAll('[data-lat]').forEach(b =>
+    b.addEventListener('click', () => navigateToSpot(+b.dataset.lat, +b.dataset.lng)));
+  body.querySelectorAll('[data-det]').forEach(b =>
+    b.addEventListener('click', () => {
+      const s = allSpots.find(x => x.id == b.dataset.det);
+      if (s) { closeDrawer(); setTimeout(() => openSpotDetail(s.id), 300); }
+    }));
+
+  try {
+    const w = await fetchWeather(userPos.lat, userPos.lng);
+    if (w) {
+      const emoji = weatherEmoji(w.current.weather_code);
+      const temp  = Math.round(w.current.temperature_2m);
+      spots.forEach(s => {
+        const badge = document.getElementById(`sw-${s.id}`);
+        if (badge) badge.textContent = `${emoji} ${temp}°`;
+      });
+    } else {
+      spots.forEach(s => {
+        const badge = document.getElementById(`sw-${s.id}`);
+        if (badge) badge.textContent = '🌡️';
+      });
+    }
+  } catch {
+    spots.forEach(s => {
+      const badge = document.getElementById(`sw-${s.id}`);
+      if (badge) badge.textContent = '🌡️';
+    });
+  }
+}
+
+// ── WOCHEN-SPOTS ─────────────────────────────────────────────────────────────
+function weeklyTimeLeft(expiresAt) {
+  const rem = new Date(expiresAt) - Date.now();
+  if (rem <= 0) return '⚠️ Abgelaufen';
+  const d = Math.floor(rem / 86400000);
+  const h = Math.floor((rem % 86400000) / 3600000);
+  if (d > 0) return `⏳ Noch ${d} Tag${d !== 1 ? 'e' : ''} ${h}h`;
+  const m = Math.floor((rem % 3600000) / 60000);
+  return `⏳ Noch ${h}h ${m}min`;
+}
+
+async function loadWeeklyDrawer(body) {
+  body.innerHTML = `<div class="empty-state"><div class="es-icon">⏳</div>Lädt…</div>`;
+  const token = localStorage.getItem('sm_token');
+  let spots = [];
+  try {
+    const r = await fetch(`${API}/weekly-spots/mine?code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(token)}`);
+    if (r.ok) spots = await r.json();
+  } catch {}
+
+  const badge = document.getElementById('weeklyBadge');
+  if (badge) {
+    badge.textContent = spots.length;
+    badge.style.display = spots.length ? 'flex' : 'none';
+  }
+
+  const createBtn = `<button class="btn-primary" style="margin-bottom:0.75rem;font-size:0.88rem;padding:0.7rem;"
+    onclick="openWeeklyCreateModal()">✨ Neuen Wochen-Spot erstellen</button>`;
+
+  if (!spots.length) {
+    body.innerHTML = createBtn + `<div class="empty-state"><div class="es-icon">🗓️</div>Noch keine Wochen-Spots.<br><span style="font-size:0.75rem;">Erstelle einen und teile den Link.</span></div>`;
+    return;
+  }
+
+  body.innerHTML = createBtn + spots.map(s => {
+    const catEmoji = CATEGORY_EMOJI[s.category] || '📍';
+    return `<div class="weekly-card">
+      <div class="weekly-card-head">
+        <div class="weekly-card-icon">${catEmoji}</div>
+        <div class="weekly-card-name">${esc(s.name)}</div>
+      </div>
+      <div class="weekly-card-meta">
+        ${s.category ? `<span class="weekly-tag">${s.category}</span>` : ''}
+        <span class="weekly-countdown">${weeklyTimeLeft(s.expires_at)}</span>
+        <span style="font-size:0.68rem;color:var(--muted2);">👥 ${s.checkin_count} Check-in${s.checkin_count !== 1 ? 's' : ''}</span>
+      </div>
+      <div class="weekly-card-actions">
+        <button class="sc-btn navigate" data-lat="${s.lat}" data-lng="${s.lng}" title="Route">🧭</button>
+        <button class="sc-btn success" data-share-token="${s.token}" data-share-name="${esc(s.name)}" title="Teilen">🔗 Teilen</button>
+        <button class="sc-btn danger" data-del-weekly="${s.token}" title="Löschen">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  body.querySelectorAll('[data-lat]').forEach(b =>
+    b.addEventListener('click', () => navigateToSpot(+b.dataset.lat, +b.dataset.lng))
+  );
+  body.querySelectorAll('[data-share-token]').forEach(b =>
+    b.addEventListener('click', () => {
+      closeDrawer();
+      setTimeout(() => showWeeklyShare(b.dataset.shareToken, b.dataset.shareName), 300);
+    })
+  );
+  body.querySelectorAll('[data-del-weekly]').forEach(b =>
+    b.addEventListener('click', () => deleteWeeklySpot(b.dataset.delWeekly))
+  );
+}
+
+function openWeeklyCreateModal() {
+  closeDrawer();
+  weeklyCoords = null;
+
+  const CATS = Object.entries(CATEGORY_EMOJI).map(([k,v]) =>
+    `<option value="${k}">${v} ${k}</option>`).join('');
+
+  document.getElementById('weeklyModalContent').innerHTML = `
+    <div class="modal-title">✨ Wochen-Spot erstellen</div>
+    <p style="font-size:0.8rem;color:var(--muted2);margin-bottom:0.75rem;">
+      Tippe auf die Karte um den Ort festzulegen – der Spot läuft nach 7 Tagen ab.
+    </p>
+    <div id="weeklyCreateMap"></div>
+    <span class="finp-label">Name</span>
+    <input id="wkName" class="finp" placeholder="z.B. Kaffee im Park" maxlength="50">
+    <span class="finp-label">Kategorie</span>
+    <select id="wkCat" class="finp">${CATS}</select>
+    <span class="finp-label">Beschreibung (optional)</span>
+    <input id="wkDesc" class="finp" placeholder="Was erwartet die Besucher?" maxlength="120">
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeWeeklyModal()">Abbrechen</button>
+      <button class="btn-primary" id="wkSubmitBtn" onclick="submitWeeklySpot()">🗓️ Erstellen</button>
+    </div>
+  `;
+
+  document.getElementById('weeklyModal').classList.add('show');
+
+  setTimeout(() => {
+    if (weeklyMiniMap) { weeklyMiniMap.remove(); weeklyMiniMap = null; }
+    const center = userPos ? [userPos.lng, userPos.lat] : [0, 0];
+    weeklyMiniMap = new maplibregl.Map({
+      container: 'weeklyCreateMap',
+      style: 'https://tiles.openfreemap.org/styles/liberty',
+      center,
+      zoom: 13,
+      attributionControl: false
+    });
+    weeklyMiniMap.on('click', e => {
+      weeklyCoords = { lat: e.lngLat.lat, lng: e.lngLat.lng };
+      if (weeklyMarker) weeklyMarker.remove();
+      const el = document.createElement('div');
+      el.style.cssText = 'width:22px;height:22px;background:#ff9f00;border-radius:50%;border:2.5px solid rgba(255,255,255,0.85);box-shadow:0 0 0 4px rgba(255,159,0,0.2),0 0 18px rgba(255,159,0,0.8);';
+      weeklyMarker = new maplibregl.Marker({ element: el })
+        .setLngLat([weeklyCoords.lng, weeklyCoords.lat])
+        .addTo(weeklyMiniMap);
+      toast('📍 Position gesetzt');
+    });
+  }, 120);
+}
+
+async function submitWeeklySpot() {
+  const name = document.getElementById('wkName')?.value.trim();
+  const cat  = document.getElementById('wkCat')?.value;
+  const desc = document.getElementById('wkDesc')?.value.trim();
+  if (!name)        { toast('⚠️ Bitte einen Namen eingeben'); return; }
+  if (!weeklyCoords){ toast('⚠️ Bitte einen Ort auf der Karte tippen'); return; }
+
+  const btn = document.getElementById('wkSubmitBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+
+  const authToken = localStorage.getItem('sm_token');
+  try {
+    const r = await fetch(`${API}/weekly-spots`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: CODE, token: authToken,
+        name, category: cat, description: desc,
+        lat: weeklyCoords.lat, lng: weeklyCoords.lng
+      })
+    });
+    const data = await r.json();
+    if (!r.ok || !data.spot) throw new Error(data.error || 'Fehler');
+
+    if (weeklyMiniMap) { weeklyMiniMap.remove(); weeklyMiniMap = null; }
+    if (weeklyMarker)  { weeklyMarker = null; }
+    showWeeklyShare(data.spot.token, data.spot.name);
+  } catch(e) {
+    toast('❌ ' + (e.message || 'Erstellen fehlgeschlagen'));
+    if (btn) { btn.disabled = false; btn.textContent = '🗓️ Erstellen'; }
+  }
+}
+
+function showWeeklyShare(token, name) {
+  const shareUrl = buildWeeklyShareUrl(token);
+
+  document.getElementById('weeklyModalContent').innerHTML = `
+    <div class="modal-title">🔗 Bereit zum Teilen!</div>
+    <p style="font-size:0.85rem;font-weight:600;margin-bottom:0.25rem;">${esc(name)}</p>
+    <p style="font-size:0.78rem;color:var(--muted2);margin-bottom:0.1rem;">
+      Teile diesen Link – Besucher können 7 Tage einchecken.
+    </p>
+    <div class="weekly-share-url" id="wkShareUrlBox" onclick="copyWeeklyLink()"
+         title="Tippen zum Kopieren">${shareUrl}</div>
+    <p style="font-size:0.68rem;color:var(--muted);text-align:center;margin-bottom:0.75rem;">
+      Tippe auf den Link zum Kopieren
+    </p>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="copyWeeklyLink()">📋 Kopieren</button>
+      <button class="btn-primary" id="wkNativeShareBtn">↗️ Teilen</button>
+    </div>
+    <button class="btn-ghost" style="width:100%;margin-top:0.5rem;font-size:0.82rem;"
+            onclick="closeWeeklyModal();setTimeout(()=>openDrawer('weekly'),300);">
+      ← Zurück zu meinen Spots
+    </button>
+  `;
+
+  const nativeBtn = document.getElementById('wkNativeShareBtn');
+  if (navigator.share) {
+    nativeBtn.addEventListener('click', () => {
+      navigator.share({ title: `SpotMe · ${name}`, url: shareUrl })
+        .catch(() => {});
+    });
+  } else {
+    nativeBtn.textContent = '📋 Kopieren';
+    nativeBtn.addEventListener('click', copyWeeklyLink);
+  }
+
+  document.getElementById('weeklyModal').classList.add('show');
+  loadWeeklyBadge();
+}
+
+function copyWeeklyLink() {
+  const box = document.getElementById('wkShareUrlBox');
+  if (!box) return;
+  navigator.clipboard?.writeText(box.textContent.trim())
+    .then(() => toast('🔗 Link kopiert!'))
+    .catch(() => toast('⚠️ Kopieren fehlgeschlagen'));
+}
+
+async function deleteWeeklySpot(token) {
+  const authToken = localStorage.getItem('sm_token');
+  try {
+    const r = await fetch(`${API}/weekly-spots/${token}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: CODE, token: authToken })
+    });
+    if (r.ok) {
+      toast('🗑️ Wochen-Spot gelöscht');
+      openDrawer('weekly');
+    }
+  } catch { toast('❌ Fehler beim Löschen'); }
+}
+
+function buildWeeklyShareUrl(token) {
+  return new URL('spot-woche.html?token=' + token, window.location.href).href;
+}
+function closeWeeklyModal() {
+  document.getElementById('weeklyModal').classList.remove('show');
+  if (weeklyMiniMap) { weeklyMiniMap.remove(); weeklyMiniMap = null; }
+  if (weeklyMarker)  { weeklyMarker = null; }
+  weeklyCoords = null;
+}
+
+async function loadWeeklyBadge() {
+  const authToken = localStorage.getItem('sm_token');
+  try {
+    const r = await fetch(`${API}/weekly-spots/mine?code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(authToken)}`);
+    if (!r.ok) return;
+    const spots = await r.json();
+    const badge = document.getElementById('weeklyBadge');
+    if (badge) {
+      badge.textContent = spots.length;
+      badge.style.display = spots.length ? 'flex' : 'none';
+    }
+  } catch {}
+}
+
+// ── WEB PUSH NOTIFICATIONS ────────────────────────────────────────────────────
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64  = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw     = atob(base64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+async function updatePushBtnState() {
+  const btn = document.getElementById('pushBtn');
+  if (!btn) return;
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+    btn.style.opacity = '0.3'; btn.title = 'Push nicht unterstützt'; return;
+  }
+  const perm = Notification.permission;
+  if (perm === 'denied') {
+    btn.textContent = '🔕'; btn.title = 'Benachrichtigungen blockiert (Browser-Einstellungen)';
+    btn.style.background = 'rgba(239,68,68,0.1)'; btn.style.borderColor = 'rgba(239,68,68,0.3)';
+    return;
+  }
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      btn.textContent = '🔔'; btn.title = 'Benachrichtigungen aktiv – tippe zum Deaktivieren';
+      btn.style.background = 'var(--acc-dim)'; btn.style.borderColor = 'var(--acc-glow)';
+      btn.style.color = 'var(--acc)';
+    } else {
+      btn.textContent = '🔔'; btn.title = 'Benachrichtigungen aktivieren';
+      btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = '';
+    }
+  } catch {}
+}
+
+async function togglePushNotifications() {
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+    toast('⚠️ Push-Benachrichtigungen werden nicht unterstützt'); return;
+  }
+  if (Notification.permission === 'denied') {
+    toast('🔕 Benachrichtigungen sind blockiert – bitte in den Browser-Einstellungen erlauben'); return;
+  }
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) {
+      await existing.unsubscribe();
+      const token = localStorage.getItem('sm_token');
+      await fetch(`${API}/push/unsubscribe`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: CODE, token, endpoint: existing.endpoint })
+      }).catch(() => {});
+      toast('🔕 Benachrichtigungen deaktiviert');
+    } else {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { toast('❌ Berechtigung verweigert'); await updatePushBtnState(); return; }
+      await subscribeToPush(reg);
+      toast('🔔 Benachrichtigungen aktiviert!');
+    }
+  } catch (e) {
+    toast('⚠️ Fehler: ' + e.message);
+  }
+  await updatePushBtnState();
+}
+
+async function subscribeToPush(reg) {
+  const keyRes  = await fetch(`${API}/push/vapid-public-key`);
+  const keyData = await keyRes.json();
+  if (!keyData.publicKey) throw new Error('Kein VAPID-Key – Push nicht konfiguriert');
+
+  const subscription = await reg.pushManager.subscribe({
+    userVisibleOnly:      true,
+    applicationServerKey: urlBase64ToUint8Array(keyData.publicKey)
+  });
+
+  const token = localStorage.getItem('sm_token');
+  const r = await fetch(`${API}/push/subscribe`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: CODE, token, subscription })
+  });
+  if (!r.ok) throw new Error('Subscription konnte nicht gespeichert werden');
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', event => {
+    if (event.data?.type === 'PUSH_NAVIGATE' && event.data.url) {
+      const url = event.data.url;
+      if (url.startsWith('/spot-woche')) {
+        window.location.href = url;
+      } else {
+        toast('🔔 ' + url);
+      }
+    }
+  });
+}
+
+// ── PROGRESSIVE HELP SYSTEM (iframe-basiert) ─────────────────────────────────
+// Erster Tap → Help-Page als schwebendes Overlay.
+// Danach 24h Pause. Langer Tap (2s) → Help jederzeit manuell aufrufen.
+
+const HELP_TTL = 24 * 60 * 60 * 1000;
+
+// Mapping: key → /help/*.html Datei + Aktion nach Schließen
+const HELP_MAP = {
+  weekly:    { file: 'wochen-spot',   action: () => openDrawer('weekly') },
+  invites:   { file: 'einladungen',   action: () => openDrawer('invites') },
+  chats:     { file: 'chat',          action: () => openDrawer('chats') },
+  meetings:  { file: 'treffen',       action: () => openMeetingsModal() },
+  push:      { file: 'push',          action: () => togglePushNotifications() },
+  filter:    { file: 'kategorien',    action: () => toggleFilterStrip() },
+  radius:    { file: 'radius-suche',  action: () => openRadiusSearch() },
+  waypoints: { file: 'waypoints',     action: () => location.href='waypoints.html' },
+  myspots:   { file: 'meine-spots',   action: () => openDrawer('myspots') },
+  allspots:  { file: 'alle-spots',    action: () => openDrawer('all') },
+  newspots:  { file: 'neue-spots',    action: () => openNewSpots() },
+  livespots: { file: 'live-spots',    action: () => openDrawer('live') },
+};
+
+let helpPendingAction = null;
+let longpressTimer    = null;
+
+function callWithHelp(key, action) {
+  const storageKey = `sm_help_${key}`;
+  const last       = +localStorage.getItem(storageKey) || 0;
+  const expired    = Date.now() - last > HELP_TTL;
+
+  if (!expired) { action(); return; }
+
+  localStorage.setItem(storageKey, Date.now().toString());
+  helpPendingAction = action;
+  openHelpPage(key);
+}
+
+function callHelpForced(key, action) {
+  localStorage.removeItem(`sm_help_${key}`);
+  helpPendingAction = action;
+  openHelpPage(key);
+}
+
+function openHelpPage(key) {
+  const entry = HELP_MAP[key];
+  if (!entry) { helpPendingAction?.(); return; }
+
+  const frame   = document.getElementById('helpPageFrame');
+  const overlay = document.getElementById('helpPageOverlay');
+
+  frame.src = `help/${entry.file}.html`;
+  overlay.classList.add('show');
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function closeHelpPage() {
+  const overlay = document.getElementById('helpPageOverlay');
+  overlay.classList.remove('show');
+  // Frame src nach Transition leeren damit Seite nicht im Hintergrund läuft
+  setTimeout(() => {
+    document.getElementById('helpPageFrame').src = '';
+  }, 350);
+  if (helpPendingAction) {
+    const fn = helpPendingAction;
+    helpPendingAction = null;
+    setTimeout(fn, 260);
+  }
+}
+
+function handleHelpOverlayBg(e) {
+  if (e.target === document.getElementById('helpPageOverlay')) closeHelpPage();
+}
+
+// Long-Press (2s) – Amber-Ring als visuelles Feedback
+function setupLongPress(el, key, action) {
+  const ring = document.getElementById('helpLongpressRing');
+  let startX = 0, startY = 0;
+
+  // Chrome feuert contextmenu bei langem Halten → verhindert pointerdown
+  el.addEventListener('contextmenu', e => e.preventDefault());
+
+  el.addEventListener('pointerdown', e => {
+    startX = e.clientX; startY = e.clientY;
+    ring.style.left = e.clientX + 'px';
+    ring.style.top  = e.clientY + 'px';
+    ring.classList.add('active');
+    longpressTimer = setTimeout(() => {
+      ring.classList.remove('active');
+      callHelpForced(key, action);
+    }, 2000);
+  });
+
+  const cancel = (e) => {
+    // Nur abbrechen wenn wirklich bewegt (>8px Threshold) – nicht bei Mikro-Jitter
+    if (e.type === 'pointermove') {
+      const dx = Math.abs(e.clientX - startX);
+      const dy = Math.abs(e.clientY - startY);
+      if (dx < 8 && dy < 8) return;
+    }
+    clearTimeout(longpressTimer);
+    ring.classList.remove('active');
+  };
+
+  el.addEventListener('pointerup',     cancel);
+  el.addEventListener('pointercancel', cancel);
+  el.addEventListener('pointermove',   cancel);
+}
+
+function initHelpSystem() {
+  const bindings = [
+    { id: 'weeklyBtn',       key: 'weekly',   action: () => openDrawer('weekly') },
+    { id: 'inviteHeaderBtn', key: 'invites',  action: () => openDrawer('invites') },
+    { id: 'chatHeaderBtn',   key: 'chats',    action: () => openDrawer('chats') },
+    { id: 'meetingsBtn',     key: 'meetings', action: () => openMeetingsModal() },
+    { id: 'pushBtn',         key: 'push',     action: () => togglePushNotifications() },
+    { id: 'filterTopBtn',    key: 'filter',   action: () => toggleFilterStrip() },
+    { id: 'radiusTopBtn',    key: 'radius',   action: () => openRadiusSearch() },
+  ];
+
+  bindings.forEach(({ id, key, action }) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.onclick = (e) => { e.preventDefault(); callWithHelp(key, action); };
+    setupLongPress(el, key, action);
+  });
+
+  const dockMap = [
+    { text: 'Meine Spots', key: 'myspots',  action: () => openDrawer('myspots') },
+    { text: 'Alle Spots',  key: 'allspots', action: () => openDrawer('all') },
+    { text: 'Neue Spots',  key: 'newspots', action: () => openNewSpots() },
+  ];
+  document.querySelectorAll('.dock-btn').forEach(btn => {
+    const match = dockMap.find(d => btn.textContent.includes(d.text));
+    if (!match) return;
+    btn.onclick = (e) => { e.preventDefault(); callWithHelp(match.key, match.action); };
+    setupLongPress(btn, match.key, match.action);
+  });
+}
+
+// ── LIVE SPOTS ────────────────────────────────────────────────────────────────
+
+let liveSpots = [];
+
+function updateLastLocation() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(async pos => {
+    userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    try {
+      await fetch(`${API}/location/update`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: CODE, token: localStorage.getItem('sm_token'), lat: userPos.lat, lng: userPos.lng })
+      });
+    } catch {}
+  }, null, { enableHighAccuracy: false, timeout: 8000 });
+}
+
+async function renderLiveSpotMarkers() {
+  try {
+    const r = await fetch(`${API}/live-spots`);
+    if (!r.ok) return;
+    liveSpots = await r.json();
+  } catch { return; }
+
+  const badge = document.getElementById('liveBadge');
+  if (badge) { badge.textContent = liveSpots.length; badge.style.display = liveSpots.length ? 'flex' : 'none'; }
+
+  liveSpots.forEach(s => {
+    if (!s.lat || !s.lng) return;
+    const el = document.createElement('div');
+    el.className = 'live-spot-marker';
+    el.title = s.name;
+    el.addEventListener('click', () => window.location.href = `live-spot.html?id=${s.id}`);
+    new maplibregl.Marker({ element: el }).setLngLat([s.lng, s.lat]).addTo(map);
+  });
+}
+
+async function loadLiveDrawer(body) {
+  body.innerHTML = `<div class="empty-state"><div class="es-icon">⏳</div>Lädt…</div>`;
+  const token = localStorage.getItem('sm_token');
+  const qs = `code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(token)}`;
+
+  const [followingRes, mineRes] = await Promise.allSettled([
+    fetch(`${API}/live-spots/following?${qs}`).then(r => r.ok ? r.json() : []),
+    fetch(`${API}/live-spots/mine?${qs}`).then(r => r.ok ? r.json() : [])
+  ]);
+
+  const following = followingRes.status === 'fulfilled' ? followingRes.value : [];
+  const mine      = mineRes.status     === 'fulfilled' ? mineRes.value     : [];
+
+  const badge = document.getElementById('liveBadge');
+  const onlineCount = following.filter(s => s.status === 'online').length;
+  if (badge) { badge.textContent = onlineCount; badge.style.display = onlineCount ? 'flex' : 'none'; }
+
+  const card = (s, own) => {
+    const online = s.status === 'online';
+    return `<div class="spot-card" style="margin-bottom:0.5rem;">
+      <div class="sc-icon">${CATEGORY_EMOJI[s.category]||'📡'}</div>
+      <div class="sc-info">
+        <div class="sc-name">${esc(s.name)}</div>
+        <div class="sc-detail">
+          <span style="font-size:0.68rem;color:${online?'var(--green)':'var(--muted)'};font-weight:700;">${online?'● LIVE':'○ Offline'}</span>
+          <span style="font-size:0.68rem;color:var(--muted2);">👥 ${s.follower_count}</span>
+          ${s.location_note?`<span style="font-size:0.68rem;color:var(--muted2);">${esc(s.location_note)}</span>`:''}
+        </div>
+      </div>
+      <div class="sc-actions">
+        ${online&&s.lat?`<button class="sc-btn navigate" data-lat="${s.lat}" data-lng="${s.lng}">🧭</button>`:''}
+        <button class="sc-btn primary" onclick="window.location.href='live-spot.html?id=${s.id}'">${own?'⚙️':'📋'}</button>
+      </div>
+    </div>`;
+  };
+
+  let html = `<button class="btn-primary" style="margin-bottom:0.75rem;"
+    onclick="location.href='live-spot-manage.html'">📡 Live Spot erstellen / verwalten</button>`;
+
+  if (mine.length) html += `<div class="section-title" style="margin-bottom:0.4rem;">MEINE LIVE SPOTS</div>` + mine.map(s=>card(s,true)).join('');
+  if (following.length) html += `<div class="section-title" style="margin:0.75rem 0 0.4rem;">ICH FOLGE</div>` + following.map(s=>card(s,false)).join('');
+  if (!mine.length && !following.length) html += `<div class="empty-state"><div class="es-icon">📡</div>Noch keine Live Spots.<br><span style="font-size:0.75rem;">Erstelle einen oder entdecke welche auf der Karte.</span></div>`;
+
+  body.innerHTML = html;
+   body.querySelectorAll('[data-lat]').forEach(b=>b.addEventListener('click',()=>{
+   const lat = +b.dataset.lat, lng = +b.dataset.lng;
+   closeDrawer();
+   setTimeout(() => navigateToSpot(lat, lng), 300);
+   }));
+}
+
+// ── MATCH ────────────────────────────────────────────────────────────────────
+function showMatch(name,spot) {
+  document.getElementById('matchName').textContent=name;
+  document.getElementById('matchSpot').textContent=spot;
+  document.getElementById('matchScreen').classList.add('show');
+}
+
+// ── EVENT LISTENERS ──────────────────────────────────────────────────────────
+document.getElementById('drawerOverlay').addEventListener('click', closeDrawer);
+document.getElementById('drawerCloseBtn').addEventListener('click', closeDrawer);
+document.getElementById('matchCloseBtn').addEventListener('click', ()=>document.getElementById('matchScreen').classList.remove('show'));
+document.getElementById('spotModalCancel').addEventListener('click', closeModals);
+document.getElementById('spotModalSave').addEventListener('click', saveSpot);
+
+document.getElementById('spotPhotoBtn').addEventListener('click', () => {
+  document.getElementById('spotPhotoInput').click();
+});
+document.getElementById('spotPhotoInput').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { toast('⚠️ Max. 5 MB'); return; }
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const maxW = 900; let w = img.width, h = img.height;
+      if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      spotPhotoData = canvas.toDataURL('image/jpeg', 0.72);
+      document.getElementById('spotPhotoImg').src = spotPhotoData;
+      document.getElementById('spotPhotoPreview').style.display = 'block';
+      document.getElementById('spotPhotoBtn').style.display = 'none';
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+document.getElementById('spotPhotoClear').addEventListener('click', () => {
+  spotPhotoData = null;
+  document.getElementById('spotPhotoPreview').style.display = 'none';
+  document.getElementById('spotPhotoBtn').style.display = 'block';
+  document.getElementById('spotPhotoInput').value = '';
+});
+document.getElementById('inviteModalCancel').addEventListener('click', closeModals);
+document.getElementById('inviteModalSend').addEventListener('click', sendInvite);
+document.getElementById('spotDetailClose').addEventListener('click', closeModals);
+
+document.getElementById('profileModalClose').addEventListener('click', closeModals);
+document.getElementById('radiusClear').addEventListener('click', ()=>{clearRadius();closeModals();});
+document.getElementById('radiusClose').addEventListener('click', closeModals);
+document.getElementById('rc2').addEventListener('click', ()=>selectRadius(2));
+document.getElementById('rc5').addEventListener('click', ()=>selectRadius(5));
+document.getElementById('rc10').addEventListener('click', ()=>selectRadius(10));
+
+initMap();
+startGlobalChatPolling();
+loadFavoritesCache();
+loadWeeklyBadge();
+updatePushBtnState();
+if (typeof lucide !== 'undefined') lucide.createIcons();
+initHelpSystem();
+updateLastLocation();       // Standort für 10km Push-Filter aktualisieren
+renderLiveSpotMarkers();    // Live Spots auf der Karte anzeigen
+
+document.getElementById('weeklyModal').addEventListener('click', function(e) {
+  if (e.target === this) closeWeeklyModal();
+});
+
+</script>
+</body>
+</html>

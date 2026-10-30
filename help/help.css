@@ -1,0 +1,277 @@
+/* ── SpotMe Help Pages ─────────────────────────────────────────────────────
+   Geteilt von allen /help/*.html Seiten.
+   Design: Tactile Cyber-Noir · Laser-Amber #ff9f00 · Tactical Cyan #00e5ff
+──────────────────────────────────────────────────────────────────────────── */
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+:root {
+  --bg:       #080b10;
+  --sur:      #0d1117;
+  --card:     #111820;
+  --card2:    #141e2a;
+  --bord:     rgba(255,255,255,0.07);
+  --bord2:    rgba(255,255,255,0.12);
+  --acc:      #ff9f00;
+  --acc-dim:  rgba(255,159,0,0.10);
+  --acc-glow: rgba(255,159,0,0.28);
+  --cyan:     #00e5ff;
+  --cyan-dim: rgba(0,229,255,0.08);
+  --green:    #00e676;
+  --text:     #dce8f0;
+  --muted:    #4a6070;
+  --muted2:   #7a98aa;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Outfit', sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* ── HERO ─────────────────────────────────────────────────────────────────── */
+.hero {
+  padding: 2rem 1.25rem 1.5rem;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(255,159,0,0.10) 0%, transparent 70%),
+    linear-gradient(rgba(255,159,0,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,159,0,0.025) 1px, transparent 1px);
+  background-size: auto, 44px 44px, 44px 44px;
+  border-bottom: 1px solid var(--bord2);
+  text-align: center;
+}
+
+.hero-icon {
+  width: 64px; height: 64px;
+  border-radius: 18px;
+  background: var(--acc-dim);
+  border: 1px solid var(--acc-glow);
+  box-shadow: 0 0 28px rgba(255,159,0,0.22),
+              inset 0 1px 0 rgba(255,255,255,0.05);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 1.75rem;
+  margin-bottom: 1rem;
+}
+
+.hero-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--acc);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 0.35rem;
+}
+
+.hero-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 0.65rem;
+}
+.hero-title span { color: var(--acc); }
+
+.hero-sub {
+  font-size: 0.88rem;
+  color: var(--muted2);
+  max-width: 280px;
+  margin: 0 auto 1.25rem;
+  line-height: 1.55;
+}
+
+.hero-tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 0.35rem 0.85rem;
+  border-radius: 100px;
+  background: var(--acc-dim);
+  border: 1px solid var(--acc-glow);
+  color: var(--acc);
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-family: 'Space Mono', monospace;
+  letter-spacing: 0.04em;
+}
+
+/* ── CONTENT ──────────────────────────────────────────────────────────────── */
+.content {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* ── SECTION LABEL ────────────────────────────────────────────────────────── */
+.section-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 0.6rem;
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.section-label::after {
+  content: '';
+  flex: 1; height: 1px;
+  background: var(--bord2);
+}
+
+/* ── FEATURE CARD ─────────────────────────────────────────────────────────── */
+.feature-card {
+  background: var(--card);
+  border: 1px solid var(--bord);
+  border-radius: 16px;
+  padding: 1rem 1.1rem;
+  position: relative;
+  overflow: hidden;
+}
+.feature-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--acc-glow), transparent);
+}
+.feature-card-head {
+  display: flex; align-items: center; gap: 0.75rem;
+  margin-bottom: 0.6rem;
+}
+.feature-card-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: var(--acc-dim); border: 1px solid var(--acc-glow);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem; flex-shrink: 0;
+}
+.feature-card-icon.cyan {
+  background: var(--cyan-dim);
+  border-color: rgba(0,229,255,0.25);
+}
+.feature-card-title {
+  font-weight: 700; font-size: 0.92rem;
+}
+.feature-card-body {
+  font-size: 0.83rem;
+  color: var(--muted2);
+  line-height: 1.55;
+}
+
+/* ── STEPS ────────────────────────────────────────────────────────────────── */
+.steps { display: flex; flex-direction: column; gap: 0; }
+.step {
+  display: flex; gap: 0.85rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--bord);
+  align-items: flex-start;
+}
+.step:last-child { border-bottom: none; }
+.step-num {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--acc); color: #080b10;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.72rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-top: 1px;
+}
+.step-body { flex: 1; min-width: 0; }
+.step-title {
+  font-weight: 700; font-size: 0.88rem;
+  margin-bottom: 0.2rem;
+}
+.step-desc { font-size: 0.8rem; color: var(--muted2); line-height: 1.5; }
+
+/* ── USE CASE ─────────────────────────────────────────────────────────────── */
+.use-cases { display: flex; flex-direction: column; gap: 0.5rem; }
+.use-case {
+  background: var(--card2);
+  border: 1px solid var(--bord);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  display: flex; align-items: flex-start; gap: 0.75rem;
+}
+.use-case-icon { font-size: 1.1rem; flex-shrink: 0; line-height: 1.4; }
+.use-case-text { font-size: 0.83rem; color: var(--muted2); line-height: 1.45; flex: 1; }
+.use-case-text strong { color: var(--text); }
+
+/* ── TIP BOX ──────────────────────────────────────────────────────────────── */
+.tip-box {
+  background: rgba(0,229,255,0.05);
+  border: 1px solid rgba(0,229,255,0.18);
+  border-radius: 13px;
+  padding: 0.85rem 1rem;
+  display: flex; gap: 0.65rem; align-items: flex-start;
+}
+.tip-box-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+.tip-box-text { font-size: 0.8rem; color: var(--muted2); line-height: 1.5; }
+.tip-box-text strong { color: var(--cyan); }
+
+/* ── HIGHLIGHT STRIP ──────────────────────────────────────────────────────── */
+.highlight {
+  display: flex; align-items: center; gap: 0.65rem;
+  padding: 0.75rem 1rem;
+  background: var(--acc-dim);
+  border: 1px solid var(--acc-glow);
+  border-radius: 12px;
+  font-size: 0.85rem; font-weight: 600; color: var(--acc);
+}
+
+/* ── CTA BUTTON ───────────────────────────────────────────────────────────── */
+.cta {
+  width: 100%; padding: 0.9rem;
+  border-radius: 14px; border: none;
+  background: var(--acc); color: #080b10;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.95rem; font-weight: 700;
+  cursor: pointer; margin-top: 0.5rem;
+  display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+  transition: opacity 0.18s;
+}
+.cta:active { opacity: 0.82; }
+
+/* ── MOCK UI ──────────────────────────────────────────────────────────────── */
+/* Kleine CSS-Mock-Elemente die eine UI-Situation zeigen */
+.mock-ui {
+  background: #0d1117;
+  border: 1px solid var(--bord2);
+  border-radius: 14px;
+  padding: 0.85rem;
+  display: flex; flex-direction: column; gap: 0.45rem;
+}
+.mock-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 100px;
+  background: var(--acc-dim); border: 1px solid var(--acc-glow);
+  color: var(--acc); font-size: 0.7rem;
+  font-family: 'Space Mono', monospace; font-weight: 700;
+}
+.mock-pill.cyan {
+  background: var(--cyan-dim);
+  border-color: rgba(0,229,255,0.25);
+  color: var(--cyan);
+}
+.mock-row {
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.mock-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--acc);
+  box-shadow: 0 0 8px rgba(255,159,0,0.7);
+  flex-shrink: 0;
+}
+.mock-dot.cyan {
+  background: var(--cyan);
+  box-shadow: 0 0 8px rgba(0,229,255,0.7);
+}
+.mock-text {
+  font-size: 0.75rem; color: var(--muted2);
+  font-family: 'Space Mono', monospace;
+}
+.mock-line {
+  height: 1px; background: var(--bord); margin: 0.2rem 0;
+}
+
+/* ── SPACER ───────────────────────────────────────────────────────────────── */
+.spacer { height: 2rem; }

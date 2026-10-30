@@ -1,0 +1,59 @@
+{
+  "app_title_flag":     "🇬🇧 SpotMe · Caching",
+  "app_title":          "SpotMe · Caching",
+
+  "place_mode_text":    "Place spot",
+  "place_mode_sub":     "Tap the map",
+
+  "spots":              "Spots",
+  "invites":            "Invitations",
+  "meine_spots":        "My Spots",
+  "alle_spots":         "All Spots",
+  "neue_spots":         "New Spots",
+
+  "name":               "Name",
+  "beschreibung":       "Description (optional)",
+  "kategorie":          "Category",
+  "foto":               "Photo (optional)",
+  "wunsch_tag":         "Preferred day",
+  "von":                "From",
+  "bis":                "To",
+  "umkreis":            "Radius",
+
+  "senden":             "Send",
+  "schliessen":         "Close",
+  "abbrechen":          "Cancel",
+  "weiter":             "Next →",
+
+  "laedt":              "Loading…",
+  "laedt_spots":        "Loading spots…",
+  "fehler":             "Error.",
+  "fehler_laden":       "Error loading",
+  "server_fehler":      "Server unreachable",
+  "nicht_gefunden":     "Not found.",
+
+  "keine_spots":        "No spots available",
+  "keine_spots_noch":   "No spots yet.",
+  "keine_nachrichten":  "No messages yet.",
+  "keine_einladungen":  "No invitations.",
+  "keine_aktiven_einl": "No active invitations.",
+  "keine_neuen_spots":  "No new spots",
+  "keine_live_spots":   "No live spots yet.",
+  "keine_wspot":        "No weekly spots yet.",
+  "spots_umgebung":     "Spots from other profiles nearby.",
+  "erstelle_teile":     "Create one and share the link.",
+  "erstelle_entdecke":  "Create one or discover some on the map.",
+
+  "match_gefunden":     "Match found",
+  "tippen_details":     "Tap for details →",
+
+  "navigation":         "NAVIGATION",
+  "entfernung":         "Distance",
+  "fussweg":            "Walking",
+  "auto":               "Car",
+
+  "meine_live":         "MY LIVE SPOTS",
+  "ich_folge":          "FOLLOWING",
+
+  "vorhersage_fehlt":   "Forecast unavailable"
+}

@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "io.github.spotme_caching.twa",
+        "sha256_cert_fingerprints": ["D3:4E:91:9B:43:3A:8B:B3:18:5C:20:F5:3F:A5:DF:49:C2:B4:45:C0:D3:59:C4:F0:28:D7:37:A1:27:D3:93:A6"]
+      }
+    }]

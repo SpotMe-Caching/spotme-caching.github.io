@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SpotMe · Highscore</title>
+    <link rel="stylesheet" href="spotme.css">
+    <style>
+        .leaderboard-card {
+            background: var(--card);
+            border-radius: 14px;
+            padding: 0.8rem 1rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .rank {
+            font-family: 'Space Mono', monospace;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--acc);
+            width: 50px;
+        }
+        .name { flex: 2; font-weight: 600; }
+        .score { text-align: right; }
+        .score small { font-size: 0.7rem; color: var(--muted); }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <div class="logo">🏆 HIGHSCORE</div>
+        <a href="/" class="back-link">← Zurück</a>
+    </div>
+    <div id="leaderboardList">Lädt...</div>
+</div>
+<script>
+const API = 'https://spotme-chat-obom.onrender.com/api';
+async function loadLeaderboard() {
+    const res = await fetch(`${API}/leaderboard?limit=20`);
+    const data = await res.json();
+    const container = document.getElementById('leaderboardList');
+    if (!data.length) {
+        container.innerHTML = '<div class="empty-state">Noch keine Daten</div>';
+        return;
+    }
+    container.innerHTML = data.map((entry, idx) => `
+        <div class="leaderboard-card">
+            <div class="rank">#${idx+1}</div>
+            <div class="name">${entry.display_name}</div>
+            <div class="score">
+                <div>${entry.score} Punkte</div>
+                <small>📦 ${entry.total_mb} MB | ⚡ ${entry.activity_points}</small>
+            </div>
+        </div>
+    `).join('');
+}
+loadLeaderboard();
+</script>
+</body>
+</html>

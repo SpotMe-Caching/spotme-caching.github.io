@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Neue Spots · SpotMe Help</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="help.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-icon">✨</div>
+  <div class="hero-label">Feature · Neue Spots</div>
+  <h1 class="hero-title">Frisch.<br><span>Und in der Nähe.</span></h1>
+  <p class="hero-sub">Spots die in den letzten 24 Stunden innerhalb von 2 km um dich herum erstellt wurden – immer aktuell.</p>
+  <div class="hero-tag">⏱️ Letzte 24 Stunden · 2 km</div>
+</div>
+
+<div class="content">
+
+  <div>
+    <div class="section-label">Was ist das</div>
+    <div class="feature-card">
+      <div class="feature-card-head">
+        <div class="feature-card-icon">✨</div>
+        <div class="feature-card-title">Dein Frische-Feed</div>
+      </div>
+      <div class="feature-card-body">
+        Neue Spots werden mit einem grünen Puls-Marker auf der Karte hervorgehoben. Im Neue-Spots-Drawer siehst du sie als Liste sortiert nach Alter – der neueste oben.
+      </div>
+    </div>
+  </div>
+
+  <div class="mock-ui">
+    <div class="mock-row">
+      <div style="width:12px;height:12px;border-radius:50%;background:var(--green);box-shadow:0 0 8px rgba(0,230,118,0.8);flex-shrink:0;"></div>
+      <div class="mock-text" style="margin-left:8px;">Aussichtspunkt Nord · vor 2h</div>
+    </div>
+    <div class="mock-row" style="margin-top:4px;">
+      <div style="width:12px;height:12px;border-radius:50%;background:var(--green);opacity:0.7;flex-shrink:0;"></div>
+      <div class="mock-text" style="margin-left:8px;">Parkplatz am See · vor 8h</div>
+    </div>
+    <div class="mock-row" style="margin-top:4px;">
+      <div style="width:12px;height:12px;border-radius:50%;background:var(--green);opacity:0.4;flex-shrink:0;"></div>
+      <div class="mock-text" style="margin-left:8px;">Industriegelände West · vor 21h</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="section-label">Wie es funktioniert</div>
+    <div class="use-cases">
+      <div class="use-case">
+        <div class="use-case-icon">📍</div>
+        <div class="use-case-text"><strong>GPS-basiert</strong> – Der 2 km Radius wird von deinem aktuellen Standort berechnet. Je nach wo du bist siehst du andere Spots.</div>
+      </div>
+      <div class="use-case">
+        <div class="use-case-icon">🟢</div>
+        <div class="use-case-text"><strong>Grüner Puls-Marker</strong> – Neue Spots leuchten auf der Karte grün mit einem Puls-Ring. Nach 24h wechseln sie zum normalen Marker.</div>
+      </div>
+      <div class="use-case">
+        <div class="use-case-icon">⚡</div>
+        <div class="use-case-text"><strong>Schnell handeln</strong> – Wer zuerst kommt entdeckt zuerst. Neue Spots bedeuten aktive Nutzer in der Nähe.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tip-box">
+    <div class="tip-box-icon">💡</div>
+    <div class="tip-box-text"><strong>Tipp:</strong> Wenn du häufig neue Spots in der Nähe siehst ist die Community in deiner Region aktiv – guter Zeitpunkt um selbst einen Spot zu erstellen.</div>
+  </div>
+
+  <div class="highlight">
+    <span>✨</span><span>Neue Spots verschwinden nach 24h aus dieser Liste – aber bleiben auf der Karte.</span>
+  </div>
+
+  <button class="cta" onclick="window.parent.closeHelpPage()">Neue Spots entdecken →</button>
+  <div class="spacer"></div>
+</div>
+</body>
+</html>

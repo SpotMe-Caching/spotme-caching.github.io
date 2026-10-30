@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Radius-Suche · SpotMe Help</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="help.css">
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-icon">🔍</div>
+  <div class="hero-label">Feature · Radius-Suche</div>
+  <h1 class="hero-title">Was ist<br><span>in deiner Nähe?</span></h1>
+  <p class="hero-sub">Finde Spots anderer Nutzer in einem wählbaren Umkreis – nach Kategorie gefiltert und nach Entfernung sortiert.</p>
+  <div class="hero-tag">📡 2 · 5 · 10 km</div>
+</div>
+
+<div class="content">
+
+  <div>
+    <div class="section-label">Was ist das</div>
+    <div class="feature-card">
+      <div class="feature-card-head">
+        <div class="feature-card-icon">◎</div>
+        <div class="feature-card-title">Dein Radar für Spots</div>
+      </div>
+      <div class="feature-card-body">
+        Wähle Kategorie und Umkreis – SpotMe zeigt alle passenden Spots mit Entfernung, Wetter-Emoji und direktem Navigations-Button. Sortiert vom nächsten zum entferntesten.
+      </div>
+    </div>
+  </div>
+
+  <div class="mock-ui">
+    <div class="mock-row">
+      <div class="mock-pill">🌳 Park</div>
+      <div class="mock-pill" style="margin-left:6px;">5 km</div>
+    </div>
+    <div class="mock-line"></div>
+    <div class="mock-row"><div class="mock-dot"></div><div class="mock-text">Stadtpark West · ☀️ 22° · 340m</div></div>
+    <div class="mock-row"><div class="mock-dot"></div><div class="mock-text">Flusspark · ☀️ 22° · 1.2km</div></div>
+    <div class="mock-row"><div class="mock-dot"></div><div class="mock-text">Naturschutz Nord · ⛅ 20° · 4.1km</div></div>
+  </div>
+
+  <div>
+    <div class="section-label">So funktioniert's</div>
+    <div class="feature-card">
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-title">◎ in der Topbar tippen</div>
+            <div class="step-desc">Das Radius-Modal öffnet sich mit Kategorie-Pills und Radius-Auswahl.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-title">Kategorie wählen (optional)</div>
+            <div class="step-desc">Filtere nach Park, Restaurant, Strand usw. – oder lass alle Kategorien anzeigen.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-title">Radius wählen</div>
+            <div class="step-desc">2 km für die Nachbarschaft, 5 km für die Stadt, 10 km für die Region.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <div class="step-title">Liste + Karte</div>
+            <div class="step-desc">Ergebnisse erscheinen als scrollbare Liste. Die Karte zeigt den Such-Kreis. 🧭 navigiert direkt zum Spot.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tip-box">
+    <div class="tip-box-icon">💡</div>
+    <div class="tip-box-text"><strong>Tipp:</strong> Der Kategorie-Filter der Radius-Suche ist unabhängig vom Karten-Filter. Du kannst auf der Karte „Park" filtern und in der Radius-Suche „Restaurant" suchen.</div>
+  </div>
+
+  <button class="cta" onclick="window.parent.closeHelpPage()">Radius-Suche starten →</button>
+  <div class="spacer"></div>
+</div>
+</body>
+</html>

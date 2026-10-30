@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+
+<!-- Eruda – Mobile Console (nur für Debugging)
+  <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+  <script>eruda.init();</script> -->
+  
+  
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>SpotMe · WayPoint Caching</title>
+<meta name="theme-color" content="#0a0d12">
+<link href="theme-vars.css" rel="stylesheet">
+<link href="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
+<script src="nav.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+}
+.logo, .mono-text, .tag, .status-pill, .countdown-value, .navi-stat-val {
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace;
+}
+/* ── Kartenfilter (Dark Mode Standard) ── */
+:root {
+  --map-filter-dark: invert(0.88) hue-rotate(180deg) brightness(0.82) saturate(0.85);
+}
+
+#playMap, #createMap, #naviMap {
+  width: 100%;
+  /* Nutzt die Variable aus theme-vars.css. Falls sie nicht gesetzt ist, nutze den Dark-Fallback */
+  filter: var(--map-filter, var(--map-filter-dark));
+  
+  /* ── MAP GRID (Raster-Overlay für Tiefe) ── */
+  background-image: 
+    linear-gradient(rgba(255, 159, 0, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 159, 0, 0.035) 1px, transparent 1px);
+  background-size: 50px 50px;
+  background-repeat: repeat;
+  background-attachment: local;
+  position: relative;
+}
+
+/* ── Light Mode Kartenfilter & Grid (nutzt Ihre Variablen) ── */
+:root[data-theme="light"] #playMap,
+:root[data-theme="light"] #createMap,
+:root[data-theme="light"] #naviMap {
+  filter: var(--map-filter-light);
+  background-image: var(--map-grid-light);
+}
+
+/* Kleinere Korrektur für die CreateMap (sie hat bereits eine feste Höhe, wir überschreiben nichts) */
+#createMap {
+  height: 25vh !important; /* Höhe bleibt wie vorher, das Grid und der Filter kommen jetzt durch das #createMap oben dazu */
+  }
+html,body{height:100%;background:var(--bg);color:var(--txt);font-family:'Outfit',sans-serif;overflow:hidden}
+.maplibregl-ctrl-attrib,.maplibregl-ctrl-logo{display:none!important}
+
+/* ── LAYOUT ── */
+#app{display:flex;flex-direction:column;height:100%;height:100dvh}
+
+/* ── HEADER ── */
+.wp-header{
+  display:flex;align-items:center;gap:0.6rem;
+  padding:max(0.8rem,env(safe-area-inset-top)) 1rem 0.8rem;
+  background:var(--glass);backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--bord);flex-shrink:0;
+}
+.wp-logo{font-family:'Space Mono',monospace;font-size:0.9rem;font-weight:700;color:var(--acc);letter-spacing:0.04em;display:flex;align-items:center;gap:6px}
+.wp-logo-dot{width:7px;height:7px;border-radius:50%;background:var(--acc);box-shadow:0 0 8px var(--acc);animation:pdot 2s ease infinite}
+@keyframes pdot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+.wp-header-title{flex:1;font-size:0.85rem;font-weight:600;color:var(--muted)}
+.wp-back-btn{padding:6px 12px;border-radius:40px;background:var(--card);border:1px solid var(--bord2);color:var(--muted);font-size:0.78rem;font-family:'Outfit',sans-serif;cursor:pointer}
+
+/* ── TABS ── */
+.wp-tabs{display:flex;border-bottom:1px solid var(--bord);flex-shrink:0}
+.wp-tab{
+  flex:1;padding:0.75rem 0.5rem;font-size:0.78rem;font-weight:600;
+  color:var(--muted2);background:none;border:none;cursor:pointer;
+  font-family:'Outfit',sans-serif;border-bottom:2px solid transparent;
+  transition:all 0.18s;display:flex;flex-direction:column;align-items:center;gap:2px;
+}
+.wp-tab.active{color:var(--acc);border-bottom-color:var(--acc)}
+.wp-tab-icon{font-size:1.1rem}
+.wp-tab-badge{background:var(--acc);color:#0a0d12;font-size:0.55rem;font-weight:700;font-family:'Space Mono',monospace;border-radius:100px;padding:1px 5px;display:none}
+.wp-tab.has-badge .wp-tab-badge{display:inline-block}
+
+/* ── SECTIONS ── */
+.wp-section{display:none;flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+.wp-section.active{display:flex;flex-direction:column}
+.wp-section-inner{padding:1rem;display:flex;flex-direction:column;gap:0.75rem}
+
+/* ── ROUTE CARD ── */
+.route-card{
+  background:var(--card);border:1px solid var(--bord);border-radius:16px;
+  padding:1rem;cursor:pointer;transition:border-color 0.18s;
+}
+.route-card:active{opacity:0.85}
+.route-card-head{display:flex;align-items:flex-start;gap:0.75rem;margin-bottom:0.6rem}
+.route-card-icon{width:42px;height:42px;border-radius:12px;background:var(--acc-dim);border:1px solid var(--acc-glow);display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0}
+.route-card-name{font-weight:700;font-size:0.95rem;margin-bottom:2px}
+.route-card-creator{font-size:0.7rem;color:var(--muted2);font-family:'Space Mono',monospace}
+.route-card-stars{margin-left:auto;font-size:0.85rem;letter-spacing:-1px}
+.route-card-desc{font-size:0.82rem;color:var(--muted);line-height:1.45;margin-bottom:0.65rem}
+.route-card-meta{display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem}
+.route-meta-tag{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:100px;background:var(--card2);border:1px solid var(--bord2);font-size:0.65rem;font-weight:600;color:var(--muted);font-family:'Space Mono',monospace}
+.route-play-btn{width:100%;padding:0.7rem;border-radius:12px;background:var(--acc);color:#0a0d12;font-family:'Outfit',sans-serif;font-size:0.9rem;font-weight:700;border:none;cursor:pointer;transition:opacity 0.18s}
+.route-play-btn:active{opacity:0.8}
+.route-play-btn.completed{background:var(--cyan-dim);border:1px solid var(--cyan-glow);color:var(--cyan)}
+
+/* ── EMPTY STATE ── */
+.wp-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:35vh;gap:0.6rem;text-align:center;color:var(--muted2);padding:2rem}
+.wp-empty-icon{font-size:2.5rem;opacity:0.4}
+.wp-empty-txt{font-size:0.88rem}
+
+/* ── SPIELEN ── */
+#playMap{width:100%;height:100%}
+.play-panel{
+  position:absolute;
+  bottom:0;left:0;right:0;
+  z-index:10;
+  background:rgba(10,13,18,0.94);
+  backdrop-filter:blur(20px);
+  border-top:1px solid var(--bord2);
+  border-radius:20px 20px 0 0;
+  padding:0.85rem 1rem;
+  padding-bottom:max(0.85rem,env(safe-area-inset-bottom));
+}
+.play-progress{display:flex;align-items:center;gap:0.5rem;margin-bottom:0.65rem}
+.play-route-name{font-weight:700;font-size:0.88rem;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.play-step{font-family:'Space Mono',monospace;font-size:0.7rem;color:var(--acc);font-weight:700;white-space:nowrap}
+.play-timer{font-family:'Space Mono',monospace;font-size:0.7rem;color:var(--cyan);white-space:nowrap}
+.progress-bar{height:4px;background:var(--bord2);border-radius:2px;margin-bottom:0.65rem;overflow:hidden}
+.progress-bar-fill{height:100%;background:var(--acc);border-radius:2px;transition:width 0.4s ease}
+.play-stats{display:flex;gap:0.5rem;margin-bottom:0.75rem}
+.play-stat{flex:1;background:var(--card2);border:1px solid var(--bord);border-radius:10px;padding:0.5rem;text-align:center}
+.play-stat-val{font-family:'Space Mono',monospace;font-size:0.85rem;font-weight:700;color:var(--cyan)}
+.play-stat-label{font-size:0.58rem;color:var(--muted2);margin-top:1px}
+.play-btn-row{display:flex;gap:0.5rem}
+.play-nav-btn{flex:0 0 44px;height:44px;border-radius:12px;background:var(--cyan-dim);border:1px solid var(--cyan-glow);color:var(--cyan);font-size:1.1rem;cursor:pointer}
+.play-question-btn{flex:1;padding:0.75rem;border-radius:12px;background:var(--acc);color:#0a0d12;font-family:'Outfit',sans-serif;font-weight:700;font-size:0.9rem;border:none;cursor:pointer;transition:opacity 0.18s}
+.play-question-btn:active{opacity:0.8}
+.play-stop-btn{flex:0 0 44px;height:44px;border-radius:12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:var(--red);font-size:1rem;cursor:pointer}
+
+/* ── QUESTION MODAL ── */
+.q-overlay{position:fixed;inset:0;z-index:800;background:rgba(0,0,0,0.7);display:none;align-items:flex-end;padding-bottom:env(safe-area-inset-bottom)}
+.q-overlay.show{display:flex}
+.q-modal{background:var(--card);border-radius:22px 22px 0 0;border-top:1px solid var(--bord2);padding:1.25rem 1.1rem;width:100%;max-height:85vh;overflow-y:auto}
+.q-handle{width:36px;height:4px;background:var(--bord2);border-radius:2px;margin:0 auto 1rem}
+.q-wp-label{font-family:'Space Mono',monospace;font-size:0.68rem;color:var(--acc);font-weight:700;letter-spacing:0.06em;margin-bottom:0.5rem}
+.q-text{font-size:0.95rem;font-weight:600;line-height:1.45;margin-bottom:1rem}
+.q-options{display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.75rem}
+.q-option{
+  padding:0.85rem 1rem;border-radius:14px;
+  background:var(--card2);border:1px solid var(--bord2);
+  color:var(--txt);font-family:'Outfit',sans-serif;font-size:0.9rem;
+  font-weight:500;cursor:pointer;text-align:left;transition:all 0.18s;
+  display:flex;align-items:center;gap:0.65rem;
+}
+.q-option:active{transform:scale(0.98)}
+.q-option.correct{background:rgba(16,185,129,0.15);border-color:rgba(16,185,129,0.4);color:var(--green)}
+.q-option.wrong{background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.3);color:var(--red)}
+.q-option.disabled{pointer-events:none;opacity:0.5}
+.q-option-letter{width:24px;height:24px;border-radius:50%;background:var(--bord2);display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:0.7rem;font-weight:700;flex-shrink:0}
+.q-feedback{text-align:center;font-size:0.88rem;font-weight:600;padding:0.5rem;border-radius:10px;display:none}
+.q-feedback.show{display:block}
+.q-feedback.ok{background:rgba(16,185,129,0.12);color:var(--green)}
+.q-feedback.err{background:rgba(239,68,68,0.1);color:var(--red)}
+
+/* ── COMPLETION SCREEN ── */
+.complete-overlay{position:fixed;inset:0;z-index:900;background:var(--bg);display:none;flex-direction:column;align-items:center;justify-content:center;padding:2rem;padding-top:max(2rem,env(safe-area-inset-top))}
+.complete-overlay.show{display:flex}
+.complete-trophy{font-size:4rem;margin-bottom:1rem;animation:trophy-pop 0.5s cubic-bezier(.17,.67,.4,1.5)}
+@keyframes trophy-pop{0%{transform:scale(0)}100%{transform:scale(1)}}
+.complete-title{font-family:'Space Mono',monospace;font-size:1.3rem;font-weight:700;color:var(--acc);margin-bottom:0.3rem;text-align:center}
+.complete-route{font-size:0.9rem;color:var(--muted);margin-bottom:1.5rem;text-align:center}
+.complete-stats{display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;width:100%;max-width:320px;margin-bottom:1.5rem}
+.complete-stat{background:var(--card);border:1px solid var(--bord2);border-radius:14px;padding:0.85rem;text-align:center}
+.complete-stat-val{font-family:'Space Mono',monospace;font-size:1.2rem;font-weight:700;color:var(--cyan)}
+.complete-stat-label{font-size:0.68rem;color:var(--muted2);margin-top:3px}
+.complete-rank{font-size:0.88rem;color:var(--muted2);margin-bottom:1.5rem;text-align:center}
+.complete-rank strong{color:var(--acc)}
+.complete-btn{width:100%;max-width:320px;padding:0.85rem;border-radius:14px;background:var(--acc);color:#0a0d12;font-family:'Outfit',sans-serif;font-size:0.95rem;font-weight:700;border:none;cursor:pointer;margin-bottom:0.5rem}
+.complete-score-btn{width:100%;max-width:320px;padding:0.7rem;border-radius:14px;background:var(--cyan-dim);border:1px solid var(--cyan-glow);color:var(--cyan);font-family:'Outfit',sans-serif;font-size:0.85rem;font-weight:600;cursor:pointer}
+
+/* ── ERSTELLEN ── */
+.create-step{background:var(--card);border:1px solid var(--bord);border-radius:16px;padding:1rem}
+.create-step-label{font-family:'Space Mono',monospace;font-size:0.65rem;color:var(--acc);font-weight:700;letter-spacing:0.06em;margin-bottom:0.75rem}
+.finp-label{display:block;font-size:0.7rem;color:var(--muted);font-weight:500;margin-bottom:0.3rem;margin-top:0.6rem}
+.finp{width:100%;padding:0.65rem 0.9rem;border-radius:11px;background:var(--bg);border:1px solid var(--bord2);color:var(--txt);font-family:'Outfit',sans-serif;font-size:0.9rem;outline:none}
+.finp:focus{border-color:var(--acc-glow)}
+textarea.finp{resize:none;min-height:70px;line-height:1.4}
+select.finp{appearance:none;cursor:pointer}
+.diff-row{display:flex;gap:0.5rem;margin-top:0.4rem}
+.diff-btn{flex:1;padding:0.55rem;border-radius:10px;background:var(--bg);border:1px solid var(--bord2);color:var(--muted2);font-size:0.85rem;cursor:pointer;transition:all 0.18s;text-align:center}
+.diff-btn.sel{background:var(--acc-dim);border-color:var(--acc-glow);color:var(--acc)}
+.btn-primary{width:100%;padding:0.75rem;border-radius:12px;background:var(--acc);color:#0a0d12;font-family:'Outfit',sans-serif;font-size:0.9rem;font-weight:700;border:none;cursor:pointer;transition:opacity 0.18s;margin-top:0.75rem}
+.btn-primary:disabled{opacity:0.45;cursor:not-allowed}
+.btn-primary:active:not(:disabled){opacity:0.8}
+.btn-secondary{width:100%;padding:0.75rem;border-radius:12px;background:var(--cyan-dim);border:1px solid var(--cyan-glow);color:var(--cyan);font-family:'Outfit',sans-serif;font-size:0.9rem;font-weight:700;border:none;cursor:pointer;transition:opacity 0.18s;margin-top:0.75rem}
+.btn-secondary:active{opacity:0.8}
+.btn-ghost{width:100%;padding:0.65rem;border-radius:12px;background:none;border:1px solid var(--bord2);color:var(--muted);font-family:'Outfit',sans-serif;font-size:0.85rem;cursor:pointer;margin-top:0.4rem}
+.btn-success{width:100%;padding:0.75rem;border-radius:12px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.35);color:var(--green);font-family:'Outfit',sans-serif;font-size:0.9rem;font-weight:700;cursor:pointer;margin-top:0.75rem}
+
+#createMap{width:100%;height:25vh;border-radius:12px;overflow:hidden;border:1px solid var(--bord2);margin-top:0.5rem}
+.correct-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.4rem;margin-top:0.4rem}
+.correct-opt-btn{padding:0.5rem;border-radius:9px;background:var(--bg);border:1px solid var(--bord2);color:var(--muted2);font-family:'Space Mono',monospace;font-size:0.8rem;cursor:pointer;transition:all 0.18s}
+.correct-opt-btn.sel{background:var(--cyan-dim);border-color:var(--cyan-glow);color:var(--cyan)}
+
+.wp-draft-list{display:flex;flex-direction:column;gap:0.4rem;margin-top:0.75rem}
+.wp-draft-item{background:var(--card2);border:1px solid var(--bord);border-radius:10px;padding:0.65rem 0.85rem;font-size:0.8rem;display:flex;gap:0.5rem;align-items:flex-start}
+.wp-draft-num{font-family:'Space Mono',monospace;color:var(--acc);font-weight:700;font-size:0.75rem;flex-shrink:0;padding-top:1px}
+.wp-draft-q{flex:1;min-width:0;line-height:1.35}
+
+/* ── HIGHSCORE ── */
+.score-overlay{position:fixed;inset:0;z-index:800;background:rgba(0,0,0,0.75);display:none;align-items:flex-end;padding-bottom:env(safe-area-inset-bottom)}
+.score-overlay.show{display:flex}
+.score-modal{background:var(--card);border-radius:22px 22px 0 0;border-top:1px solid var(--bord2);padding:1.25rem 1.1rem;width:100%;max-height:80vh;overflow-y:auto}
+.score-row{display:flex;align-items:center;gap:0.65rem;padding:0.6rem 0;border-bottom:1px solid var(--bord)}
+.score-row:last-child{border-bottom:none}
+.score-rank{font-family:'Space Mono',monospace;font-size:0.8rem;font-weight:700;width:28px;text-align:center;color:var(--muted2)}
+.score-rank.gold{color:#fbbf24}
+.score-rank.silver{color:#94a3b8}
+.score-rank.bronze{color:#d97706}
+.score-code{font-family:'Space Mono',monospace;font-size:0.78rem;color:var(--txt);flex:1}
+.score-time{font-family:'Space Mono',monospace;font-size:0.78rem;color:var(--cyan);font-weight:700}
+.score-me{background:var(--acc-dim);border-radius:8px;padding:0 6px}
+
+/* ── Navigation Overlay (identisch mit index.html) ── */
+.wp-toast{position:fixed;bottom:max(1.5rem,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(10px);background:rgba(15,19,24,0.96);backdrop-filter:blur(20px);border:1px solid var(--bord2);border-radius:100px;padding:0.5rem 1.2rem;font-size:0.82rem;z-index:999;opacity:0;transition:all 0.25s;pointer-events:none;white-space:nowrap}
+.wp-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+.section-title{font-family:'Space Mono',monospace;font-size:0.65rem;color:var(--muted2);font-weight:700;letter-spacing:0.08em;margin-bottom:0.1rem}
+
+.diff-row{display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.4rem}
+.diff-btn{flex:1 1 30%;padding:0.55rem;border-radius:10px;background:var(--bg);border:1px solid var(--bord2);color:var(--muted2);font-size:0.8rem;cursor:pointer;transition:all 0.18s;text-align:center}
+
+.osm-suggest-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+  margin-bottom: 0.35rem;
+  border-radius: 10px;
+  background: var(--bg);
+  border: 1px solid var(--bord2);
+  color: var(--text);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.osm-suggest-btn:hover {
+  border-color: var(--acc-glow);
+  background: var(--acc-dim);
+}
+
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <div class="wp-header">
+    <div class="wp-logo"><div class="wp-logo-dot"></div>WAYPOINT</div>
+    <div class="wp-header-title">Caching</div>
+    <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Hell/Dunkel">🌙</button>
+    <button class="wp-back-btn" onclick="location.href='/'">← App</button>
+  </div>
+
+  <!-- Tabs -->
+  <div class="wp-tabs">
+    <button class="wp-tab active" onclick="switchTab('discover')" id="tab-discover">
+      <span class="wp-tab-icon">🗺️</span>Entdecken
+    </button>
+    <button class="wp-tab" onclick="switchTab('play')" id="tab-play">
+      <span class="wp-tab-icon">🧭</span>Spielen
+      <span class="wp-tab-badge" id="playBadge">1</span>
+    </button>
+    <button class="wp-tab" onclick="switchTab('create')" id="tab-create">
+      <span class="wp-tab-icon">✏️</span>Erstellen
+    </button>
+  </div>
+
+  <!-- ── ENTDECKEN ── -->
+  <div class="wp-section active" id="sec-discover">
+    <div class="wp-section-inner" id="discoverList">
+      <div class="wp-empty"><div class="wp-empty-icon">⏳</div><div class="wp-empty-txt">Lädt Routen…</div></div>
+    </div>
+  </div>
+
+  <!-- ── SPIELEN ── -->
+  <div class="wp-section" id="sec-play" style="position:relative;overflow:hidden;">
+    <!-- Map füllt den verfügbaren Raum -->
+    <div id="playMap"></div>
+    <!-- Panel -->
+    <div class="play-panel" id="playPanel">
+      <div id="noActiveRoute" class="wp-empty" style="min-height:unset;padding:1rem 0;">
+        <div class="wp-empty-icon">🗺️</div>
+        <div class="wp-empty-txt">Keine aktive Route.<br>Wähle eine Route im Entdecken-Tab.</div>
+      </div>
+      <div id="activePanel" style="display:none;">
+        <div class="play-progress">
+          <div class="play-route-name" id="playRouteName">—</div>
+          <div class="play-step" id="playStep">WP 1/5</div>
+          <div class="play-timer" id="playTimer">00:00</div>
+        </div>
+        <div class="progress-bar"><div class="progress-bar-fill" id="progressFill" style="width:0%"></div></div>
+        <div class="play-stats">
+          <div class="play-stat"><div class="play-stat-val" id="playDist">—</div><div class="play-stat-label">Entfernung</div></div>
+          <div class="play-stat"><div class="play-stat-val" id="playWpNum" style="color:var(--acc)">1</div><div class="play-stat-label">WayPoint</div></div>
+          <div class="play-stat"><div class="play-stat-val" id="playTotal" style="color:var(--muted2)">5</div><div class="play-stat-label">Gesamt</div></div>
+        </div>
+        <div class="play-btn-row">
+          <button class="play-nav-btn" id="playNavBtn" title="Navigieren">🧭</button>
+          <button class="play-question-btn" id="playQBtn" onclick="openQuestion()">❓ Frage anzeigen</button>
+          <button class="play-stop-btn" onclick="confirmStopRoute()" title="Abbrechen">✕</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ERSTELLEN ── -->
+  <div class="wp-section" id="sec-create">
+    <div class="wp-section-inner">
+
+      <!-- Schritt 1: Route-Info -->
+      <div class="create-step" id="createStep1">
+        <div class="create-step-label">SCHRITT 1 · ROUTE ANLEGEN</div>
+        <span class="finp-label">Name der Route</span>
+        <input class="finp" id="crName" placeholder="z.B. Rund um den alten Hafen" maxlength="80">
+        <span class="finp-label">Beschreibung (optional)</span>
+        <textarea class="finp" id="crDesc" placeholder="Was erwartet die Spieler?" maxlength="300"></textarea>
+        <span class="finp-label">Schwierigkeitsgrad</span>
+           <div class="diff-row" id="diffRow">
+           <button class="diff-btn sel" data-d="1" onclick="setDiff(1)">⭐ Leicht</button>
+           <button class="diff-btn" data-d="2" onclick="setDiff(2)">⭐⭐ Mittel</button>
+           <button class="diff-btn" data-d="3" onclick="setDiff(3)">⭐⭐⭐ Schwer</button>
+           <button class="diff-btn" data-d="4" onclick="setDiff(4)">⭐⭐⭐⭐ Experte</button>
+           <button class="diff-btn" data-d="5" onclick="setDiff(5)">⭐⭐⭐⭐⭐ Meister</button>
+         </div>
+        <button class="btn-primary" id="crCreateBtn" onclick="createRoute()">Route anlegen →</button>
+      </div>
+
+        <div class="create-step" id="createStep2" style="display:none;">
+        <div class="create-step-label">SCHRITT 2 · WAYPOINTS HINZUFÜGEN</div>
+
+        <!-- Dynamischer Hinweis: welcher WayPoint als nächstes gesetzt wird -->
+        <div id="wpNextHint" style="display:flex;align-items:center;gap:0.5rem;padding:0.6rem 0.85rem;border-radius:10px;background:var(--acc-dim);border:1px solid var(--acc-glow);margin-bottom:0.5rem;">
+          <span style="font-size:1.1rem;">📍</span>
+          <span id="wpNextHintText" style="font-size:0.82rem;font-weight:600;color:var(--acc);">Tippe auf die Karte für WayPoint 1</span>
+        </div>
+
+        <div id="createMap"></div>
+        <div id="osmSuggestions" style="display:none;margin-top:0.6rem;"></div>
+
+<span class="finp-label" style="margin-top:0.75rem;">Frage an diesem WayPoint</span>
+<textarea class="finp" id="wpQuestion" placeholder="Was steht auf dem Schild an der Brücke?" maxlength="300" rows="2"></textarea>
+
+<span class="finp-label">Fragetyp</span>
+<div class="diff-row" id="qTypeRow">
+  <button class="diff-btn sel" data-t="multiple_choice" onclick="setQType('multiple_choice')">☑️ Multiple Choice</button>
+  <button class="diff-btn" data-t="freitext" onclick="setQType('freitext')">✏️ Freitext</button>
+</div>
+
+<div id="mcFields">
+  <span class="finp-label">Option A</span>
+  <input class="finp" id="wpOptA" placeholder="Erste Antwortoption" maxlength="120">
+  <span class="finp-label">Option B</span>
+  <input class="finp" id="wpOptB" placeholder="Zweite Antwortoption" maxlength="120">
+  <span class="finp-label">Option C</span>
+  <input class="finp" id="wpOptC" placeholder="Dritte Antwortoption" maxlength="120">
+
+  <span class="finp-label">Richtige Antwort</span>
+  <div class="correct-row">
+    <button class="correct-opt-btn" data-v="a" onclick="setCorrect('a')">A</button>
+    <button class="correct-opt-btn" data-v="b" onclick="setCorrect('b')">B</button>
+    <button class="correct-opt-btn" data-v="c" onclick="setCorrect('c')">C</button>
+  </div>
+</div>
+
+<div id="freitextFields" style="display:none;">
+  <span class="finp-label">Richtige Antwort (Freitext)</span>
+  <input class="finp" id="wpCorrectText" placeholder="z.B. 1873" maxlength="200" autocomplete="off">
+  <div style="font-size:0.72rem;color:var(--muted2);margin-top:0.3rem;">Groß-/Kleinschreibung und Leerzeichen am Rand spielen keine Rolle.</div>
+</div>
+
+        <!-- Erweiterung: JSON Import Button -->
+        <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;">
+         <button class="btn-secondary" style="flex:1;font-size:0.85rem;" onclick="document.getElementById('jsonFileInput').click()">📂 JSON importieren</button>
+          <input type="file" id="jsonFileInput" accept=".json" style="display:none" onchange="handleJSONImport(this)">
+         <button class="btn-secondary" style="flex:1;font-size:0.85rem;" onclick="document.getElementById('gpxFileInput').click()">🗺️ GPX importieren</button>
+          <input type="file" id="gpxFileInput" accept=".gpx" style="display:none" onchange="handleGPXImport(this)">
+       <button class="btn-primary" style="flex:1;font-size:0.85rem;" id="wpAddBtn" onclick="addWaypoint()">＋ WayPoint hinzufügen</button>
+        </div>
+    
+        <!-- Import-Draft-Container -->
+        <div id="importDraftSection" style="display:none;margin-top:0.75rem;">
+          <div style="font-size:0.78rem;color:var(--muted2);margin-bottom:0.5rem;">
+            📥 Importierte Punkte — jeder muss eine Frage + Antwort bekommen, bevor du veröffentlichst.
+          </div>
+          <div id="importDraftList"></div>
+          <button class="btn-primary" id="importPublishBtn" onclick="publishImportedRoute()" style="margin-top:0.75rem;width:100%;" disabled>
+            🚀 Importierte Route veröffentlichen (0/0 fertig)
+          </button>
+          <button class="btn-secondary" onclick="discardImportDraft()" style="margin-top:0.5rem;width:100%;font-size:0.8rem;">
+            🗑️ Import verwerfen
+          </button>
+        </div>
+
+        <!-- Liste der bereits hinzugefügten WayPoints -->
+        <div id="wpDraftList" class="wp-draft-list"></div>
+
+        <!-- Veröffentlichen (erst ab 2 WayPoints) -->
+        <div id="publishSection" style="display:none;">
+          <div style="height:1px;background:var(--bord);margin:0.75rem 0;"></div>
+          <!-- Info: letzter WayPoint = Finale -->
+          <div style="display:flex;align-items:center;gap:0.5rem;padding:0.6rem 0.85rem;border-radius:10px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);margin-bottom:0.75rem;">
+            <span style="font-size:1rem;">🏁</span>
+            <span id="finaleHint" style="font-size:0.8rem;color:var(--green);line-height:1.35;">
+              WayPoint <strong id="finaleNum">2</strong> ist das <strong>Finale</strong> –
+              der Zielort den die Spieler am Ende erreichen müssen.
+            </span>
+          </div>
+          <button class="btn-success" onclick="publishRoute()">🚀 Route veröffentlichen</button>
+          <button class="btn-ghost" onclick="resetCreate()">Abbrechen</button>
+        </div>
+      </div>
+
+      <!-- Meine Routen -->
+      <div id="myRoutesSection">
+        <div class="section-title">MEINE ROUTEN</div>
+        <div id="myRoutesList"><div class="wp-empty" style="min-height:unset;padding:0.5rem 0;"><div class="wp-empty-icon" style="font-size:1.5rem;">✏️</div><div class="wp-empty-txt">Noch keine Routen erstellt.</div></div></div>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<!-- ── FRAGEN-MODAL ── -->
+<div class="q-overlay" id="questionOverlay" onclick="handleQOverlayClick(event)">
+  <div class="q-modal" id="questionModal">
+    <div class="q-handle"></div>
+    <div class="q-wp-label" id="qWpLabel">WAYPOINT 1</div>
+    <div class="q-text" id="qText">Frage lädt…</div>
+    <div class="q-options" id="qOptions"></div>
+    <div class="q-feedback" id="qFeedback"></div>
+  </div>
+</div>
+
+<!-- ── HIGHSCORE-MODAL ── -->
+<div class="score-overlay" id="scoreOverlay" onclick="if(event.target===this)closeScore()">
+  <div class="score-modal">
+    <div class="q-handle"></div>
+    <div style="font-family:'Space Mono',monospace;font-size:0.8rem;font-weight:700;color:var(--acc);margin-bottom:0.1rem;" id="scoreTitle">HIGHSCORE</div>
+    <div style="font-size:0.8rem;color:var(--muted2);margin-bottom:0.85rem;" id="scoreRouteName"></div>
+    <div id="scoreList"></div>
+    <button class="btn-ghost" style="margin-top:0.5rem;" onclick="closeScore()">Schließen</button>
+  </div>
+</div>
+
+<!-- ── COMPLETION SCREEN ── -->
+<div class="complete-overlay" id="completeOverlay">
+  <div class="complete-trophy">🏆</div>
+  <div class="complete-title">Route abgeschlossen!</div>
+  <div class="complete-route" id="completeRouteName"></div>
+  <div class="complete-stats">
+    <div class="complete-stat"><div class="complete-stat-val" id="completeTime">—</div><div class="complete-stat-label">Deine Zeit</div></div>
+    <div class="complete-stat"><div class="complete-stat-val" id="completeWpCount" style="color:var(--acc)">—</div><div class="complete-stat-label">WayPoints</div></div>
+  </div>
+  <div class="complete-rank" id="completeRank"></div>
+  <button class="complete-btn" onclick="closeComplete()">Weiter erkunden 🗺️</button>
+  <button class="complete-score-btn" onclick="closeComplete();showScore(lastCompletedRouteId)">Highscore ansehen</button>
+</div>
+
+<!-- Toast -->
+<div class="wp-toast" id="wpToast"></div>
+
+<script>
+'use strict';
+
+// ── Theme (Hell/Dunkel) – gleicher Key wie index.html, daher konsistent ──────
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('sm_theme', theme);
+  const btn = document.getElementById('themeToggleBtn');
+  if (btn) btn.textContent = theme === 'light' ? '🌙' : '☀️';
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  applyTheme(current === 'light' ? 'dark' : 'light');
+}
+applyTheme(localStorage.getItem('sm_theme') || 'dark');
+
+const API   = 'https://spotme-chat-obom.onrender.com/api';
+const CODE  = localStorage.getItem('sm_code') || '';
+const TOKEN = localStorage.getItem('sm_token') || '';
+
+// ── STATE ────────────────────────────────────────────────────────────────────
+let allRoutes      = [];
+let activeRoute    = null;   // { id, name, total, started_at }
+let activeWaypoint = null;   // current waypoint object
+let activeIndex    = 0;
+let playMap        = null;
+let userMarker     = null;
+let wpMarker       = null;
+let watchId        = null;
+let userPos        = null;
+let timerInterval  = null;
+let lastCompletedRouteId = null;
+let answering      = false;
+
+// Create state
+let draftRouteId   = null;
+let draftDifficulty = 1;
+let draftCorrect   = null;
+let draftWpCount   = 0;
+let createMap      = null;
+let createMarker   = null;
+let createCoords   = null;
+
+let selectedQType = 'multiple_choice';
+function setQType(t) {
+  selectedQType = t;
+  document.querySelectorAll('#qTypeRow .diff-btn').forEach(b => {
+    b.classList.toggle('sel', b.dataset.t === t);
+  });
+  document.getElementById('mcFields').style.display = t === 'multiple_choice' ? '' : 'none';
+  document.getElementById('freitextFields').style.display = t === 'freitext' ? '' : 'none';
+}
+
+// ── IMPORT STATE ──────────────────────────────────────────────────────────────
+let importDraft = null;
+let editingImportIndex = null;
+
+// ── INDEXEDDB FÜR IMPORT-DRAFTS ──────────────────────────────────────────────
+const IMPORT_DB_NAME = 'wp_import_db';
+function openImportDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IMPORT_DB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('drafts', { keyPath: 'id' });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function saveImportDraftToDB() {
+  const db = await openImportDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('drafts', 'readwrite');
+    tx.objectStore('drafts').put({ id: 'current', ...importDraft });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function loadImportDraftFromDB() {
+  const db = await openImportDB();
+  return new Promise((resolve) => {
+    const tx = db.transaction('drafts', 'readonly');
+    const req = tx.objectStore('drafts').get('current');
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => resolve(null);
+  });
+}
+async function clearImportDraftFromDB() {
+  const db = await openImportDB();
+  return new Promise((resolve) => {
+    const tx = db.transaction('drafts', 'readwrite');
+    tx.objectStore('drafts').delete('current');
+    tx.oncomplete = () => resolve();
+  });
+}
+
+// ── UTILS ────────────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('wpToast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+function esc(s) { const d=document.createElement('div');d.textContent=s||'';return d.innerHTML; }
+function fmtTime(s) {
+  const m = Math.floor(s/60), sec = s%60;
+  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+function stars(n) { return '⭐'.repeat(n) || '⭐'; }
+function haversineM(lat1,lng1,lat2,lng2) {
+  const R=6371000, dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function fmtDist(m) { return m<1000?`${Math.round(m)} m`:`${(m/1000).toFixed(1)} km`; }
+
+// ── TABS ─────────────────────────────────────────────────────────────────────
+function switchTab(id) {
+  document.querySelectorAll('.wp-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.wp-section').forEach(s=>s.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  document.getElementById('sec-'+id).classList.add('active');
+  if (id==='play' && activeRoute) initPlayMap();
+  if (id==='create') loadMyRoutes();
+}
+
+// ── ENTDECKEN ────────────────────────────────────────────────────────────────
+async function loadRoutes() {
+  try {
+    const r = await fetch(`${API}/wp/routes`);
+    allRoutes = r.ok ? await r.json() : [];
+  } catch { allRoutes = []; }
+  renderRoutes();
+}
+
+function renderRoutes() {
+  const list = document.getElementById('discoverList');
+  if (!allRoutes.length) {
+    list.innerHTML = `<div class="wp-empty"><div class="wp-empty-icon">🗺️</div><div class="wp-empty-txt">Noch keine Routen verfügbar.<br>Sei der Erste und erstelle eine!</div></div>`;
+    return;
+  }
+  list.innerHTML = allRoutes.map(r => {
+    const best = r.best_time ? `⏱ ${fmtTime(r.best_time)}` : 'kein Rekord';
+    return `<div class="route-card">
+      <div class="route-card-head">
+        <div class="route-card-icon">🗺️</div>
+        <div>
+          <div class="route-card-name">${esc(r.name)}</div>
+          <div class="route-card-creator">${r.code}</div>
+        </div>
+        <div class="route-card-stars">${stars(r.difficulty)}</div>
+      </div>
+      ${r.description ? `<div class="route-card-desc">${esc(r.description)}</div>` : ''}
+      <div class="route-card-meta">
+        <span class="route-meta-tag">📍 ${r.waypoint_count} WayPoints</span>
+        <span class="route-meta-tag">👥 ${r.completion_count} Abschlüsse</span>
+        <span class="route-meta-tag">🏆 ${best}</span>
+        <span class="route-meta-tag">▶ ${r.play_count}×</span>
+      </div>
+      <button class="route-play-btn" onclick="startRoute(${r.id},'${esc(r.name)}',${r.waypoint_count})">
+        ▶ Route starten
+      </button>
+      <button style="width:100%;margin-top:0.4rem;padding:0.5rem;border-radius:10px;background:none;border:1px solid var(--bord2);color:var(--muted2);font-family:'Outfit',sans-serif;font-size:0.78rem;cursor:pointer;" onclick="showScore(${r.id},'${esc(r.name)}')">
+        🏆 Highscore
+      </button>
+    </div>`;
+  }).join('');
+}
+
+// ── SPIELEN ──────────────────────────────────────────────────────────────────
+async function startRoute(routeId, routeName, total) {
+  if (!CODE) { toast('⚠️ Bitte zuerst einloggen'); return; }
+  toast('⏳ Route wird gestartet…');
+  try {
+    const r = await fetch(`${API}/wp/routes/${routeId}/start`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ player_code: CODE })
+    });
+    const data = await r.json();
+    if (!r.ok) { toast('❌ ' + (data.error||'Fehler')); return; }
+    if (data.alreadyCompleted) {
+      toast(`✅ Bereits abgeschlossen in ${fmtTime(data.time_seconds)}`);
+      return;
+    }
+
+    activeRoute    = { id: routeId, name: routeName, total: data.total, started_at: data.started_at };
+    activeWaypoint = data.waypoint;
+    activeIndex    = data.current_index;
+
+    // Play-Tab Badge setzen + wechseln
+    document.getElementById('tab-play').classList.add('has-badge');
+    switchTab('play');
+    updatePlayPanel();
+    startTimer();
+    startGPS();
+  } catch (e) {
+    toast('❌ Verbindungsfehler');
+  }
+}
+
+function initPlayMap() {
+  if (!activeRoute || !activeWaypoint) return;
+  if (playMap) { playMap.remove(); playMap=null; userMarker=null; wpMarker=null; }
+
+  const center = [activeWaypoint.lng, activeWaypoint.lat];
+  playMap = new maplibregl.Map({
+    container: 'playMap',
+    style: 'https://tiles.openfreemap.org/styles/liberty',
+    center, zoom: 14, attributionControl: false
+  });
+  playMap.on('load', () => {
+    addWpMarker();
+    if (userPos) addUserMarker();
+  });
+}
+
+function addWpMarker() {
+  if (!playMap || !activeWaypoint) return;
+  if (wpMarker) wpMarker.remove();
+  const el = document.createElement('div');
+  el.innerHTML = `<div style="width:28px;height:28px;background:var(--acc);border-radius:50%;border:3px solid white;box-shadow:0 0 20px rgba(245,158,11,0.9);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;color:#0a0d12;">${activeIndex+1}</div>`;
+  el.style.cursor='pointer';
+  wpMarker = new maplibregl.Marker({ element: el })
+    .setLngLat([activeWaypoint.lng, activeWaypoint.lat])
+    .addTo(playMap);
+}
+
+function addUserMarker() {
+  if (!playMap || !userPos) return;
+  if (userMarker) userMarker.remove();
+  const el = document.createElement('div');
+  el.style.cssText='width:16px;height:16px;background:var(--cyan);border-radius:50%;border:2px solid white;box-shadow:0 0 8px rgba(34,211,238,0.8);';
+  userMarker = new maplibregl.Marker({ element: el })
+    .setLngLat([userPos.lng, userPos.lat]).addTo(playMap);
+}
+
+function startGPS() {
+  if (!navigator.geolocation) return;
+  if (watchId) { navigator.geolocation.clearWatch(watchId); watchId=null; }
+  watchId = navigator.geolocation.watchPosition(pos => {
+    userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    if (userMarker) userMarker.setLngLat([userPos.lng, userPos.lat]);
+    else if (playMap?.loaded()) addUserMarker();
+    updateDistDisplay();
+  }, null, { enableHighAccuracy:true, maximumAge:5000, timeout:15000 });
+}
+
+function stopGPS() {
+  if (watchId) { navigator.geolocation.clearWatch(watchId); watchId=null; }
+}
+
+function updateDistDisplay() {
+  if (!userPos||!activeWaypoint) return;
+  const m = haversineM(userPos.lat,userPos.lng,activeWaypoint.lat,activeWaypoint.lng);
+  document.getElementById('playDist').textContent = fmtDist(m);
+  if (m < 30) document.getElementById('playDist').style.color = 'var(--green)';
+  else document.getElementById('playDist').style.color = 'var(--cyan)';
+}
+
+function updatePlayPanel() {
+  if (!activeRoute||!activeWaypoint) {
+    document.getElementById('noActiveRoute').style.display='';
+    document.getElementById('activePanel').style.display='none';
+    return;
+  }
+  document.getElementById('noActiveRoute').style.display='none';
+  document.getElementById('activePanel').style.display='';
+  document.getElementById('playRouteName').textContent = activeRoute.name;
+  document.getElementById('playStep').textContent = `WP ${activeIndex+1}/${activeRoute.total}`;
+  document.getElementById('playWpNum').textContent = activeIndex+1;
+  document.getElementById('playTotal').textContent = activeRoute.total;
+  const pct = Math.round((activeIndex/activeRoute.total)*100);
+  document.getElementById('progressFill').style.width = pct+'%';
+  if (userPos) updateDistDisplay();
+
+  // Nav-Button
+  document.getElementById('playNavBtn').onclick = () => {
+    if (!activeWaypoint) return;
+    openNavOverlay(activeWaypoint.lat, activeWaypoint.lng, `WayPoint ${activeIndex + 1}`);
+  };
+}
+
+let timerStart = 0;
+function startTimer() {
+  timerStart = activeRoute.started_at;
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    if (!activeRoute) { clearInterval(timerInterval); return; }
+    const sec = Math.round((Date.now() - timerStart)/1000);
+    document.getElementById('playTimer').textContent = fmtTime(sec);
+  }, 1000);
+}
+
+
+function openQuestion() {
+  if (!activeWaypoint) return;
+  const overlay = document.getElementById('questionOverlay');
+  document.getElementById('qWpLabel').textContent = `WAYPOINT ${activeIndex+1} VON ${activeRoute?.total}`;
+  document.getElementById('qText').textContent = activeWaypoint.question;
+  document.getElementById('qFeedback').className='q-feedback';
+  document.getElementById('qFeedback').textContent='';
+
+  if (activeWaypoint.question_type === 'freitext') {
+    document.getElementById('qOptions').innerHTML = `
+      <input class="finp" id="qFreitextInput" placeholder="Deine Antwort..." maxlength="200">
+      <button class="play-question-btn" style="margin-top:0.6rem;width:100%;" onclick="submitAnswer(document.getElementById('qFreitextInput').value)">Antwort prüfen</button>
+    `;
+    setTimeout(() => document.getElementById('qFreitextInput')?.focus(), 200);
+  } else {
+    const opts = [
+      { key:'a', text: activeWaypoint.option_a },
+      { key:'b', text: activeWaypoint.option_b },
+      { key:'c', text: activeWaypoint.option_c }
+    ];
+    document.getElementById('qOptions').innerHTML = opts.map(o =>
+      `<button class="q-option" data-k="${o.key}" onclick="submitAnswer('${o.key}')">
+         <span class="q-option-letter">${o.key.toUpperCase()}</span>
+         ${esc(o.text)}
+       </button>`
+    ).join('');
+  }
+
+  overlay.classList.add('show');
+  answering = false;
+}
+
+function handleQOverlayClick(e) {
+  if (e.target === document.getElementById('questionOverlay')) {
+    document.getElementById('questionOverlay').classList.remove('show');
+  }
+}
+
+
+async function submitAnswer(value) {
+  if (answering) return;
+  if (!value || !value.trim()) { toast('⚠️ Bitte etwas eingeben'); return; }
+  answering = true;
+  const fb = document.getElementById('qFeedback');
+  const isMC = activeWaypoint.question_type !== 'freitext';
+  if (isMC) document.querySelectorAll('.q-option').forEach(b => b.classList.add('disabled'));
+
+  try {
+    const r = await fetch(`${API}/wp/routes/${activeRoute.id}/answer`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ player_code: CODE, waypoint_index: activeIndex, answer: value })
+    });
+    const data = await r.json();
+    if (!r.ok) { toast('❌ '+(data.error||'Fehler')); answering=false; return; }
+
+    if (!data.correct) {
+      if (isMC) {
+        document.querySelector(`.q-option[data-k="${value}"]`)?.classList.add('wrong');
+        document.querySelectorAll('.q-option').forEach(b=>b.classList.remove('disabled'));
+      }
+      fb.textContent = '❌ Falsch! Versuche es nochmal.';
+      fb.className = 'q-feedback show err';
+      answering = false;
+      return;
+    }
+
+    if (isMC) document.querySelector(`.q-option[data-k="${value}"]`)?.classList.add('correct');
+
+    if (data.completed) {
+      fb.textContent = `🎉 Letzter WayPoint gelöst! +${data.coins_earned} Coins`;
+      fb.className = 'q-feedback show ok';
+      setTimeout(() => {
+        document.getElementById('questionOverlay').classList.remove('show');
+        showCompletion(data.time_seconds, data.rank, data.coins_earned);
+      }, 1200);
+    } else {
+      fb.textContent = `✅ Richtig! +${data.coins_earned} Coins — nächster WayPoint wird geladen…`;
+      fb.className = 'q-feedback show ok';
+      setTimeout(() => {
+        document.getElementById('questionOverlay').classList.remove('show');
+        activeWaypoint = data.next_waypoint;
+        activeIndex    = data.current_index;
+        updatePlayPanel();
+        if (playMap) {
+          addWpMarker();
+          playMap.flyTo({ center:[activeWaypoint.lng,activeWaypoint.lat], zoom:14, duration:800 });
+        }
+        refreshCoinDisplay();
+        toast(`✅ WayPoint ${activeIndex} gelöst! Weiter zu WayPoint ${activeIndex+1}`);
+      }, 1000);
+    }
+  } catch {
+    toast('❌ Verbindungsfehler');
+    answering = false;
+  }
+}
+
+
+function showCompletion(timeSec, rank, coinsEarned) {
+  clearInterval(timerInterval);
+  stopGPS();
+  lastCompletedRouteId = activeRoute?.id;
+
+  document.getElementById('completeRouteName').textContent = activeRoute?.name || '';
+  document.getElementById('completeTime').textContent = fmtTime(timeSec);
+  document.getElementById('completeWpCount').textContent = activeRoute?.total || '—';
+  const rankTxt = rank === 1 ? '🥇 Du bist Erster!' : rank === 2 ? '🥈 Platz 2!' : rank === 3 ? '🥉 Platz 3!' : `Platz ${rank}`;
+  document.getElementById('completeRank').innerHTML = `<strong>${rankTxt}</strong> auf dem Highscore dieser Route · <strong style="color:var(--acc)">+${coinsEarned} 🪙</strong>`;
+
+  activeRoute=null; activeWaypoint=null; activeIndex=0;
+  document.getElementById('tab-play').classList.remove('has-badge');
+  document.getElementById('completeOverlay').classList.add('show');
+  loadRoutes();
+  refreshCoinDisplay();
+}
+
+async function refreshCoinDisplay() {
+  if (!CODE) return;
+  try {
+    const r = await fetch(`${API}/coins/${CODE}`);
+    const data = await r.json();
+    const el = document.getElementById('coinDisplay');
+    if (el) el.textContent = `🪙 ${data.coins ?? 0}`;
+  } catch {}
+}
+
+function closeComplete() {
+  document.getElementById('completeOverlay').classList.remove('show');
+  updatePlayPanel();
+}
+
+function confirmStopRoute() {
+  if (!confirm('Route wirklich abbrechen? Dein Fortschritt geht verloren.')) return;
+  clearInterval(timerInterval);
+  stopGPS();
+  activeRoute=null; activeWaypoint=null; activeIndex=0;
+  document.getElementById('tab-play').classList.remove('has-badge');
+  updatePlayPanel();
+  toast('Route abgebrochen');
+}
+
+// ── HIGHSCORE ────────────────────────────────────────────────────────────────
+async function showScore(routeId, routeName) {
+  document.getElementById('scoreRouteName').textContent = routeName || '';
+  document.getElementById('scoreList').innerHTML = '<div style="color:var(--muted2);font-size:0.82rem;padding:0.5rem 0;">Lädt…</div>';
+  document.getElementById('scoreOverlay').classList.add('show');
+  try {
+    const r = await fetch(`${API}/wp/routes/${routeId}/score`);
+    const rows = r.ok ? await r.json() : [];
+    document.getElementById('scoreTitle').textContent = `🏆 HIGHSCORE · ${rows.length} Einträge`;
+    if (!rows.length) {
+      document.getElementById('scoreList').innerHTML='<div style="color:var(--muted2);font-size:0.82rem;padding:0.5rem 0;">Noch keine Abschlüsse.</div>';
+      return;
+    }
+    const rankClass = n => n===1?'gold':n===2?'silver':n===3?'bronze':'';
+    document.getElementById('scoreList').innerHTML = rows.map(row => {
+      const isMe = row.player_code === CODE;
+      return `<div class="score-row ${isMe?'score-me':''}">
+        <div class="score-rank ${rankClass(row.rank)}">${row.rank}</div>
+        <div class="score-code">${isMe?'👤 Du':row.player_code}</div>
+        <div class="score-time">${fmtTime(row.time_seconds)}</div>
+      </div>`;
+    }).join('');
+  } catch {
+    document.getElementById('scoreList').innerHTML='<div style="color:var(--red);font-size:0.82rem;">Fehler beim Laden.</div>';
+  }
+}
+function closeScore() { document.getElementById('scoreOverlay').classList.remove('show'); }
+
+// ── ERSTELLEN ────────────────────────────────────────────────────────────────
+let selectedDiff = 1;
+function setDiff(n) {
+  selectedDiff = n;
+  document.querySelectorAll('.diff-btn').forEach(b => {
+    b.classList.toggle('sel', +b.dataset.d === n);
+  });
+}
+
+async function createRoute() {
+  const name = document.getElementById('crName').value.trim();
+  if (!name) { toast('⚠️ Bitte einen Namen eingeben'); return; }
+  if (!CODE) { toast('⚠️ Bitte zuerst einloggen'); return; }
+  const btn = document.getElementById('crCreateBtn');
+  btn.disabled=true; btn.textContent='⏳';
+  try {
+    const r = await fetch(`${API}/wp/routes`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        code:CODE, token:TOKEN,
+        name, description:document.getElementById('crDesc').value.trim(),
+        difficulty:selectedDiff
+      })
+    });
+    const data = await r.json();
+    if (!r.ok||!data.route) throw new Error(data.error||'Fehler');
+    draftRouteId = data.route.id;
+    draftWpCount = 0;
+    sessionStorage.setItem('wp_draft_id', draftRouteId);
+    sessionStorage.setItem('wp_draft_count', '0');
+    document.getElementById('createStep1').style.display='none';
+    document.getElementById('createStep2').style.display='';
+    initCreateMap();
+    toast('✅ Route angelegt – jetzt WayPoints hinzufügen');
+  } catch(e) {
+    toast('❌ '+(e.message||'Fehler'));
+    btn.disabled=false; btn.textContent='Route anlegen →';
+  }
+}
+
+async function fetchNearbyOSM(lat, lng) {
+  const box = document.getElementById('osmSuggestions');
+  box.style.display = 'none';
+  box.innerHTML = '';
+
+  const query = `[out:json][timeout:8];(
+    node(around:60,${lat},${lng})[tourism=artwork];
+    node(around:60,${lat},${lng})[historic];
+    node(around:60,${lat},${lng})[tourism=viewpoint];
+    node(around:60,${lat},${lng})[amenity=fountain];
+  );out body;`;
+
+  try {
+    const r = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: 'data=' + encodeURIComponent(query)
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    const elements = (data.elements || []).filter(e => e.tags?.name);
+    if (!elements.length) return;
+
+    box.style.display = 'block';
+    box.innerHTML = `<div style="font-size:0.72rem;color:var(--muted2);margin-bottom:0.4rem;">📡 In der Nähe gefunden (OpenStreetMap):</div>` +
+      elements.slice(0, 4).map((e, i) => {
+        const name = e.tags.name;
+        const type = e.tags.tourism || e.tags.historic || e.tags.amenity || 'Ort';
+        return `<button class="osm-suggest-btn" onclick='applyOsmSuggestion(${i})'>📍 ${esc(name)} <span style="opacity:0.6;">(${esc(type)})</span></button>`;
+      }).join('');
+
+    window.__osmCandidates = elements;
+  } catch {
+    // Overpass nicht erreichbar – einfach ignorieren, manuelle Eingabe bleibt möglich
+  }
+}
+
+function applyOsmSuggestion(i) {
+  const e = window.__osmCandidates?.[i];
+  if (!e) return;
+  const name = e.tags.name;
+  let question = `Wie heißt dieser Ort/dieses Objekt hier?`;
+  if (e.tags.start_date) {
+    question = `In welchem Jahr wurde "${name}" errichtet?`;
+  } else if (e.tags.artist_name) {
+    question = `Von wem stammt "${name}"?`;
+  }
+  document.getElementById('wpQuestion').value = question;
+  toast(`✅ Vorschlag übernommen: ${name}`);
+}
+
+function initCreateMap() {
+  if (createMap) { createMap.remove(); createMap=null; createMarker=null; }
+  const center = userPos ? [userPos.lng,userPos.lat] : [0,20];
+  createMap = new maplibregl.Map({
+    container:'createMap',
+    style:'https://tiles.openfreemap.org/styles/liberty',
+    center, zoom:13, attributionControl:false
+  });
+  if (userPos) {
+    navigator.geolocation.getCurrentPosition(p => {
+      createMap.flyTo({ center:[p.coords.longitude,p.coords.latitude], zoom:14 });
+    });
+  }
+  createMap.on('click', e => {
+  createCoords = { lat: e.lngLat.lat, lng: e.lngLat.lng };
+  if (createMarker) createMarker.remove();
+  const el = document.createElement('div');
+  el.style.cssText='width:22px;height:22px;background:var(--acc);border-radius:50%;border:3px solid white;box-shadow:0 0 12px rgba(245,158,11,0.8);';
+  createMarker = new maplibregl.Marker({element:el}).setLngLat([createCoords.lng,createCoords.lat]).addTo(createMap);
+  toast(`📍 Position gesetzt (WP ${draftWpCount+1})`);
+  fetchNearbyOSM(createCoords.lat, createCoords.lng); // ← neu
+});
+}
+
+function setCorrect(v) {
+  draftCorrect = v;
+  document.querySelectorAll('.correct-opt-btn').forEach(b=>b.classList.toggle('sel',b.dataset.v===v));
+}
+
+// ── NEUE IMPORT-LOGIK (handleJSONImport, Render, Edit, Publish) ───────────────
+
+async function handleJSONImport(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.waypoints || data.waypoints.length === 0) {
+        toast('⚠️ JSON enthält keine WayPoints.');
+        return;
+      }
+      importDraft = {
+        name: data.name || 'Importierte Route',
+        description: data.description || '',
+        difficulty: (data.difficulty >= 1 && data.difficulty <= 5) ? data.difficulty : 1,
+        waypoints: data.waypoints.map(wp => ({
+          lat: wp.lat, lng: wp.lng,
+          importName: wp.name || wp.question || '',
+          importDescription: wp.description || '',
+          question: wp.question || wp.name || '',
+          question_type: wp.correct_text ? 'freitext' : 'multiple_choice',
+          option_a: wp.option_a || '', option_b: wp.option_b || '', option_c: wp.option_c || '',
+          correct_option: wp.correct_option || '',
+          correct_text: wp.correct_text || ''
+        }))
+      };
+      await saveImportDraftToDB();
+      renderImportDraftList();
+      toast(`📥 ${importDraft.waypoints.length} Punkte importiert — jetzt bearbeiten`);
+    } catch (e) {
+      toast('❌ Fehler beim Lesen der JSON: ' + e.message);
+    }
+    input.value = '';
+  };
+  reader.readAsText(file);
+}
+
+async function handleGPXImport(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    try {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(e.target.result, "text/xml");
+
+      const wptElements = xmlDoc.getElementsByTagName('wpt');
+      if (wptElements.length === 0) {
+        toast('⚠️ Keine Markierungen (<wpt>) in der GPX-Datei gefunden.');
+        return;
+      }
+
+      const trkEl = xmlDoc.getElementsByTagName('trk')[0];
+      const routeName = trkEl?.getElementsByTagName('name')[0]?.textContent?.trim() || 'Importierte Route';
+      const routeDesc = trkEl?.getElementsByTagName('desc')[0]?.textContent?.trim() || '';
+
+      const wps = [];
+      let i = 1;
+      for (const wpt of wptElements) {
+        const lat = parseFloat(wpt.getAttribute('lat'));
+        const lng = parseFloat(wpt.getAttribute('lon'));
+        const name = wpt.getElementsByTagName('name')[0]?.textContent?.trim() || `WayPoint ${i}`;
+        const desc = wpt.getElementsByTagName('desc')[0]?.textContent?.trim() || '';
+        wps.push({ lat, lng, name, description: desc });
+        i++;
+      }
+
+      importDraft = {
+        name: routeName,
+        description: routeDesc,
+        difficulty: 1,
+        waypoints: wps.map(wp => ({
+          lat: wp.lat, lng: wp.lng,
+          importName: wp.name,
+          importDescription: wp.description,
+          question: wp.name,
+          question_type: 'multiple_choice',
+          option_a: '', option_b: '', option_c: '',
+          correct_option: '',
+          correct_text: ''
+        }))
+      };
+      await saveImportDraftToDB();
+      renderImportDraftList();
+      toast(`📥 ${importDraft.waypoints.length} Markierungen aus GPX importiert — jetzt bearbeiten`);
+    } catch (err) {
+      toast('❌ Fehler beim Lesen der GPX: ' + err.message);
+    }
+    input.value = '';
+  };
+  reader.readAsText(file);
+          }
+
+function isWpComplete(wp) {
+  if (!wp.question?.trim()) return false;
+  if (wp.question_type === 'freitext') return !!wp.correct_text?.trim();
+  return !!(wp.option_a?.trim() && wp.option_b?.trim() && wp.option_c?.trim() && wp.correct_option);
+}
+
+function renderImportDraftList() {
+  const section = document.getElementById('importDraftSection');
+  const list = document.getElementById('importDraftList');
+  if (!importDraft) { section.style.display = 'none'; return; }
+  section.style.display = '';
+
+  list.innerHTML = importDraft.waypoints.map((wp, i) => {
+    const complete = isWpComplete(wp);
+    const summary = complete
+      ? (wp.question_type === 'freitext'
+          ? `Freitext: <b style="color:var(--cyan);">${esc(wp.correct_text)}</b>`
+          : `A:${esc(wp.option_a)} · B:${esc(wp.option_b)} · C:${esc(wp.option_c)} → <b style="color:var(--cyan);">${wp.correct_option.toUpperCase()}</b>`)
+      : '<span style="color:var(--acc);">⚠️ Noch nicht ausgefüllt</span>';
+
+    return `<div class="wp-draft-item" style="cursor:pointer;${complete?'':'border-color:var(--acc-glow);'}" onclick="editImportWaypoint(${i})">
+      <div class="wp-draft-num">${complete ? '✓' : i+1}</div>
+      <div class="wp-draft-q">
+        <div style="font-weight:600;">${esc(wp.importName || wp.question || 'Punkt ' + (i+1))}</div>
+        ${wp.importDescription ? `<div style="font-size:0.72rem;color:var(--muted2);margin:2px 0;">📝 ${esc(wp.importDescription)}</div>` : ''}
+        <div style="font-size:0.72rem;margin-top:3px;">${summary}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const doneCount = importDraft.waypoints.filter(isWpComplete).length;
+  const total = importDraft.waypoints.length;
+  const pubBtn = document.getElementById('importPublishBtn');
+  pubBtn.textContent = `🚀 Importierte Route veröffentlichen (${doneCount}/${total} fertig)`;
+  pubBtn.disabled = doneCount < total || total < 2;
+}
+
+function editImportWaypoint(i) {
+  editingImportIndex = i;
+  const wp = importDraft.waypoints[i];
+
+  document.getElementById('wpQuestion').value = wp.question || '';
+  setQType(wp.question_type);
+
+  if (wp.question_type === 'multiple_choice') {
+    document.getElementById('wpOptA').value = wp.option_a || '';
+    document.getElementById('wpOptB').value = wp.option_b || '';
+    document.getElementById('wpOptC').value = wp.option_c || '';
+    draftCorrect = wp.correct_option || null;
+    document.querySelectorAll('.correct-opt-btn').forEach(b =>
+      b.classList.toggle('sel', b.dataset.v === draftCorrect));
+  } else {
+    document.getElementById('wpCorrectText').value = wp.correct_text || '';
+  }
+
+  // Hinweis-Box mit Original-Kontext einblenden
+  let hint = document.getElementById('importEditHint');
+  if (!hint) {
+    hint = document.createElement('div');
+    hint.id = 'importEditHint';
+    hint.style.cssText = 'background:var(--acc-dim);border:1px solid var(--acc-glow);border-radius:10px;padding:0.6rem 0.75rem;margin-bottom:0.6rem;font-size:0.78rem;';
+    document.getElementById('wpQuestion').parentNode.insertBefore(hint, document.getElementById('wpQuestion'));
+  }
+  hint.innerHTML = `📍 Original aus OpenTracks: <b>${esc(wp.importName)}</b>${wp.importDescription ? ' — ' + esc(wp.importDescription) : ''}`;
+
+  const btn = document.getElementById('wpAddBtn');
+  btn.textContent = '💾 Übernehmen';
+  btn.onclick = saveImportWaypointEdit;
+
+  document.getElementById('createMap')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function saveImportWaypointEdit() {
+  if (editingImportIndex === null) return;
+  const wp = importDraft.waypoints[editingImportIndex];
+  const q = document.getElementById('wpQuestion').value.trim();
+  if (!q) { toast('⚠️ Bitte eine Frage eingeben'); return; }
+
+  wp.question = q;
+  wp.question_type = selectedQType;
+  if (selectedQType === 'multiple_choice') {
+    wp.option_a = document.getElementById('wpOptA').value.trim();
+    wp.option_b = document.getElementById('wpOptB').value.trim();
+    wp.option_c = document.getElementById('wpOptC').value.trim();
+    wp.correct_option = draftCorrect || '';
+  } else {
+    wp.correct_text = document.getElementById('wpCorrectText').value.trim();
+  }
+
+  saveImportDraftToDB();
+  exitImportEditMode();
+  renderImportDraftList();
+  toast('✅ Übernommen');
+}
+
+function exitImportEditMode() {
+  editingImportIndex = null;
+  document.getElementById('importEditHint')?.remove();
+  ['wpQuestion','wpOptA','wpOptB','wpOptC','wpCorrectText'].forEach(id => document.getElementById(id).value = '');
+  draftCorrect = null;
+  document.querySelectorAll('.correct-opt-btn').forEach(b => b.classList.remove('sel'));
+  setQType('multiple_choice');
+  const btn = document.getElementById('wpAddBtn');
+  btn.textContent = '＋ WayPoint hinzufügen';
+  btn.onclick = addWaypoint;
+}
+
+async function publishImportedRoute() {
+  if (!importDraft) return;
+  const btn = document.getElementById('importPublishBtn');
+  btn.disabled = true; btn.textContent = '⏳ Wird veröffentlicht…';
+
+  document.getElementById('crName').value = importDraft.name;
+  document.getElementById('crDesc').value = importDraft.description;
+  setDiff(importDraft.difficulty);
+  await createRoute();
+
+  if (!draftRouteId) {
+    toast('❌ Route konnte nicht angelegt werden');
+    btn.disabled = false;
+    return;
+  }
+
+  let ok = 0;
+  for (const wp of importDraft.waypoints) {
+    const payload = {
+      code: CODE, token: TOKEN, lat: wp.lat, lng: wp.lng,
+      question: wp.question, question_type: wp.question_type
+    };
+    if (wp.question_type === 'freitext') payload.correct_text = wp.correct_text;
+    else Object.assign(payload, {
+      option_a: wp.option_a, option_b: wp.option_b, option_c: wp.option_c,
+      correct_option: wp.correct_option
+    });
+    try {
+      const r = await fetch(`${API}/wp/routes/${draftRouteId}/waypoints`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      if ((await r.json()).success) { ok++; draftWpCount++; }
+    } catch {}
+  }
+
+  await clearImportDraftFromDB();
+  importDraft = null;
+  document.getElementById('importDraftSection').style.display = 'none';
+  toast(`✅ ${ok} WayPoints angelegt`);
+  await publishRoute();
+}
+
+function discardImportDraft() {
+  if (!confirm('Import wirklich verwerfen? Alle Bearbeitungen gehen verloren.')) return;
+  clearImportDraftFromDB();
+  importDraft = null;
+  document.getElementById('importDraftSection').style.display = 'none';
+}
+
+// ── ENDE IMPORT-LOGIK ─────────────────────────────────────────────────────────
+
+async function addWaypoint() {
+  if (!createCoords) { toast('⚠️ Bitte Position auf der Karte tippen'); return; }
+  const q = document.getElementById('wpQuestion').value.trim();
+  if (!q) { toast('⚠️ Bitte eine Frage eingeben'); return; }
+
+  let payload = {
+    code: CODE, token: TOKEN,
+    lat: createCoords.lat, lng: createCoords.lng,
+    question: q, question_type: selectedQType,
+  };
+
+  let summaryHtml = '';
+  if (selectedQType === 'multiple_choice') {
+    const a = document.getElementById('wpOptA').value.trim();
+    const b = document.getElementById('wpOptB').value.trim();
+    const c = document.getElementById('wpOptC').value.trim();
+    if (!a || !b || !c) { toast('⚠️ Bitte alle 3 Optionen ausfüllen'); return; }
+    if (!draftCorrect) { toast('⚠️ Bitte richtige Antwort markieren'); return; }
+    payload = { ...payload, option_a: a, option_b: b, option_c: c, correct_option: draftCorrect };
+    summaryHtml = `A:${esc(a)} · B:${esc(b)} · C:${esc(c)} → <b style="color:var(--cyan);">${draftCorrect.toUpperCase()}</b>`;
+  } else {
+    const text = document.getElementById('wpCorrectText').value.trim();
+    if (!text) { toast('⚠️ Bitte die richtige Antwort eingeben'); return; }
+    payload.correct_text = text;
+    summaryHtml = `Freitext-Antwort: <b style="color:var(--cyan);">${esc(text)}</b>`;
+  }
+
+  const btn = document.getElementById('wpAddBtn');
+  btn.disabled = true; btn.textContent = '⏳';
+  try {
+    const r = await fetch(`${API}/wp/routes/${draftRouteId}/waypoints`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json();
+    if (!r.ok || !data.success) throw new Error(data.error || 'Fehler');
+
+    draftWpCount++;
+    sessionStorage.setItem('wp_draft_count', String(draftWpCount));
+
+    // Formular zurücksetzen
+    ['wpQuestion','wpOptA','wpOptB','wpOptC','wpCorrectText'].forEach(id => document.getElementById(id).value = '');
+    draftCorrect = null;
+    document.querySelectorAll('.correct-opt-btn').forEach(b => b.classList.remove('sel'));
+    setQType('multiple_choice');
+    createCoords = null;
+    if (createMarker) { createMarker.remove(); createMarker = null; }
+    document.getElementById('osmSuggestions').style.display = 'none';
+
+    // Hinweis + Finale-Anzeige aktualisieren
+    const hintEl = document.getElementById('wpNextHintText');
+    if (hintEl) hintEl.textContent = `Tippe auf die Karte für WayPoint ${draftWpCount + 1}`;
+    if (draftWpCount >= 2) {
+      document.getElementById('publishSection').style.display = '';
+      document.getElementById('finaleNum').textContent = draftWpCount;
+    }
+
+    // Liste aktualisieren
+    const item = document.createElement('div');
+    item.className = 'wp-draft-item';
+    item.innerHTML = `<div class="wp-draft-num">${draftWpCount}</div><div class="wp-draft-q">${esc(q)}<br><span style="font-size:0.7rem;color:var(--muted2);">${summaryHtml}</span></div>`;
+    document.getElementById('wpDraftList').appendChild(item);
+
+    toast(`✅ WayPoint ${draftWpCount} gespeichert – tippe jetzt WayPoint ${draftWpCount + 1} auf der Karte`);
+
+    setTimeout(() => {
+      document.getElementById('createMap')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 200);
+  } catch (e) {
+    toast('❌ ' + (e.message || 'Fehler'));
+  }
+  btn.disabled = false; btn.textContent = '＋ WayPoint hinzufügen';
+}
+
+async function publishRoute() {
+  if (draftWpCount < 2) { toast('⚠️ Mindestens 2 WayPoints erforderlich'); return; }
+  try {
+    const r = await fetch(`${API}/wp/routes/${draftRouteId}/publish`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ code:CODE, token:TOKEN })
+    });
+    const data=await r.json();
+    if (!r.ok) throw new Error(data.error||'Fehler');
+    toast('🚀 Route veröffentlicht!');
+    resetCreate();
+    loadRoutes();
+    switchTab('discover');
+  } catch(e) {
+    toast('❌ '+(e.message||'Fehler'));
+  }
+}
+
+function resetCreate() {
+  draftRouteId=null; draftWpCount=0; draftCorrect=null; createCoords=null;
+  sessionStorage.removeItem('wp_draft_id');
+  sessionStorage.removeItem('wp_draft_count');
+  if (createMap){ createMap.remove(); createMap=null; }
+  createMarker=null;
+  document.getElementById('crName').value='';
+  document.getElementById('crDesc').value='';
+  document.getElementById('wpDraftList').innerHTML='';
+  document.getElementById('publishSection').style.display='none';
+  document.getElementById('createStep1').style.display='';
+  document.getElementById('createStep2').style.display='none';
+  setDiff(1);
+}
+
+async function loadMyRoutes() {
+  if (!CODE) return;
+  const list=document.getElementById('myRoutesList');
+  try {
+    const r=await fetch(`${API}/wp/my?code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(TOKEN)}`);
+    if (!r.ok){ list.innerHTML=''; return; }
+    const {created}=await r.json();
+    if (!created.length){
+      list.innerHTML='<div class="wp-empty" style="min-height:unset;padding:0.5rem 0;"><div class="wp-empty-icon" style="font-size:1.5rem;">✏️</div><div class="wp-empty-txt">Noch keine Routen erstellt.</div></div>';
+      return;
+    }
+    list.innerHTML=created.map(r=>`
+      <div class="route-card" style="padding:0.75rem;">
+        <div style="display:flex;align-items:center;gap:0.5rem;">
+          <div style="flex:1;font-weight:600;font-size:0.88rem;">${esc(r.name)}</div>
+          <div style="font-size:0.75rem;">${stars(r.difficulty)}</div>
+          <span style="font-size:0.68rem;padding:2px 8px;border-radius:100px;${r.published?'background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);color:var(--green)':'background:var(--acc-dim);border:1px solid var(--acc-glow);color:var(--acc)'};">${r.published?'live':'Entwurf'}</span>
+        </div>
+        <div style="font-size:0.7rem;color:var(--muted2);margin-top:4px;">📍 ${r.waypoint_count} WayPoints · 👥 ${r.completion_count} Abschlüsse</div>
+        ${r.published?`<button onclick="showScore(${r.id},'${esc(r.name)}')" style="margin-top:0.5rem;width:100%;padding:0.45rem;border-radius:8px;background:none;border:1px solid var(--bord2);color:var(--muted2);font-size:0.78rem;font-family:'Outfit',sans-serif;cursor:pointer;">🏆 Highscore ansehen</button>`:''}
+        <button onclick="deleteRoute(${r.id})" style="margin-top:0.4rem;width:100%;padding:0.4rem;border-radius:8px;background:none;border:1px solid rgba(239,68,68,0.25);color:var(--red);font-size:0.75rem;font-family:'Outfit',sans-serif;cursor:pointer;">🗑️ Löschen</button>
+      </div>
+    `).join('');
+  } catch {}
+}
+
+async function deleteRoute(id) {
+  if (!confirm('Route wirklich löschen?')) return;
+  try {
+    await fetch(`${API}/wp/routes/${id}`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:CODE,token:TOKEN})});
+    toast('🗑️ Route gelöscht'); loadMyRoutes(); loadRoutes();
+  } catch { toast('❌ Fehler'); }
+}
+
+navigator.geolocation?.getCurrentPosition(p=>{
+  userPos={lat:p.coords.latitude,lng:p.coords.longitude};
+}, null, {enableHighAccuracy:true,timeout:8000});
+
+// Entwurf aus sessionStorage wiederherstellen (nach Seiten-Reload)
+const savedDraftId = sessionStorage.getItem('wp_draft_id');
+if (savedDraftId) {
+  draftRouteId = +savedDraftId;
+  draftWpCount = +(sessionStorage.getItem('wp_draft_count') || '0');
+  document.getElementById('createStep1').style.display = 'none';
+  document.getElementById('createStep2').style.display = '';
+  if (draftWpCount >= 2) {
+    document.getElementById('publishSection').style.display = '';
+    document.getElementById('finaleNum').textContent = draftWpCount;
+  }
+  const hintEl = document.getElementById('wpNextHintText');
+  if (hintEl) hintEl.textContent = `Tippe auf die Karte für WayPoint ${draftWpCount + 1}`;
+  // Hinweis in der Entwurfsliste
+  if (draftWpCount > 0) {
+    document.getElementById('wpDraftList').innerHTML =
+      `<div class="wp-draft-item"><div class="wp-draft-num">ℹ️</div><div class="wp-draft-q" style="color:var(--muted2);">${draftWpCount} WayPoint${draftWpCount!==1?'s':''} bereits gespeichert (Seite wurde neu geladen).</div></div>`;
+  }
+  // Karte initialisieren sobald Erstellen-Tab aktiv
+  setTimeout(() => { if (document.getElementById('sec-create').classList.contains('active')) initCreateMap(); }, 80);
+}
+
+// ── WIEDERHERSTELLUNG VON UNFERTIGEM IMPORT ──────────────────────────────────
+(async () => {
+  const saved = await loadImportDraftFromDB();
+  if (saved) {
+    importDraft = saved;
+    renderImportDraftList();
+    toast('📥 Unfertiger Import wiederhergestellt');
+  }
+})();
+
+loadRoutes();
+</script>
+</body>
+</html>
