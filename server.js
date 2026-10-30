@@ -426,7 +426,7 @@ async function initDB() {
         `ALTER TABLE user_spots ADD COLUMN IF NOT EXISTS image_status TEXT DEFAULT 'pending'`,
       )
       .catch(() => {});
-    console.log("✅ v13.0 – Alle Spalten bereit (inkl. SpotCache)");
+    console.log("✅ v12.0 – Alle Spalten bereit (inkl. SpotCache)");
   } catch (e) {
     console.log(
       "ℹ️ Spalten existieren bereits oder konnten nicht angelegt werden",
@@ -1468,11 +1468,9 @@ app.post("/api/message", async (req, res) => {
 
   // Pflichtfelder prüfen
   if (!recipient || !sender_code || !message || !token) {
-    return res
-      .status(400)
-      .json({
-        error: "recipient, sender_code, message und token sind Pflicht",
-      });
+    return res.status(400).json({
+      error: "recipient, sender_code, message und token sind Pflicht",
+    });
   }
 
   // Selbst-Nachrichten verhindern
@@ -3309,11 +3307,12 @@ app.post("/api/bluesky/connect", async (req, res) => {
     const encryptedPassword = encrypt(appPassword);
 
     await pool.query(
-      `INSERT INTO bluesky_accounts (code, handle, app_password)
-       VALUES ($1, $2, $3)
+      `INSERT INTO bluesky_accounts (code, handle, app_password, updated_at)
+       VALUES ($1, $2, $3, NOW())
        ON CONFLICT (code) DO UPDATE
          SET handle = EXCLUDED.handle,
-             app_password = EXCLUDED.app_password`,
+             app_password = EXCLUDED.app_password,
+             updated_at = NOW()`,
       [code, handle.toLowerCase().replace(/^@/, ""), encryptedPassword],
     );
 
