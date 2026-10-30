@@ -171,7 +171,9 @@ peerServer.on("connection", (client) => {
   const expiresAt = peerTickets.get(id);
 
   if (!expiresAt || expiresAt < Date.now()) {
-    console.warn(`🚫 PeerJS: Verbindung ohne gültiges Ticket für ID "${id}" – gekappt`);
+    console.warn(
+      `🚫 PeerJS: Verbindung ohne gültiges Ticket für ID "${id}" – gekappt`,
+    );
     try {
       // Realm-basiertes Entfernen (versionsunabhängigster Weg im peer-Paket)
       const realm = peerServer.get("realm");
@@ -984,7 +986,9 @@ function generateSixDigitCode() {
 }
 
 app.post("/api/messenger/register", async (req, res) => {
-  const name = String(req.body?.name || "").trim().slice(0, 40);
+  const name = String(req.body?.name || "")
+    .trim()
+    .slice(0, 40);
   if (!name) {
     return res.status(400).json({ error: "Name erforderlich" });
   }
@@ -1004,7 +1008,9 @@ app.post("/api/messenger/register", async (req, res) => {
       }
     }
     if (!code) {
-      return res.status(503).json({ error: "Kein freier Code verfügbar, bitte erneut versuchen" });
+      return res
+        .status(503)
+        .json({ error: "Kein freier Code verfügbar, bitte erneut versuchen" });
     }
 
     const token = crypto.randomBytes(24).toString("hex");
@@ -1457,13 +1463,16 @@ app.get("/api/offline-messages/:code", async (req, res) => {
 // Jeder der ein Profil hat kann eine Nachricht schicken.
 // Das verhindert anonymen Spam ohne einen Login zu erzwingen.
 app.post("/api/message", async (req, res) => {
-  const { recipient, sender_code, sender_name, message, spot_type, token } = req.body;
+  const { recipient, sender_code, sender_name, message, spot_type, token } =
+    req.body;
 
   // Pflichtfelder prüfen
   if (!recipient || !sender_code || !message || !token) {
     return res
       .status(400)
-      .json({ error: "recipient, sender_code, message und token sind Pflicht" });
+      .json({
+        error: "recipient, sender_code, message und token sind Pflicht",
+      });
   }
 
   // Selbst-Nachrichten verhindern
@@ -3211,6 +3220,42 @@ async function bskyCreateSession(handle, appPassword) {
   return res.json();
 }
 
+// Bluesky: Links und Hashtags anklickbar machen (Facets).
+// Positionen sind UTF-8-Byte-Offsets, nicht Zeichen (wichtig wegen Emoji).
+function bskyFacets(text) {
+  const enc = new TextEncoder();
+  const byteOffset = (i) => enc.encode(text.slice(0, i)).length;
+  const facets = [];
+
+  const urlRe = /https?:\/\/[^\s]+/g;
+  let m;
+  while ((m = urlRe.exec(text)) !== null) {
+    const url = m[0].replace(/[.,;:!?)\]]+$/, "");
+    if (!url) continue;
+    facets.push({
+      index: {
+        byteStart: byteOffset(m.index),
+        byteEnd: byteOffset(m.index) + enc.encode(url).length,
+      },
+      features: [{ $type: "app.bsky.richtext.facet#link", uri: url }],
+    });
+  }
+
+  const tagRe = /(^|\s)#([\p{L}\p{N}_]{1,64})/gu;
+  while ((m = tagRe.exec(text)) !== null) {
+    const start = m.index + m[1].length;
+    const tag = m[2];
+    facets.push({
+      index: {
+        byteStart: byteOffset(start),
+        byteEnd: byteOffset(start) + enc.encode("#" + tag).length,
+      },
+      features: [{ $type: "app.bsky.richtext.facet#tag", tag }],
+    });
+  }
+  return facets;
+}
+
 // AT-Protocol Hilfsfunktion – postet einen Beitrag
 async function bskyPost(accessJwt, did, text) {
   const res = await fetch(
@@ -3227,6 +3272,7 @@ async function bskyPost(accessJwt, did, text) {
         record: {
           $type: "app.bsky.feed.post",
           text,
+          facets: bskyFacets(text),
           createdAt: new Date().toISOString(),
         },
       }),
@@ -3610,29 +3656,35 @@ app.post("/api/wp/routes/:id/answer", async (req, res) => {
   const { player_code, waypoint_index, answer } = req.body;
   const routeId = +req.params.id;
   if (!player_code || waypoint_index == null || !answer) {
-    return res.status(400).json({ error: "player_code, waypoint_index, answer erforderlich" });
+    return res
+      .status(400)
+      .json({ error: "player_code, waypoint_index, answer erforderlich" });
   }
 
   try {
     const prog = await pool.query(
       "SELECT * FROM wp_progress WHERE route_id=$1 AND player_code=$2",
-      [routeId, player_code]
+      [routeId, player_code],
     );
-    if (!prog.rows.length) return res.status(403).json({ error: "Route nicht gestartet" });
+    if (!prog.rows.length)
+      return res.status(403).json({ error: "Route nicht gestartet" });
     if (prog.rows[0].current_index !== +waypoint_index) {
       return res.status(409).json({ error: "Falscher WayPoint-Index" });
     }
 
     const wp = await pool.query(
       "SELECT * FROM wp_waypoints WHERE route_id=$1 AND order_index=$2",
-      [routeId, +waypoint_index]
+      [routeId, +waypoint_index],
     );
-    if (!wp.rows.length) return res.status(404).json({ error: "WayPoint nicht gefunden" });
+    if (!wp.rows.length)
+      return res.status(404).json({ error: "WayPoint nicht gefunden" });
 
     const waypoint = wp.rows[0];
     let isCorrect;
     if (waypoint.question_type === "freitext") {
-      isCorrect = answer.trim().toLowerCase() === (waypoint.correct_text || "").trim().toLowerCase();
+      isCorrect =
+        answer.trim().toLowerCase() ===
+        (waypoint.correct_text || "").trim().toLowerCase();
     } else {
       isCorrect = answer.toLowerCase() === waypoint.correct_option;
     }
@@ -3641,41 +3693,50 @@ app.post("/api/wp/routes/:id/answer", async (req, res) => {
 
     const nextIndex = +waypoint_index + 1;
     const total = await pool.query(
-      "SELECT COUNT(*)::int AS cnt FROM wp_waypoints WHERE route_id=$1", [routeId]
+      "SELECT COUNT(*)::int AS cnt FROM wp_waypoints WHERE route_id=$1",
+      [routeId],
     );
     const isLast = nextIndex >= total.rows[0].cnt;
 
     if (isLast) {
       const timeSec = Math.round((Date.now() - prog.rows[0].started_at) / 1000);
-      await pool.query(`
+      await pool.query(
+        `
         INSERT INTO wp_completions (route_id, player_code, time_seconds)
         VALUES ($1,$2,$3)
         ON CONFLICT (route_id, player_code) DO UPDATE SET
           time_seconds = LEAST(EXCLUDED.time_seconds, wp_completions.time_seconds),
           completed_at = NOW()
-      `, [routeId, player_code, timeSec]);
+      `,
+        [routeId, player_code, timeSec],
+      );
       await pool.query(
         "DELETE FROM wp_progress WHERE route_id=$1 AND player_code=$2",
-        [routeId, player_code]
+        [routeId, player_code],
       );
 
       const rank = await pool.query(
         `SELECT COUNT(*)::int + 1 AS rank FROM wp_completions
          WHERE route_id=$1 AND time_seconds < $2`,
-        [routeId, timeSec]
+        [routeId, timeSec],
       );
-      return res.json({ correct: true, completed: true, time_seconds: timeSec, rank: rank.rows[0].rank });
+      return res.json({
+        correct: true,
+        completed: true,
+        time_seconds: timeSec,
+        rank: rank.rows[0].rank,
+      });
     }
 
     await pool.query(
       `UPDATE wp_progress SET current_index=$1, last_activity_at=$2
        WHERE route_id=$3 AND player_code=$4`,
-      [nextIndex, Date.now(), routeId, player_code]
+      [nextIndex, Date.now(), routeId, player_code],
     );
     const nextWp = await pool.query(
       `SELECT id, order_index, lat, lng, question, option_a, option_b, option_c
        FROM wp_waypoints WHERE route_id=$1 AND order_index=$2`,
-      [routeId, nextIndex]
+      [routeId, nextIndex],
     );
 
     res.json({
@@ -3683,7 +3744,7 @@ app.post("/api/wp/routes/:id/answer", async (req, res) => {
       completed: false,
       next_waypoint: nextWp.rows[0],
       current_index: nextIndex,
-      total: total.rows[0].cnt
+      total: total.rows[0].cnt,
     });
   } catch (e) {
     console.error("POST /api/wp/routes/:id/answer:", e.message);
