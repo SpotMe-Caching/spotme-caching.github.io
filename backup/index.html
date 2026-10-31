@@ -4,7 +4,14 @@
 
 <meta charset="UTF-8">
 
+  <!-- Eruda – Mobile Console (nur für Debugging)
+  <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+  <script>eruda.init();</script> -->
+
+
 <link rel="stylesheet" href="spotme.css">
+
+<script src="https://unpkg.com/marked@4.3.0/marked.min.js"></script>
 
 <script src="bluesky.js"></script>
 <script src="https://unpkg.com/lucide@0.383.0/dist/umd/lucide.min.js"></script>
@@ -14,7 +21,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- iPhone X, XS, 11 Pro, 12 Mini, 13 Mini -->
+<!-- iPhone X, XS, 11 Pro, 12 Mini, 13 Mini  -->
 <link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)" href="/icons/splash-1125x2436.png">
 <!-- iPhone 8, 7, 6, SE -->
 <link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)" href="/icons/splash-750x1334.png">
@@ -22,10 +29,12 @@
 <link rel="apple-touch-startup-image" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)" href="/icons/splash-1179x2556.png">
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>SpotMe · Caching</title>
+  <title>SpotMe · 🇪🇺</title>
   <meta name="theme-color" content="#0a0d12">
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.css" rel="stylesheet">
+  <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
+  <script src="nav.js"></script>
   
 </head>
 <body>
@@ -35,26 +44,35 @@
 <div class="crosshair" id="crosshair"></div>
 <div class="place-mode-bar" id="placeModeBar">
   <div class="pm-icon">📍</div>
-  <div class="pm-text">Spot platzieren</div>
-  <div class="pm-sub">Tippe auf die Karte</div>
+  <div class="pm-text" data-i18n="place_mode_text">Spot platzieren</div>
+  <div class="pm-sub" data-i18n="place_mode_sub">Tippe auf die Karte</div>
 </div>
   
-  <!-- Header-Bar (rechts neben Rail) -->
+  <!-- Header- Bar (rechts neben Rail) -->
   <div class="topbar">
     <div class="logo">
       <div class="logo-dot"></div>
       SPOT<span style="color:var(--text);font-weight:300;">ME</span>
       <span class="logo-sub">· CACHING</span>
     </div>
-    <div style="display:flex;align-items:center;gap:5px;margin-left:auto;">
-      <button class="topbar-btn" id="filterTopBtn" onclick="toggleFilterStrip()" title="Kategorien">
-        <i data-lucide="layers" class="nav-icon"></i>
-      </button>
-      <button class="topbar-btn" id="radiusTopBtn" onclick="openRadiusSearch()" title="Radius-Suche">
-        <i data-lucide="scan" class="nav-icon"></i>
-      </button>
-    </div>
-  </div>
+
+  <div style="display:flex;align-items:center;gap:5px;margin-left:auto;overflow-x:auto;">
+    <button class="topbar-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Hell/Dunkel">
+    <i data-lucide="sun" class="nav-icon" id="themeIcon"></i>
+    </button>
+    <button class="topbar-btn" id="filterTopBtn" onclick="toggleFilterStrip()" title="Kategorien">
+    <i data-lucide="layers" class="nav-icon"></i>
+    </button>
+    <button class="topbar-btn" id="radiusTopBtn" onclick="openRadiusSearch()" title="Radius-Suche">
+    <i data-lucide="scan" class="nav-icon"></i>
+    </button>
+    <button class="topbar-btn" id="newsTopBtn" onclick="loadNewsTeaser(true)" title="News">
+    <i data-lucide="newspaper" class="nav-icon"></i>
+    </button>
+    <button class="topbar-btn" id="hikingToggleBtn" onclick="toggleHikingLayer()" title="Wanderwege">🥾</button>
+    <button class="topbar-btn" onclick="donate(7)">❤️</button>
+   </div>
+ </div>
 
   <!-- Nav-Rail (links, scrollbar) -->
   <div id="navRail">
@@ -164,6 +182,24 @@
     <input id="spotDesc" class="finp" placeholder="Was macht diesen Spot besonders?" maxlength="120">
     <span class="finp-label">Wunsch-Tag</span>
     <select id="spotWish" class="finp"></select>
+    <span class="finp-label">Kategorie</span>
+    <select id="spotCategory" class="finp">
+  <option value="">— keine —</option>
+  <option value="Bahnhof">🚉 Bahnhof</option>
+  <option value="Club">🎉 Club</option>
+  <option value="Einkaufsviertel">🛍️ Einkaufsviertel</option>
+  <option value="Filmtheater">🎬 Filmtheater</option>
+  <option value="Fitnesscenter">💪 Fitnesscenter</option>
+  <option value="Industriepark">🏭 Industriepark</option>
+  <option value="Internetcafé">💻 Internetcafé</option>
+  <option value="Naturschutzgebiet">🌿 Naturschutzgebiet</option>
+  <option value="Park">🌳 Park</option>
+  <option value="Rastplatz">🛣️ Rastplatz</option>
+  <option value="Restaurant">🍽️ Restaurant</option>
+  <option value="Sauna">🧖 Sauna</option>
+  <option value="Strand">🏖️ Strand</option>
+  <option value="Sonstiges">📌 Sonstiges</option>
+</select>
     <span class="finp-label">Foto (optional)</span>
     <div id="spotPhotoPreview" style="display:none;margin-bottom:0.6rem;position:relative;">
       <img id="spotPhotoImg" src="" alt="" style="width:100%;max-height:160px;object-fit:cover;border-radius:11px;border:1px solid var(--bord2);">
@@ -312,44 +348,6 @@
   </div>
 </div>
 
-<!-- ── Navigation Overlay ─────────────────────────────────────────────── -->
-<div id="naviOverlay">
-  <div id="naviMap"></div>
-
-  <!-- Topbar -->
-  <div class="navi-topbar">
-    <button class="navi-close-btn" onclick="closeNavOverlay()" title="Schließen">✕</button>
-    <div class="navi-spot-label">
-      <div class="navi-spot-label-name" id="naviSpotName">—</div>
-      <div class="navi-spot-label-sub" id="naviSpotSub">NAVIGATION</div>
-    </div>
-    <button class="navi-recenter-btn" id="naviRecenterBtn" title="Neu zentrieren">⊕</button>
-  </div>
-
-  <!-- Bottom panel -->
-  <div class="navi-bottom">
-    <div class="navi-stats">
-      <div class="navi-stat">
-        <div class="navi-stat-val" id="naviDistVal">…</div>
-        <div class="navi-stat-label">Entfernung</div>
-      </div>
-      <div class="navi-stat">
-        <div class="navi-stat-val" id="naviFootVal">…</div>
-        <div class="navi-stat-label">🚶 zu Fuß</div>
-      </div>
-      <div class="navi-stat">
-        <div class="navi-stat-val amber" id="naviCarVal">…</div>
-        <div class="navi-stat-label">🚗 Auto</div>
-      </div>
-    </div>
-    <div class="navi-legend">
-      <span><span class="navi-legend-dot" style="background:#22d3ee;"></span>Fußweg</span>
-      <span><span class="navi-legend-dot" style="background:#f59e0b;"></span>Auto</span>
-    </div>
-    <button class="navi-stop-btn" onclick="closeNavOverlay()">■ Navigation beenden</button>
-  </div>
-</div>
-
 <div class="match-screen" id="matchScreen">
   <div class="match-ring">🎯</div>
   <div class="match-label">Match gefunden</div>
@@ -364,7 +362,41 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
+<!-- ── News Teaser (neu platziert, außerhalb von naviOverlay) ── -->
+<div id="newsOverlay">
+  <div class="news-card">
+    <div class="news-emoji" id="newsEmoji">🆕</div>
+    <div class="news-title" id="newsTitle"></div>
+    <div class="news-body" id="newsBody"></div>
+    <button class="news-close-btn" onclick="closeNewsTeaser()">Weiter →</button>
+  </div>
+</div>
+
+<!-- ── Navigation Overlay ── -->
+<div id="naviOverlay">
+  <div id="naviMap"></div>
+  <div class="navi-topbar">
+    <button class="navi-close-btn" onclick="closeNavOverlay()" title="Schließen">✕</button>
+    <div class="navi-spot-label">
+      <div class="navi-spot-label-name" id="naviSpotName">—</div>
+      <div class="navi-spot-label-sub" id="naviSpotSub">NAVIGATION</div>
+    </div>
+    <button class="navi-recenter-btn" id="naviRecenterBtn" title="Neu zentrieren">⊕</button>
+  </div>
+  <div class="navi-bottom">
+    <div class="navi-stats">
+      <div class="navi-stat"><div class="navi-stat-val" id="naviDistVal">…</div><div class="navi-stat-label">Entfernung</div></div>
+      <div class="navi-stat"><div class="navi-stat-val" id="naviFootVal">…</div><div class="navi-stat-label">🚶 zu Fuß</div></div>
+      <div class="navi-stat"><div class="navi-stat-val amber" id="naviCarVal">…</div><div class="navi-stat-label">🚲 Fahrrad</div></div>
+    </div>
+    <div class="navi-legend">
+      <span><span class="navi-legend-dot" style="background:#22d3ee;"></span>Fußweg</span>
+      <span><span class="navi-legend-dot" style="background:#f59e0b;"></span>Fahrrad</span>
+    </div>
+    <button class="navi-stop-btn" onclick="closeNavOverlay()">■ Navigation beenden</button>
+  </div>
+</div>
+
 <script>
 'use strict';
 
@@ -372,7 +404,8 @@ const API  = 'https://spotme-chat-obom.onrender.com/api';
 const CODE = localStorage.getItem('sm_code') || '000000';
 
 // ── OpenRouteService API-Key ──────────────────────────────────────────────────
-const ORS_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjI5NmQwYWMxYmM0MzQxNjdiOTE2Mjk2ZjFiOTk3MmRjIiwiaCI6Im11cm11cjY0In0=';
+// (Wurde entfernt, da nav.js den Key selbst definiert)
+// const ORS_KEY = '...';
 
 let map, userPos, userMarker, placeMode = false, tempLatLng = null;
 let mySpots = [], allSpots = [], markers = [];
@@ -384,6 +417,88 @@ let activeRadius = null, detailSpot = null, detailMiniMap = null;
 let radiusCatFilter = null;
 let weeklyMiniMap = null, weeklyMarker = null, weeklyCoords = null;
 let urlSpotChecked = false; // Verhindert mehrfaches Fliegen zum Spot beim Laden
+
+// Wanderwege einblenden //
+let hikingLayerActive = false;
+
+function toggleHikingLayer() {
+  const btn = document.getElementById('hikingToggleBtn');
+  if (!map) return;
+
+  if (!hikingLayerActive) {
+    if (!map.getSource('hiking-overlay')) {
+      map.addSource('hiking-overlay', {
+        type: 'raster',
+        tiles: ['https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png'],
+        tileSize: 256,
+        attribution: '© <a href="https://hiking.waymarkedtrails.org">Waymarked Trails</a>'
+      });
+    }
+    if (!map.getLayer('hiking-layer')) {
+      map.addLayer({
+        id: 'hiking-layer',
+        type: 'raster',
+        source: 'hiking-overlay',
+        paint: { 'raster-opacity': 0.75 }
+      });
+    }
+    hikingLayerActive = true;
+    btn?.classList.add('active');
+    toast('🥾 Wanderwege eingeblendet');
+  } else {
+    if (map.getLayer('hiking-layer')) map.removeLayer('hiking-layer');
+    hikingLayerActive = false;
+    btn?.classList.remove('active');
+    toast('🥾 Wanderwege ausgeblendet');
+  }
+}
+
+// ═══════════════════════════════════════════════
+// SIMPLE JSON i18n TRANSLATION HELPER
+// ═══════════════════════════════════════════════
+const i18n = {
+  locale: 'de',
+  data: {},
+
+// Sprache initialisieren & laden
+async init() {
+  const browserLang = (navigator.language || 'de-DE').split('-')[0];
+  this.locale = ['de', 'en', 'es'].includes(browserLang) ? browserLang : 'de';
+
+  try {
+    const res = await fetch(`/locales/${this.locale}.json`);
+    if (res.ok) this.data = await res.json();
+  } catch (e) {
+    console.warn('Übersetzungsdatei nicht gefunden, verwende Default.');
+    this.locale = 'de';
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // 0. Browser Tab Titel setzen (NEU)
+  document.title = this.t('app_title_flag');
+  // ═══════════════════════════════════════════════════════════════
+
+  // 1. Statische HTML-Elemente übersetzen
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.dataset.i18n;
+    el.textContent = this.t(key);
+  });
+
+  // 2. Tooltip-Titel (data-i18n-title) übersetzen
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    const key = el.dataset.i18nTitle;
+    el.title = this.t(key);
+  });
+},
+
+  // Übersetzung abrufen (Fallback: Wenn Key nicht existiert, zeige Key an)
+  t(key) {
+    return this.data[key] || key;
+  }
+};
+// Übersetzung im Hintergrund laden (blockiert nicht die Karte)
+i18n.init().catch(err => console.warn('i18n Fehler:', err));
+// ═══════════════════════════════════════════════
 
 // Baut die Kategorie-Pills im Radius-Modal aus den vorhandenen Spots.
 function buildRadiusCatPills() {
@@ -443,6 +558,19 @@ function openDB() {
   });
 }
 
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('sm_theme', theme);
+  const icon = document.getElementById('themeIcon');
+  if (icon) icon.setAttribute('data-lucide', theme === 'light' ? 'moon' : 'sun');
+  if (window.lucide) lucide.createIcons();
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  applyTheme(current === 'light' ? 'dark' : 'light');
+}
+applyTheme(localStorage.getItem('sm_theme') || 'dark');
+  
 async function saveSpotsOffline(spots) {
   const db = await openDB();
   const tx = db.transaction('spots', 'readwrite');
@@ -472,7 +600,7 @@ function openSpotEdit(s) {
   document.getElementById('spotName').value = s.name || '';
   document.getElementById('spotDesc').value = s.description || '';
   document.getElementById('spotWish').value = s.wishTag || '';
-
+  document.getElementById('spotCategory').value = s.area_type || '';
   spotPhotoData = null;
   if (s.image) {
     spotPhotoData = s.image;
@@ -561,6 +689,8 @@ function initMap() {
     startInvitePolling();
     checkBlueskyStatusForRail();
 
+    // setTimeout(() => loadNewsTeaser(), 1500);
+
     // Navi-Deep-Link prüfen
     const urlParams = new URLSearchParams(window.location.search);
     const navLat = urlParams.get('navlat');
@@ -600,6 +730,52 @@ function initMap() {
   });
 
   if ('Notification' in window) Notification.requestPermission();
+}
+
+async function loadNewsTeaser(force = false) {
+  let raw;
+  try {
+    raw = await fetch('news.md', { cache: 'no-store' }).then(r => r.ok ? r.text() : null);
+  } catch { raw = null; }
+  if (!raw) { if (force) toast('⚠️ Keine News verfügbar'); return; }
+
+  const [meta, ...rest] = raw.split('\n---\n');
+  const body = rest.join('\n---\n').trim();
+  const fields = {};
+  meta.split('\n').forEach(line => {
+    const idx = line.indexOf(':');
+    if (idx === -1) return;
+    fields[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
+  });
+
+  if (!fields.id || (!force && !shouldShowNews(fields.id))) return;
+
+  window.__currentNewsId = fields.id;
+  document.getElementById('newsEmoji').textContent = fields.emoji || '🆕';
+  document.getElementById('newsTitle').textContent = fields.title || '';
+
+  let html;
+  try {
+    html = (typeof marked !== 'undefined') ? marked.parse(body) : body;
+  } catch (err) {
+    console.warn('[News] marked.parse fehlgeschlagen:', err);
+    html = body;
+  }
+  document.getElementById('newsBody').innerHTML = html;
+  document.getElementById('newsOverlay').classList.add('active');
+}
+
+
+function shouldShowNews(id) {
+  const s = JSON.parse(localStorage.getItem('sm_news_state') || 'null');
+  if (!s) return true;
+  if (s.id !== id) return true;
+  return Date.now() - s.shownAt > 1*60*60*1000;
+}
+
+function closeNewsTeaser() {
+  localStorage.setItem('sm_news_state', JSON.stringify({ id: window.__currentNewsId, shownAt: Date.now() }));
+  document.getElementById('newsOverlay').classList.remove('active');
 }
 
 // Auto Reload der Karte uns Spots 
@@ -664,32 +840,86 @@ async function checkBlueskyStatusForRail() {
   }
 }
 
-// Öffnet den Share-Dialog für Bluesky
+// Öffnet den Share-Dialog für Bluesky (normale Spots + Live Spots)
 async function openBlueskyShareDialog() {
   const select = document.getElementById('bskySpotSelect');
   if (!select) return;
-  
+
   select.innerHTML = '<option value="">Lade Spots…</option>';
   document.getElementById('bskyCustomMessage').value = '';
   document.getElementById('bskyCharCount').textContent = '0 / 200';
-  
+
   document.getElementById('blueskyShareModal').classList.add('show');
-  
-  try {
-    // Eigene Spots vom Server laden
-    const res = await fetch(`${API}/userspots/${CODE}`);
-    if (res.ok) {
-      const spots = await res.json();
-      if (!spots.length) {
-        select.innerHTML = '<option value="">Keine Spots vorhanden</option>';
-        return;
-      }
-      select.innerHTML = spots.map(s => `<option value="${s.id}">${esc(s.name)} (${s.wishTag || 'Spot'})</option>`).join('');
-    } else {
-      select.innerHTML = '<option value="">Fehler beim Laden</option>';
-    }
-  } catch {
+
+  const token = localStorage.getItem('sm_token');
+  const [spotsRes, liveRes] = await Promise.allSettled([
+    fetch(`${API}/userspots/${CODE}`).then(r => r.ok ? r.json() : null),
+    fetch(`${API}/live-spots/mine?code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(token || '')}`)
+      .then(r => r.ok ? r.json() : null)
+  ]);
+
+  const spots = spotsRes.status === 'fulfilled' && Array.isArray(spotsRes.value) ? spotsRes.value : null;
+  const lives = liveRes.status === 'fulfilled' && Array.isArray(liveRes.value) ? liveRes.value : null;
+
+  if (spots === null && lives === null) {
     select.innerHTML = '<option value="">Server nicht erreichbar</option>';
+    return;
+  }
+
+  let html = '';
+  if (spots && spots.length) {
+    html += '<optgroup label="📍 Spots">' +
+      spots.map(s => `<option value="spot:${s.id}">${esc(s.name)} (${esc(s.wishTag || 'Spot')})</option>`).join('') +
+      '</optgroup>';
+  }
+  if (lives && lives.length) {
+    html += '<optgroup label="🔴 Live Spots">' +
+      lives.map(s => `<option value="live:${s.id}">${esc(s.name)}${s.status === 'online' ? ' · LIVE' : ''}</option>`).join('') +
+      '</optgroup>';
+  }
+  select.innerHTML = html || '<option value="">Keine Spots vorhanden</option>';
+}
+
+// Postet den ausgewählten Spot / Live Spot mit Custom Message und Direktlink auf Bluesky
+async function postToBluesky() {
+  const select = document.getElementById('bskySpotSelect');
+  const raw = select?.value;
+  if (!raw) { toast('⚠️ Bitte wähle einen Spot aus'); return; }
+
+  const [kind, spotId] = raw.includes(':') ? raw.split(':') : ['spot', raw];
+  const customMessage = document.getElementById('bskyCustomMessage').value.trim();
+  const btn = document.getElementById('bskyPostBtn');
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Poste…';
+
+  let finalMessage;
+  if (kind === 'live') {
+    // Live Spots haben eine eigene Seite (öffentliche ID, nicht der geheime Token)
+    const liveUrl = `${window.location.origin}/live-spot.html?id=${spotId}`;
+    finalMessage = customMessage
+      ? `${customMessage}\n\n🔴 Live Spot: \n\n ${liveUrl}`
+      : `🔴 Mein Live Spot auf SpotMe Caching: \n\n ${liveUrl}`;
+  } else {
+    const spotUrl = `${window.location.origin}${window.location.pathname}?spot=${spotId}`;
+    finalMessage = customMessage
+      ? `${customMessage}\n\n📍 Zum Spot: \n\n ${spotUrl}`
+      : `📍 Mein Spot auf SpotMe Caching: \n\n ${spotUrl}`;
+  }
+
+  try {
+    const res = await window.shareSpotOnBluesky(spotId, finalMessage);
+    if (res.success) {
+      toast('🦋 Erfolgreich auf Bluesky geteilt!');
+      closeModals();
+    } else {
+      toast('❌ ' + (res.error || 'Fehler beim Teilen'));
+    }
+  } catch (e) {
+    toast('⚠️ Fehler: Verbindung abgebrochen');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🦋 Posten';
   }
 }
 
@@ -702,40 +932,6 @@ document.getElementById('bskyCustomMessage')?.addEventListener('input', function
     counter.classList.toggle('warn', len > 170);
   }
 });
-
-// Postet den ausgewählten Spot mit Custom Message und Direktlink auf Bluesky
-async function postToBluesky() {
-  const select = document.getElementById('bskySpotSelect');
-  const spotId = select?.value;
-  if (!spotId) { toast('⚠️ Bitte wähle einen Spot aus'); return; }
-  
-  const customMessage = document.getElementById('bskyCustomMessage').value.trim();
-  const btn = document.getElementById('bskyPostBtn');
-  
-  btn.disabled = true;
-  btn.textContent = '⏳ Poste…';
-  
-  // Direkt-Link zum Spot dynamisch konstruieren
-  const spotUrl = `${window.location.origin}${window.location.pathname}?spot=${spotId}`;
-  const finalMessage = customMessage 
-    ? `${customMessage}\n\n📍 Zum Spot: \n\n ${spotUrl}` 
-    : `📍 Mein Spot auf SpotMe Caching: \n\n ${spotUrl}`;
-  
-  try {
-    const res = await window.shareSpotOnBluesky(spotId, finalMessage);
-    if (res.success) {
-      toast('🦋 Erfolgreich auf Bluesky geteilt!');
-      closeModals();
-    } else {
-      toast('❌ ' + (res.error || 'Fehler beim Teilen'));
-    }
-  } catch(e) {
-    toast('⚠️ Fehler: Verbindung abgebrochen');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '🦋 Posten';
-  }
-}
 
 // ── SPOTS ────────────────────────────────────────────────────────────────────
 async function loadAllSpots() {
@@ -814,11 +1010,12 @@ function buildFilterStrip() {
   const categories = Object.keys(counts);
 
   if (!categories.length) {
-    strip.style.display = 'none';
-    return;
+     strip.innerHTML = '';
+     strip.style.display = 'none';
+     document.getElementById('filterTopBtn')?.classList.remove('active');
+     return;
   }
-
-  strip.style.display = 'flex';
+  const wasVisible = strip.style.display === 'flex';
 
   const allCount = allSpots.length;
   strip.innerHTML = `
@@ -833,6 +1030,8 @@ function buildFilterStrip() {
         <span class="pill-count">${counts[cat]}</span>
       </div>
     `).join('')}`;
+
+  strip.style.display = wasVisible ? 'flex' : 'none'; // ← nur wiederherstellen, nicht erzwingen
 
   strip.querySelectorAll('.filter-pill').forEach(pill => {
     pill.addEventListener('click', () => {
@@ -935,6 +1134,7 @@ async function saveSpot() {
   const name=document.getElementById('spotName').value.trim();
   const desc=document.getElementById('spotDesc').value.trim();
   const wish=document.getElementById('spotWish').value;
+  const category=document.getElementById('spotCategory').value;   // ← neu
   if (!name) { toast('⚠️ Name eingeben'); return; }
 
   if (editSpotId) {
@@ -942,7 +1142,7 @@ async function saveSpot() {
     try {
       await fetch(`${API}/userspots/${editSpotId}`, {
         method:'PUT', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ code:CODE, name, description:desc, wishTag:wish, image:spotPhotoData||null })
+        body: JSON.stringify({ code:CODE, name, description:desc, wishTag:wish, area_type:category||null, image:spotPhotoData||null })
       });
     } catch {}
     toast('✅ Spot aktualisiert');
@@ -1002,201 +1202,6 @@ function openSpotForm() {
   document.getElementById('spotPhotoBtn').style.display='block';
   document.getElementById('spotPhotoInput').value='';
   document.getElementById('spotModal').classList.add('show');
-}
-
-// ── NAVIGATION ───────────────────────────────────────────────────────────────
-function clearRoutes() {
-  ['route-foot','route-foot-casing','route-car','route-car-casing'].forEach(id => {
-    if (map.getLayer(id)) map.removeLayer(id);
-  });
-  ['route-foot-src','route-car-src'].forEach(id => {
-    if (map.getSource(id)) map.removeSource(id);
-  });
-}
-
-// ── NAVIGATION OVERLAY ───────────────────────────────────────────────────────
-let naviMap = null, naviUserMarker = null, naviSpotMarker = null;
-let naviWatchId = null, naviLastRoutePos = null, naviRouting = false;
-let naviTarget = null;
-let naviCentered = true;
-
-function navigateToSpot(lat, lng, name) {
-  openNavOverlay(lat, lng, name || 'Spot');
-}
-
-function openNavOverlay(lat, lng, name) {
-  naviTarget = { lat, lng, name: name || 'Spot' };
-  naviLastRoutePos = null;
-  naviRouting = false;
-  naviCentered = true;
-
-  document.getElementById('naviSpotName').textContent = naviTarget.name;
-  document.getElementById('naviSpotSub').textContent = 'NAVIGATION · GPS aktiv';
-  document.getElementById('naviDistVal').textContent = '…';
-  document.getElementById('naviFootVal').textContent = '…';
-  document.getElementById('naviCarVal').textContent = '…';
-
-  document.getElementById('naviOverlay').classList.add('active');
-
-  document.getElementById('naviRecenterBtn').onclick = () => {
-    naviCentered = true;
-    if (naviMap && userPos) {
-      naviMap.flyTo({ center: [userPos.lng, userPos.lat], zoom: 15, duration: 600 });
-    }
-  };
-
-  setTimeout(() => {
-    if (naviMap) { naviMap.remove(); naviMap = null; }
-    naviUserMarker = null; naviSpotMarker = null;
-
-    const center = userPos
-      ? [(userPos.lng + lng) / 2, (userPos.lat + lat) / 2]
-      : [lng, lat];
-
-    naviMap = new maplibregl.Map({
-      container: 'naviMap',
-      style: 'https://tiles.openfreemap.org/styles/liberty',
-      center, zoom: 14,
-      attributionControl: false
-    });
-
-    naviMap.on('dragstart', () => { naviCentered = false; });
-
-    naviMap.on('load', () => {
-      const sEl = document.createElement('div');
-      sEl.style.cssText = 'width:22px;height:22px;background:#ff9f00;border-radius:50%;border:2.5px solid rgba(255,255,255,0.85);box-shadow:0 0 0 4px rgba(255,159,0,0.2),0 0 20px rgba(255,159,0,0.8);';
-      naviSpotMarker = new maplibregl.Marker({ element: sEl })
-        .setLngLat([lng, lat]).addTo(naviMap);
-
-      if (userPos) {
-        naviAddUserMarker();
-        naviUpdateDistDisplay();
-        naviFitBounds();
-        naviFetchRoute();
-      }
-    });
-
-    if (navigator.geolocation) {
-      naviWatchId = navigator.geolocation.watchPosition(pos => {
-        userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-
-        if (naviUserMarker) naviUserMarker.setLngLat([userPos.lng, userPos.lat]);
-        else naviAddUserMarker();
-
-        if (naviCentered && naviMap) {
-          naviMap.easeTo({ center: [userPos.lng, userPos.lat], duration: 400 });
-        }
-
-        naviUpdateDistDisplay();
-
-        const moved = naviLastRoutePos
-          ? haversineKm(naviLastRoutePos.lat, naviLastRoutePos.lng, userPos.lat, userPos.lng) * 1000
-          : 999;
-        if (moved > 25) naviFetchRoute();
-
-      }, () => toast('⚠️ GPS Signal verloren'),
-         { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 });
-    }
-  }, 80);
-}
-
-function naviAddUserMarker() {
-  if (!naviMap || !userPos) return;
-  if (naviUserMarker) naviUserMarker.remove();
-  const uEl = document.createElement('div');
-  uEl.style.cssText = 'width:18px;height:18px;background:#22d3ee;border-radius:50%;border:3px solid white;box-shadow:0 0 10px rgba(34,211,238,0.9);';
-  naviUserMarker = new maplibregl.Marker({ element: uEl })
-    .setLngLat([userPos.lng, userPos.lat]).addTo(naviMap);
-}
-
-function naviFitBounds() {
-  if (!naviMap || !userPos || !naviTarget) return;
-  const bounds = new maplibregl.LngLatBounds(
-    [userPos.lng, userPos.lat], [naviTarget.lng, naviTarget.lat]
-  );
-  naviMap.fitBounds(bounds, { padding: 80, maxZoom: 16 });
-}
-
-function naviUpdateDistDisplay() {
-  if (!userPos || !naviTarget) return;
-  const m = haversineKm(userPos.lat, userPos.lng, naviTarget.lat, naviTarget.lng) * 1000;
-  document.getElementById('naviDistVal').textContent =
-    m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
-}
-
-function naviClearRouteLayers() {
-  if (!naviMap) return;
-  ['navi-foot-casing','navi-foot','navi-car-casing','navi-car'].forEach(id => {
-    if (naviMap.getLayer(id)) naviMap.removeLayer(id);
-  });
-  ['navi-src-foot','navi-src-car'].forEach(id => {
-    if (naviMap.getSource(id)) naviMap.removeSource(id);
-  });
-}
-
-async function naviFetchRoute() {
-  if (!userPos || !naviTarget || !naviMap || naviRouting) return;
-  naviRouting = true;
-  naviLastRoutePos = { ...userPos };
-
-  const start = `${userPos.lng},${userPos.lat}`;
-  const end   = `${naviTarget.lng},${naviTarget.lat}`;
-
-  // Auto-Route: OSRM (kein Key nötig)
-  const osrmBase = `${userPos.lng},${userPos.lat};${naviTarget.lng},${naviTarget.lat}?overview=full&geometries=geojson`;
-  const carPromise = fetch(`https://router.project-osrm.org/route/v1/driving/${osrmBase}`)
-    .then(r => r.json()).catch(() => null);
-
-  // Fußweg: ORS foot-hiking – Fallback auf OSRM foot wenn kein Key
-  const footPromise = ORS_KEY
-    ? fetch(`https://api.openrouteservice.org/v2/directions/foot-hiking?api_key=${ORS_KEY}&start=${start}&end=${end}`)
-        .then(r => r.json()).catch(() => null)
-    : fetch(`https://router.project-osrm.org/route/v1/foot/${osrmBase}`)
-        .then(r => r.json()).catch(() => null);
-
-  const [carData, footRaw] = await Promise.all([carPromise, footPromise]);
-
-  naviRouting = false;
-  if (!naviMap) return;
-
-  naviClearRouteLayers();
-
-  const fmtMin = s => {
-    const m = Math.round(s / 60);
-    return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${m % 60}m`;
-  };
-
-  if (carData?.routes?.length) {
-    const r = carData.routes[0];
-    naviMap.addSource('navi-src-car', { type: 'geojson', data: { type: 'Feature', geometry: r.geometry } });
-    naviMap.addLayer({ id: 'navi-car-casing', type: 'line', source: 'navi-src-car', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#0a0d12', 'line-width': 8, 'line-opacity': 0.7 } });
-    naviMap.addLayer({ id: 'navi-car', type: 'line', source: 'navi-src-car', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#f59e0b', 'line-width': 5, 'line-opacity': 0.9 } });
-    document.getElementById('naviCarVal').textContent = fmtMin(r.duration);
-  }
-
-  let footGeometry = null, footDuration = null;
-  if (ORS_KEY && footRaw?.features?.length) {
-    footGeometry = footRaw.features[0].geometry;
-    footDuration  = footRaw.features[0].properties?.summary?.duration;
-  } else if (!ORS_KEY && footRaw?.routes?.length) {
-    footGeometry = footRaw.routes[0].geometry;
-    footDuration  = footRaw.routes[0].duration;
-  }
-
-  if (footGeometry) {
-    naviMap.addSource('navi-src-foot', { type: 'geojson', data: { type: 'Feature', geometry: footGeometry } });
-    naviMap.addLayer({ id: 'navi-foot-casing', type: 'line', source: 'navi-src-foot', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#0a0d12', 'line-width': 6, 'line-opacity': 0.6 } });
-    naviMap.addLayer({ id: 'navi-foot', type: 'line', source: 'navi-src-foot', layout: { 'line-join': 'round', 'line-cap': 'butt' }, paint: { 'line-color': '#22d3ee', 'line-width': 3, 'line-opacity': 1, 'line-dasharray': [2, 2] } });
-    if (footDuration) document.getElementById('naviFootVal').textContent = fmtMin(footDuration);
-  }
-}
-
-function closeNavOverlay() {
-  if (naviWatchId) { navigator.geolocation.clearWatch(naviWatchId); naviWatchId = null; }
-  if (naviMap) { naviMap.remove(); naviMap = null; }
-  naviUserMarker = null; naviSpotMarker = null;
-  naviLastRoutePos = null; naviTarget = null; naviRouting = false;
-  document.getElementById('naviOverlay').classList.remove('active');
 }
 
 // ── DRAWER ───────────────────────────────────────────────────────────────────
@@ -1365,7 +1370,6 @@ function closeDrawer() {
     newSpotMarkers = [];
     document.getElementById('newSpotsBtn')?.classList.remove('active');
   }
-  clearRoutes();
   const nt=document.getElementById('navToast'); if(nt) nt.remove();
   currentDrawer = null;
 }
@@ -2266,6 +2270,22 @@ async function checkFavoriteNotifications() {
       badge.style.display = 'inline-block';
     }
   } catch {}
+}
+
+// SumUp Donate
+async function donate(amount) {
+  try {
+    const r = await fetch(`${API}/donate/checkout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount })
+    });
+    const data = await r.json();
+    if (!data.url) { toast('⚠️ Spende gerade nicht möglich'); return; }
+    window.location.href = data.url;
+  } catch {
+    toast('⚠️ Verbindungsfehler');
+  }
 }
 
 // ── WETTER (Open-Meteo) ──────────────────────────────────────────────────────
@@ -3661,11 +3681,6 @@ document.getElementById('weeklyModal').addEventListener('click', function(e) {
   if (e.target === this) closeWeeklyModal();
 });
 
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && document.getElementById('naviOverlay').classList.contains('active')) {
-    closeNavOverlay();
-  }
-});
 </script>
 </body>
 </html>

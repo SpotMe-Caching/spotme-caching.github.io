@@ -426,7 +426,7 @@ async function initDB() {
         `ALTER TABLE user_spots ADD COLUMN IF NOT EXISTS image_status TEXT DEFAULT 'pending'`,
       )
       .catch(() => {});
-    console.log("✅ v15.0 – Alle Spalten bereit (inkl. SpotCache)");
+    console.log("✅ v16.0 – Alle Spalten bereit (inkl. SpotCache)");
   } catch (e) {
     console.log(
       "ℹ️ Spalten existieren bereits oder konnten nicht angelegt werden",
@@ -4011,6 +4011,14 @@ async function authCheck(code, token) {
   return r.rows.length && r.rows.some((row) => row.token === token);
 }
 
+// ── Live-Events (Tickets / Teilnehmerlimit) – überschreibt die Live-Routen darunter ──
+const liveEvents = require("./live-events")(app, {
+  pool,
+  authCheck,
+  decrypt,
+  webpush,
+});
+
 // ── Live Spot erstellen ──────────────────────────────────────────────────────
 app.post("/api/live-spots", async (req, res) => {
   const { code, token, name, description, category, avatar } = req.body;
@@ -4269,47 +4277,7 @@ app.post("/api/location/update", async (req, res) => {
 
 // Push an Follower innerhalb 10km wenn Live Spot online geht
 async function sendLivePush(spot) {
-  if (!spot.lat || !spot.lng) return;
-  const { rows: followers } = await pool.query(
-    `SELECT p.code, p.last_lat, p.last_lng, ps.endpoint, ps.p256dh, ps.auth
-     FROM live_followers lf
-     JOIN profiles p ON p.code = lf.follower_code
-     LEFT JOIN push_subscriptions ps ON ps.code = p.code
-     WHERE lf.live_spot_id = $1 AND ps.endpoint IS NOT NULL`,
-    [spot.id],
-  );
-  const payload = JSON.stringify({
-    title: `📡 ${spot.name} ist jetzt live!`,
-    body: spot.location_note || "Tippe um den Standort zu sehen.",
-    url: `/live-spot.html?id=${spot.id}`,
-    tag: `live-${spot.id}`,
-  });
-  for (const f of followers) {
-    // Push nur wenn Follower Standort bekannt und innerhalb 10km
-    if (f.last_lat && f.last_lng) {
-      const km = liveHaversineKm(
-        +f.last_lat,
-        +f.last_lng,
-        +spot.lat,
-        +spot.lng,
-      );
-      if (km > 10) continue;
-    }
-    webpush
-      .sendNotification(
-        { endpoint: f.endpoint, keys: { p256dh: f.p256dh, auth: f.auth } },
-        payload,
-      )
-      .catch(async (err) => {
-        if (err.statusCode === 410 || err.statusCode === 404) {
-          await pool
-            .query("DELETE FROM push_subscriptions WHERE endpoint=$1", [
-              f.endpoint,
-            ])
-            .catch(() => {});
-        }
-      });
-  }
+  return liveEvents.sendLivePush(spot);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

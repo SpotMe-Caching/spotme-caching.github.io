@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════════════════════
-// SPOTME SERVER v10.0 – PostgreSQL (inkl. SpotCache & Messenger Invites)
+// SPOTME SERVER v12.01– PostgreSQL (inkl. SpotCache & Messenger Invites)
 //
 // Features:
 //   • 24h Offline-Sichtbarkeit  → visible_until Timestamp pro Profil
@@ -125,6 +125,74 @@ const peerServer = ExpressPeerServer(server, {
   proxied: true,
 });
 app.use("/peerjs", peerServer);
+
+// ── PEERJS IDENTITÄTS-SCHUTZ ────────────────────────────────────────────────
+// PeerJS vergibt IDs (= unser 6-stelliger Code) ohne jede Prüfung gegen den
+// Server. Ist ein Nutzer offline, könnte sich sonst jeder mit dessen Code
+// registrieren und alle künftigen P2P-Verbindungsversuche kapern.
+// Fix: Client muss sich VOR der Peer-Registrierung ein kurzlebiges Ticket
+// holen (nur mit gültigem Token möglich). Bei der tatsächlichen PeerJS-
+// Verbindung wird geprüft, ob für diese ID gerade ein frisches Ticket
+// ausgestellt wurde – falls nicht, wird die Verbindung sofort gekappt.
+const peerTickets = new Map(); // code -> expiresAt (Timestamp)
+const PEER_TICKET_TTL_MS = 30_000;
+
+app.post("/api/peer-ticket", async (req, res) => {
+  const { code, token } = req.body;
+  if (!code || !token) {
+    return res.status(400).json({ error: "code und token erforderlich" });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT token FROM profiles WHERE code = $1 AND spot = 'caching' LIMIT 1`,
+      [code],
+    );
+    if (!rows.length || rows[0].token !== token) {
+      return res.status(403).json({ error: "Ungültiger Code oder Token" });
+    }
+    peerTickets.set(code, Date.now() + PEER_TICKET_TTL_MS);
+    res.json({ ok: true, ttl: PEER_TICKET_TTL_MS });
+  } catch (e) {
+    console.error("POST /api/peer-ticket:", e.message);
+    res.status(500).json({ error: "Datenbankfehler" });
+  }
+});
+
+// Aufräumen abgelaufener Tickets (verhindert unbegrenztes Map-Wachstum)
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, expiresAt] of peerTickets) {
+    if (expiresAt < now) peerTickets.delete(code);
+  }
+}, 60_000);
+
+peerServer.on("connection", (client) => {
+  const id = client.getId();
+  const expiresAt = peerTickets.get(id);
+
+  if (!expiresAt || expiresAt < Date.now()) {
+    console.warn(
+      `🚫 PeerJS: Verbindung ohne gültiges Ticket für ID "${id}" – gekappt`,
+    );
+    try {
+      // Realm-basiertes Entfernen (versionsunabhängigster Weg im peer-Paket)
+      const realm = peerServer.get("realm");
+      if (realm && typeof realm.removeClientById === "function") {
+        realm.removeClientById(id);
+      }
+      // Fallback: Socket direkt schließen
+      const socket = client.getSocket?.();
+      if (socket && typeof socket.close === "function") socket.close();
+    } catch (e) {
+      console.error("PeerJS Kick fehlgeschlagen:", e.message);
+    }
+    return;
+  }
+
+  // Ticket ist einmalig gültig
+  peerTickets.delete(id);
+  console.log(`✅ PeerJS: ID "${id}" mit gültigem Ticket verbunden`);
+});
 
 // ---------- PostgreSQL Pool ----------
 const pool = new Pool({
@@ -358,7 +426,7 @@ async function initDB() {
         `ALTER TABLE user_spots ADD COLUMN IF NOT EXISTS image_status TEXT DEFAULT 'pending'`,
       )
       .catch(() => {});
-    console.log("✅ v10.0 – Alle Spalten bereit (inkl. SpotCache)");
+    console.log("✅ v15.0 – Alle Spalten bereit (inkl. SpotCache)");
   } catch (e) {
     console.log(
       "ℹ️ Spalten existieren bereits oder konnten nicht angelegt werden",
@@ -904,6 +972,91 @@ app.get("/api/profile/:code", async (req, res) => {
   }
 });
 
+// ── AUTH-VERIFY FÜR SPOT MESSENGER (eigenständige Chat-App) ──────────────────
+// GET /api/profile/:code prüft den Token NICHT (dient dem öffentlichen
+// Profil-Browsing in SpotMe Caching, wo Token fremder Nutzer nicht bekannt sind).
+// Für den Chat-Login brauchen wir echte Verifikation → eigener Endpoint.
+// ── SPOT MESSENGER SELBST-REGISTRIERUNG ────────────────────────────────────
+// Für Nutzer, die den Messenger eigenständig (ohne bestehendes SpotMe
+// Caching Profil) zum ersten Mal öffnen. Erzeugt Code+Token automatisch,
+// legt einen minimalen Profil-Eintrag an (nur name Pflicht, Rest bleibt
+// leer/ungenutzt) – reicht damit /api/auth/verify & Co. normal funktionieren.
+function generateSixDigitCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+app.post("/api/messenger/register", async (req, res) => {
+  const name = String(req.body?.name || "")
+    .trim()
+    .slice(0, 40);
+  if (!name) {
+    return res.status(400).json({ error: "Name erforderlich" });
+  }
+
+  try {
+    // Freien 6-stelligen Code suchen (max. 20 Versuche)
+    let code = null;
+    for (let i = 0; i < 20; i++) {
+      const candidate = generateSixDigitCode();
+      const exists = await pool.query(
+        `SELECT 1 FROM profiles WHERE code = $1 AND spot = 'caching' LIMIT 1`,
+        [candidate],
+      );
+      if (!exists.rows.length) {
+        code = candidate;
+        break;
+      }
+    }
+    if (!code) {
+      return res
+        .status(503)
+        .json({ error: "Kein freier Code verfügbar, bitte erneut versuchen" });
+    }
+
+    const token = crypto.randomBytes(24).toString("hex");
+    const now = Date.now();
+
+    await pool.query(
+      `INSERT INTO profiles (code, spot, name, region, token, updated_at, visible_until)
+       VALUES ($1, 'caching', $2, '', $3, $4, 0)`,
+      [code, encrypt(name), token, now],
+    );
+
+    res.json({ code, token, name });
+  } catch (e) {
+    console.error("POST /api/messenger/register:", e.message);
+    res.status(500).json({ error: "Datenbankfehler" });
+  }
+});
+
+app.post("/api/auth/verify", async (req, res) => {
+  const { code, token } = req.body;
+  if (!code || !token) {
+    return res.status(400).json({ error: "code und token erforderlich" });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT code, name, age, region, province, city,
+              orientation, role, trans, crossdresser,
+              looking_for AS "lookingFor",
+              category, bio,
+              wish_tags, offer_tags,
+              updated_at AS ts, visible_until, token
+       FROM profiles WHERE code = $1 AND spot = 'caching'`,
+      [code],
+    );
+    if (!rows.length || rows[0].token !== token) {
+      return res.status(403).json({ error: "Ungültiger Code oder Token" });
+    }
+    const profile = decryptProfile(rows[0]);
+    delete profile.token;
+    res.json(profile);
+  } catch (e) {
+    console.error("POST /api/auth/verify:", e.message);
+    res.status(500).json({ error: "Datenbankfehler" });
+  }
+});
+
 // ══════════════════════════════════════════════════════════════════════════════
 // AVATAR UPLOAD / ABRUF / LÖSCHEN
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1310,13 +1463,14 @@ app.get("/api/offline-messages/:code", async (req, res) => {
 // Jeder der ein Profil hat kann eine Nachricht schicken.
 // Das verhindert anonymen Spam ohne einen Login zu erzwingen.
 app.post("/api/message", async (req, res) => {
-  const { recipient, sender_code, sender_name, message, spot_type } = req.body;
+  const { recipient, sender_code, sender_name, message, spot_type, token } =
+    req.body;
 
   // Pflichtfelder prüfen
-  if (!recipient || !sender_code || !message) {
-    return res
-      .status(400)
-      .json({ error: "recipient, sender_code und message sind Pflicht" });
+  if (!recipient || !sender_code || !message || !token) {
+    return res.status(400).json({
+      error: "recipient, sender_code, message und token sind Pflicht",
+    });
   }
 
   // Selbst-Nachrichten verhindern
@@ -1333,15 +1487,15 @@ app.post("/api/message", async (req, res) => {
   }
 
   try {
-    // Sicherheits-Check: Hat der Absender ein Profil im System?
-    // Das verhindert dass anonyme Bots Nachrichten schicken können.
-    // Profil muss im caching-Spot existieren.
-    const senderExists = await pool.query(
-      `SELECT 1 FROM profiles WHERE code = $1 AND spot = 'caching' LIMIT 1`,
+    // FIX: Vorher wurde nur geprüft OB der sender_code ein Profil hat –
+    // nicht OB der Aufrufer dieses Profil auch besitzt. Jeder konnte sich
+    // als jeder ausgeben. Jetzt: Token muss zum sender_code passen.
+    const senderCheck = await pool.query(
+      `SELECT token FROM profiles WHERE code = $1 AND spot = 'caching' LIMIT 1`,
       [sender_code],
     );
-    if (!senderExists.rows.length) {
-      return res.status(403).json({ error: "Absender hat kein Profil" });
+    if (!senderCheck.rows.length || senderCheck.rows[0].token !== token) {
+      return res.status(403).json({ error: "Ungültiger Absender-Token" });
     }
 
     // Postfach-Limit: maximal 100 ungelesene Chat-Nachrichten pro Empfänger
@@ -1370,14 +1524,16 @@ app.post("/api/message", async (req, res) => {
     );
 
     console.log(`💬 Chat: ${sender_code} → ${recipient}`);
-    // Push-Benachrichtigung an Empfänger (fire-and-forget)
-    sendPushToCode(
+    // Push-Benachrichtigung an Empfänger – jetzt awaited für den
+    // "Zugestellt"-Haken. Zeigt NUR ob die Push-Zustellung an den Dienst
+    // geklappt hat, NICHT ob/wann der Empfänger sie gelesen hat.
+    const delivered = await sendPushToCode(
       recipient,
       "💬 Neue Nachricht",
       `${sender_name || sender_code}: ${clean.slice(0, 80)}`,
       "/",
     );
-    res.json({ success: true });
+    res.json({ success: true, delivered });
   } catch (e) {
     console.error("POST /api/message:", e.message);
     res.status(500).json({ error: "Datenbankfehler" });
@@ -1392,8 +1548,23 @@ app.post("/api/message", async (req, res) => {
 app.get("/api/messages/:code", async (req, res) => {
   const { code } = req.params;
   const spot_type = req.query.spot_type || "caching_chat";
+  const token = req.query.token || req.headers["x-spotme-token"];
+
+  // FIX: Vorher kein Token-Check – jeder der den Code kannte, konnte fremde
+  // Nachrichten abholen (und sie damit serverseitig als "read" markieren,
+  // sodass der echte Empfänger sie nie zu sehen bekam). Jetzt: nur der
+  // Code-Besitzer selbst darf sein eigenes Postfach leeren.
+  if (!token) return res.status(401).json({ error: "Token fehlt" });
 
   try {
+    const auth = await pool.query(
+      `SELECT token FROM profiles WHERE code = $1 AND spot = 'caching' LIMIT 1`,
+      [code],
+    );
+    if (!auth.rows.length || auth.rows[0].token !== token) {
+      return res.status(403).json({ error: "Ungültiger Token" });
+    }
+
     // Nachrichten der letzten 48 Stunden abrufen
     // Ältere Nachrichten sind im localStorage bereits gespeichert
     const { rows } = await pool.query(
@@ -3047,6 +3218,42 @@ async function bskyCreateSession(handle, appPassword) {
   return res.json();
 }
 
+// Bluesky: Links und Hashtags anklickbar machen (Facets).
+// Positionen sind UTF-8-Byte-Offsets, nicht Zeichen (wichtig wegen Emoji).
+function bskyFacets(text) {
+  const enc = new TextEncoder();
+  const byteOffset = (i) => enc.encode(text.slice(0, i)).length;
+  const facets = [];
+
+  const urlRe = /https?:\/\/[^\s]+/g;
+  let m;
+  while ((m = urlRe.exec(text)) !== null) {
+    const url = m[0].replace(/[.,;:!?)\]]+$/, "");
+    if (!url) continue;
+    facets.push({
+      index: {
+        byteStart: byteOffset(m.index),
+        byteEnd: byteOffset(m.index) + enc.encode(url).length,
+      },
+      features: [{ $type: "app.bsky.richtext.facet#link", uri: url }],
+    });
+  }
+
+  const tagRe = /(^|\s)#([\p{L}\p{N}_]{1,64})/gu;
+  while ((m = tagRe.exec(text)) !== null) {
+    const start = m.index + m[1].length;
+    const tag = m[2];
+    facets.push({
+      index: {
+        byteStart: byteOffset(start),
+        byteEnd: byteOffset(start) + enc.encode("#" + tag).length,
+      },
+      features: [{ $type: "app.bsky.richtext.facet#tag", tag }],
+    });
+  }
+  return facets;
+}
+
 // AT-Protocol Hilfsfunktion – postet einen Beitrag
 async function bskyPost(accessJwt, did, text) {
   const res = await fetch(
@@ -3063,6 +3270,7 @@ async function bskyPost(accessJwt, did, text) {
         record: {
           $type: "app.bsky.feed.post",
           text,
+          facets: bskyFacets(text),
           createdAt: new Date().toISOString(),
         },
       }),
@@ -3099,11 +3307,12 @@ app.post("/api/bluesky/connect", async (req, res) => {
     const encryptedPassword = encrypt(appPassword);
 
     await pool.query(
-      `INSERT INTO bluesky_accounts (code, handle, app_password)
-       VALUES ($1, $2, $3)
+      `INSERT INTO bluesky_accounts (code, handle, app_password, updated_at)
+       VALUES ($1, $2, $3, NOW())
        ON CONFLICT (code) DO UPDATE
          SET handle = EXCLUDED.handle,
-             app_password = EXCLUDED.app_password`,
+             app_password = EXCLUDED.app_password,
+             updated_at = NOW()`,
       [code, handle.toLowerCase().replace(/^@/, ""), encryptedPassword],
     );
 
@@ -3213,40 +3422,53 @@ app.delete("/api/bluesky/disconnect", async (req, res) => {
 // Fire-and-forget (kein await nötig), blockiert den Request-Handler nicht.
 // Abgelaufene Subscriptions (410/404) werden automatisch aus der DB gelöscht.
 async function sendPushToCode(code, title, body, url = "/") {
-  if (!process.env.VAPID_PUBLIC_KEY) return;
+  if (!process.env.VAPID_PUBLIC_KEY) return false;
   try {
     const { rows } = await pool.query(
       "SELECT * FROM push_subscriptions WHERE code = $1",
       [code],
     );
-    if (!rows.length) return;
+    if (!rows.length) return false;
     const payload = JSON.stringify({
       title,
       body,
       url,
       tag: `spotme-${Date.now()}`,
     });
-    for (const sub of rows) {
-      webpush
-        .sendNotification(
+
+    // Awaiten statt fire-and-forget: Aufrufer braucht das Ergebnis für den
+    // "Zugestellt"-Haken beim Absender (KEIN Lesestatus, nur ob die
+    // Benachrichtigung erfolgreich an den Push-Dienst übergeben wurde).
+    const results = await Promise.allSettled(
+      rows.map((sub) =>
+        webpush.sendNotification(
           {
             endpoint: sub.endpoint,
             keys: { p256dh: sub.p256dh, auth: sub.auth },
           },
           payload,
-        )
-        .catch(async (err) => {
-          if (err.statusCode === 410 || err.statusCode === 404) {
-            await pool
-              .query("DELETE FROM push_subscriptions WHERE endpoint = $1", [
-                sub.endpoint,
-              ])
-              .catch(() => {});
-          }
-        });
-    }
+        ),
+      ),
+    );
+
+    // Abgelaufene Subscriptions aufräumen
+    results.forEach((r, i) => {
+      if (r.status === "rejected") {
+        const err = r.reason;
+        if (err?.statusCode === 410 || err?.statusCode === 404) {
+          pool
+            .query("DELETE FROM push_subscriptions WHERE endpoint = $1", [
+              rows[i].endpoint,
+            ])
+            .catch(() => {});
+        }
+      }
+    });
+
+    return results.some((r) => r.status === "fulfilled");
   } catch (e) {
     console.error("sendPushToCode:", e.message);
+    return false;
   }
 }
 
@@ -3433,29 +3655,35 @@ app.post("/api/wp/routes/:id/answer", async (req, res) => {
   const { player_code, waypoint_index, answer } = req.body;
   const routeId = +req.params.id;
   if (!player_code || waypoint_index == null || !answer) {
-    return res.status(400).json({ error: "player_code, waypoint_index, answer erforderlich" });
+    return res
+      .status(400)
+      .json({ error: "player_code, waypoint_index, answer erforderlich" });
   }
 
   try {
     const prog = await pool.query(
       "SELECT * FROM wp_progress WHERE route_id=$1 AND player_code=$2",
-      [routeId, player_code]
+      [routeId, player_code],
     );
-    if (!prog.rows.length) return res.status(403).json({ error: "Route nicht gestartet" });
+    if (!prog.rows.length)
+      return res.status(403).json({ error: "Route nicht gestartet" });
     if (prog.rows[0].current_index !== +waypoint_index) {
       return res.status(409).json({ error: "Falscher WayPoint-Index" });
     }
 
     const wp = await pool.query(
       "SELECT * FROM wp_waypoints WHERE route_id=$1 AND order_index=$2",
-      [routeId, +waypoint_index]
+      [routeId, +waypoint_index],
     );
-    if (!wp.rows.length) return res.status(404).json({ error: "WayPoint nicht gefunden" });
+    if (!wp.rows.length)
+      return res.status(404).json({ error: "WayPoint nicht gefunden" });
 
     const waypoint = wp.rows[0];
     let isCorrect;
     if (waypoint.question_type === "freitext") {
-      isCorrect = answer.trim().toLowerCase() === (waypoint.correct_text || "").trim().toLowerCase();
+      isCorrect =
+        answer.trim().toLowerCase() ===
+        (waypoint.correct_text || "").trim().toLowerCase();
     } else {
       isCorrect = answer.toLowerCase() === waypoint.correct_option;
     }
@@ -3464,41 +3692,50 @@ app.post("/api/wp/routes/:id/answer", async (req, res) => {
 
     const nextIndex = +waypoint_index + 1;
     const total = await pool.query(
-      "SELECT COUNT(*)::int AS cnt FROM wp_waypoints WHERE route_id=$1", [routeId]
+      "SELECT COUNT(*)::int AS cnt FROM wp_waypoints WHERE route_id=$1",
+      [routeId],
     );
     const isLast = nextIndex >= total.rows[0].cnt;
 
     if (isLast) {
       const timeSec = Math.round((Date.now() - prog.rows[0].started_at) / 1000);
-      await pool.query(`
+      await pool.query(
+        `
         INSERT INTO wp_completions (route_id, player_code, time_seconds)
         VALUES ($1,$2,$3)
         ON CONFLICT (route_id, player_code) DO UPDATE SET
           time_seconds = LEAST(EXCLUDED.time_seconds, wp_completions.time_seconds),
           completed_at = NOW()
-      `, [routeId, player_code, timeSec]);
+      `,
+        [routeId, player_code, timeSec],
+      );
       await pool.query(
         "DELETE FROM wp_progress WHERE route_id=$1 AND player_code=$2",
-        [routeId, player_code]
+        [routeId, player_code],
       );
 
       const rank = await pool.query(
         `SELECT COUNT(*)::int + 1 AS rank FROM wp_completions
          WHERE route_id=$1 AND time_seconds < $2`,
-        [routeId, timeSec]
+        [routeId, timeSec],
       );
-      return res.json({ correct: true, completed: true, time_seconds: timeSec, rank: rank.rows[0].rank });
+      return res.json({
+        correct: true,
+        completed: true,
+        time_seconds: timeSec,
+        rank: rank.rows[0].rank,
+      });
     }
 
     await pool.query(
       `UPDATE wp_progress SET current_index=$1, last_activity_at=$2
        WHERE route_id=$3 AND player_code=$4`,
-      [nextIndex, Date.now(), routeId, player_code]
+      [nextIndex, Date.now(), routeId, player_code],
     );
     const nextWp = await pool.query(
       `SELECT id, order_index, lat, lng, question, option_a, option_b, option_c
        FROM wp_waypoints WHERE route_id=$1 AND order_index=$2`,
-      [routeId, nextIndex]
+      [routeId, nextIndex],
     );
 
     res.json({
@@ -3506,7 +3743,7 @@ app.post("/api/wp/routes/:id/answer", async (req, res) => {
       completed: false,
       next_waypoint: nextWp.rows[0],
       current_index: nextIndex,
-      total: total.rows[0].cnt
+      total: total.rows[0].cnt,
     });
   } catch (e) {
     console.error("POST /api/wp/routes/:id/answer:", e.message);
