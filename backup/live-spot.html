@@ -7,30 +7,28 @@
 <meta name="theme-color" content="#080b10">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.css" rel="stylesheet">
+<link href="theme-vars.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
+<script src="nav.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-:root{
-  --bg:#080b10;--sur:#0d1117;--card:#111820;--card2:#141e2a;
-  --bord:rgba(255,255,255,0.07);--bord2:rgba(255,255,255,0.12);
-  --acc:#ff9f00;--acc-dim:rgba(255,159,0,0.10);--acc-glow:rgba(255,159,0,0.28);
-  --cyan:#00e5ff;--cyan-dim:rgba(0,229,255,0.08);
-  --green:#00e676;--red:#ff1744;--text:#dce8f0;--muted:#4a6070;--muted2:#7a98aa;
-}
 html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif}
 .maplibregl-ctrl-attrib,.maplibregl-ctrl-logo{display:none!important}
 
 .page-header{
   display:flex;align-items:center;justify-content:space-between;
   padding:max(0.85rem,env(safe-area-inset-top)) 1rem 0.85rem;
-  background:rgba(8,11,16,0.92);backdrop-filter:blur(20px);
+  background:var(--glass-strong);backdrop-filter:blur(20px);
   border-bottom:1px solid var(--bord2);position:sticky;top:0;z-index:100;
 }
 .logo{font-family:'Space Mono',monospace;font-size:0.9rem;font-weight:700;color:var(--acc);display:flex;align-items:center;gap:6px}
 .logo-dot{width:7px;height:7px;border-radius:50%;background:var(--acc);box-shadow:0 0 8px var(--acc);animation:pdot 2s ease infinite}
 @keyframes pdot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
 .back-link{font-size:0.8rem;background:var(--card);backdrop-filter:blur(16px);border:1px solid var(--bord2);border-radius:40px;padding:6px 14px;color:var(--muted2);text-decoration:none}
+.theme-toggle-btn{width:34px;height:34px;border-radius:50%;background:var(--card);backdrop-filter:blur(16px);border:1px solid var(--bord2);color:var(--muted2);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 
-#map{width:100%;height:48vmax;max-height:280px;filter:invert(0.88) hue-rotate(180deg) brightness(0.82) saturate(0.85)}
+#map{width:100%;height:48vmax;max-height:280px;filter:var(--map-filter-dark)}
+:root[data-theme="light"] #map{filter:var(--map-filter-light)}
 .content{padding:1.1rem;max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:0.85rem;padding-bottom:2rem}
 
 /* Avatar */
@@ -71,19 +69,179 @@ html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Ou
 .btn-nav{background:rgba(255,255,255,0.05);border:1px solid var(--bord2);color:var(--muted2)}
 
 /* Toast */
-.toast{position:fixed;bottom:max(1.5rem,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(10px);background:rgba(8,11,16,0.96);backdrop-filter:blur(20px);border:1px solid var(--bord2);border-radius:100px;padding:0.5rem 1.2rem;font-size:0.82rem;z-index:999;opacity:0;transition:all 0.25s;pointer-events:none;white-space:nowrap}
+.toast{position:fixed;bottom:max(1.5rem,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(10px);background:var(--glass-strong);backdrop-filter:blur(20px);border:1px solid var(--bord2);border-radius:100px;padding:0.5rem 1.2rem;font-size:0.82rem;z-index:999;opacity:0;transition:all 0.25s;pointer-events:none;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
 /* Loading */
 .loading{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:50vh;gap:0.75rem;color:var(--muted2);font-size:0.88rem}
 .loading-icon{font-size:2.5rem;opacity:0.4}
+
+/* Bild-Vergrößern */
+#imgFullscreen {
+  position: fixed; inset: 0; z-index: 970;
+  background: rgba(0,0,0,0.95);
+  display: none; align-items: center; justify-content: center;
+  cursor: zoom-out;
+}
+#imgFullscreen.show { display: flex; }
+#imgFullscreen img {
+  max-width: 100%; max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+/* ── Navigation Overlay ── */
+#naviOverlay {
+  position: fixed; inset: 0; z-index: 950;
+  background: var(--ov-bg);
+  display: none; flex-direction: column;
+}
+#naviOverlay.active { display: flex; }
+#naviMap { width: 100%; height: 100%; }
+
+.navi-topbar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  padding: max(0.85rem, env(safe-area-inset-top)) 1rem 0.85rem;
+  z-index: 10;
+  display: flex; align-items: center; gap: 0.75rem;
+  background: linear-gradient(to bottom, var(--ov-bg) 0%, transparent 100%);
+  pointer-events: none;
+}
+.navi-topbar > * { pointer-events: auto; }
+.navi-close-btn {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: var(--ov-pill); backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #e2e8f0; font-size: 1rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.navi-spot-label { flex: 1; min-width: 0; }
+.navi-spot-label-name {
+  font-weight: 700; font-size: 0.95rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.navi-spot-label-sub {
+  font-size: 0.68rem; color: #64748b;
+  font-family: 'Space Mono', monospace; margin-top: 1px;
+}
+.navi-recenter-btn {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: var(--ov-pill); backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #22d3ee; font-size: 1rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+
+.navi-bottom {
+  position: absolute;
+  bottom: 0; left: 0; right: 0; z-index: 10;
+  background: var(--ov-bg);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(255,255,255,0.08);
+  border-radius: 22px 22px 0 0;
+  padding: 1rem 1.1rem;
+  padding-bottom: max(1.1rem, env(safe-area-inset-bottom));
+}
+.navi-stats {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.5rem; margin-bottom: 0.75rem;
+}
+.navi-stat {
+  background: var(--ov-stat); border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 12px; padding: 0.55rem 0.5rem; text-align: center;
+}
+.navi-stat-val {
+  font-family: 'Space Mono', monospace; font-size: 0.88rem;
+  font-weight: 700; color: #22d3ee; line-height: 1.2;
+}
+.navi-stat-val.amber { color: #f59e0b; }
+.navi-stat-label { font-size: 0.6rem; color: #64748b; margin-top: 2px; }
+.navi-legend {
+  display: flex; gap: 1rem; margin-bottom: 0.65rem;
+  font-size: 0.68rem; color: #64748b; align-items: center;
+}
+.navi-legend-dot {
+  display: inline-block; width: 14px; height: 3px;
+  border-radius: 2px; vertical-align: middle; margin-right: 4px;
+}
+.navi-stop-btn {
+  width: 100%; padding: 0.75rem;
+  background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3);
+  border-radius: 12px; color: #ef4444;
+  font-family: 'Outfit', sans-serif; font-size: 0.88rem; font-weight: 700;
+  cursor: pointer; transition: all 0.18s;
+}
+.navi-stop-btn:active { transform: scale(0.97); }
+
+/* ── Chat Overlay ── */
+#chatOverlay { position: fixed; inset: 0; z-index: 960; background: var(--ov-bg); display: none; flex-direction: column; }
+#chatOverlay.active { display: flex; }
+.chat-overlay-header { padding: max(0.85rem, env(safe-area-inset-top)) 1rem 0.85rem; display: flex; align-items: center; gap: 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; }
+.chat-msgs { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.chat-bubble { max-width: 78%; padding: 0.55rem 0.8rem; border-radius: 14px; font-size: 0.88rem; line-height: 1.4; }
+.chat-bubble.mine { align-self: flex-end; background: var(--acc); color: #080b10; border-bottom-right-radius: 4px; }
+.chat-bubble.theirs { align-self: flex-start; background: var(--ov-stat); color: var(--text); border-bottom-left-radius: 4px; }
+.chat-bubble-author { display: block; font-size: 0.68rem; font-weight: 700; color: #22d3ee; margin-bottom: 2px; }
+.chat-bubble-time { font-size: 0.62rem; opacity: 0.6; margin-top: 3px; text-align: right; }
+.chat-input-row { display: flex; gap: 0.5rem; padding: 0.75rem 1rem; padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); border-top: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; }
+.chat-input { flex: 1; background: var(--ov-stat); border: 1px solid rgba(255,255,255,0.1); border-radius: 100px; padding: 0.65rem 1rem; color: var(--text); font-size: 0.88rem; }
+.chat-send-btn { width: 42px; height: 42px; border-radius: 50%; background: var(--acc); border: none; color: #080b10; font-size: 1.1rem; cursor: pointer; flex-shrink: 0; }
 </style>
 </head>
 <body>
 
+<div id="imgFullscreen" onclick="this.classList.remove('show')">
+  <img id="imgFullscreenSrc" src="" alt="">
+</div>
+
+<div id="chatOverlay">
+  <div class="chat-overlay-header">
+    <button class="navi-close-btn" onclick="closeChatOverlay()" title="Schließen">✕</button>
+    <div class="navi-spot-label">
+      <div class="navi-spot-label-name" id="chatPartnerLabel">—</div>
+      <div class="navi-spot-label-sub">CHAT</div>
+    </div>
+  </div>
+  <div class="chat-msgs" id="chatMsgs"></div>
+  <div class="chat-input-row">
+    <input class="chat-input" id="chatInput" placeholder="Nachricht..." maxlength="500" onkeydown="if(event.key==='Enter')sendChatMsg()">
+    <button class="chat-send-btn" onclick="sendChatMsg()">➤</button>
+  </div>
+</div>
+
+<div id="naviOverlay">
+  <div id="naviMap"></div>
+  <div class="navi-topbar">
+    <button class="navi-close-btn" onclick="closeNavOverlay()" title="Schließen">✕</button>
+    <div class="navi-spot-label">
+      <div class="navi-spot-label-name" id="naviSpotName">—</div>
+      <div class="navi-spot-label-sub" id="naviSpotSub">NAVIGATION</div>
+    </div>
+    <button class="navi-recenter-btn" id="naviRecenterBtn" title="Neu zentrieren">⊕</button>
+  </div>
+  <div class="navi-bottom">
+    <div class="navi-stats">
+      <div class="navi-stat"><div class="navi-stat-val" id="naviDistVal">…</div><div class="navi-stat-label">Entfernung</div></div>
+      <div class="navi-stat"><div class="navi-stat-val" id="naviFootVal">…</div><div class="navi-stat-label">🚶 zu Fuß</div></div>
+      <div class="navi-stat"><div class="navi-stat-val amber" id="naviCarVal">…</div><div class="navi-stat-label">🚲 Fahrrad</div></div>
+    </div>
+    <div class="navi-legend">
+      <span><span class="navi-legend-dot" style="background:#22d3ee;"></span>Fußweg</span>
+      <span><span class="navi-legend-dot" style="background:#f59e0b;"></span>Fahrrad</span>
+    </div>
+    <button class="navi-stop-btn" onclick="closeNavOverlay()">■ Navigation beenden</button>
+  </div>
+</div>
+
 <div class="page-header">
   <div class="logo"><div class="logo-dot"></div>SPOT<span style="font-weight:300">ME</span></div>
-  <a href="/" class="back-link">← App</a>
+  <div style="display:flex;align-items:center;gap:0.5rem;">
+    <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Hell/Dunkel">🌙</button>
+    <a href="/" class="back-link">← App</a>
+  </div>
 </div>
 
 <div id="map"></div>
@@ -92,7 +250,6 @@ html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Ou
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
 <script>
 'use strict';
 const API  = 'https://spotme-chat-obom.onrender.com/api';
@@ -100,12 +257,32 @@ const CODE = localStorage.getItem('sm_code') || '';
 const TOK  = localStorage.getItem('sm_token') || '';
 let spotMap = null;
 
+// ── Theme (Hell/Dunkel) – gleicher Key wie index.html, daher konsistent ──────
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('sm_theme', theme);
+  const btn = document.getElementById('themeToggleBtn');
+  if (btn) btn.textContent = theme === 'light' ? '🌙' : '☀️';
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  applyTheme(current === 'light' ? 'dark' : 'light');
+}
+applyTheme(localStorage.getItem('sm_theme') || 'dark');
+
+// ── Globals, die nav.js braucht ───────────────────────────────────────────────
+let userPos = null;
+
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2800);
 }
 function esc(s) { const d = document.createElement('div'); d.textContent = s||''; return d.innerHTML; }
+function openImg(src) {
+  document.getElementById('imgFullscreenSrc').src = src;
+  document.getElementById('imgFullscreen').classList.add('show');
+}
 
 function initMap(lat, lng) {
   if (spotMap) spotMap.remove();
@@ -162,7 +339,7 @@ async function loadSpot(id) {
 
   content.innerHTML = `
     <div class="profile-head">
-      <div class="avatar">${spot.avatar?`<img src="${spot.avatar}" alt="">`:`${catIcon}`}</div>
+      <div class="avatar" ${spot.avatar ? `onclick="openImg('${spot.avatar}')" style="cursor:zoom-in;"` : ''}>${spot.avatar?`<img src="${spot.avatar}" alt="">`:`${catIcon}`}</div>
       <div class="profile-info">
         <div class="profile-name">${esc(spot.name)}</div>
         <div class="profile-cat">${spot.category||'Live Spot'}</div>
@@ -206,7 +383,8 @@ async function loadSpot(id) {
         ${isFollowing ? '✓ Gefolgt' : '+ Folgen'}
       </button>` : ''}
       ${online && spot.lat ? `<button class="btn btn-nav" onclick="navigate(${spot.lat},${spot.lng},'${esc(spot.name).replace(/'/g,"\\'")}')">🧭 Route</button>` : ''}
-      </div>
+      ${CODE && spot.creator_code && spot.creator_code !== CODE ? `<button class="btn btn-nav" onclick="openChatOverlay('${spot.creator_code}','${esc(spot.name).replace(/'/g,"\\'")}')">💬 Chat</button>` : ''}
+    </div>
 
     ${!CODE ? `<div style="font-size:0.78rem;color:var(--muted2);text-align:center;">
       <a href="/" style="color:var(--acc);">App öffnen</a> um zu folgen und Benachrichtigungen zu erhalten.
@@ -235,8 +413,120 @@ async function toggleFollow(id) {
   btn.disabled = false;
 }
 
-function navigate(lat, lng, name) {
-  window.location.href = `index.html?navlat=${lat}&navlng=${lng}&navname=${encodeURIComponent(name || 'Spot')}`;
+// ── CHAT ──────────────────────────────────────────────────────────────────────
+const CHAT_PREFIX = 'sm_local_msg_';
+let chatPartnerCode = null;
+let chatPartnerName = null;
+let chatRoom        = null;
+let chatPollTimer   = null;
+
+function buildChatRoom(a, b) { return [a, b].sort().join('-'); }
+
+function getChatMessages() {
+  if (!chatRoom) return [];
+  try { return JSON.parse(localStorage.getItem(CHAT_PREFIX + chatRoom) || '[]'); }
+  catch { return []; }
+}
+function saveChatMessages(msgs) {
+  if (!chatRoom) return;
+  localStorage.setItem(CHAT_PREFIX + chatRoom, JSON.stringify(msgs));
+}
+
+function renderChatMessages() {
+  const container = document.getElementById('chatMsgs');
+  if (!container) return;
+  const msgs = getChatMessages();
+  if (!msgs.length) {
+    container.innerHTML = `<div style="text-align:center;color:#64748b;font-size:0.85rem;padding:2rem 0;">💬 Noch keine Nachrichten.</div>`;
+    return;
+  }
+  container.innerHTML = msgs.map(m => {
+    const isMine = m.from === CODE;
+    const time = new Date(m.ts).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    return `<div class="chat-bubble ${isMine ? 'mine' : 'theirs'}">
+      ${!isMine ? `<span class="chat-bubble-author">${esc(m.fromName || chatPartnerName)}</span>` : ''}
+      ${esc(m.text)}
+      <div class="chat-bubble-time">${time}</div>
+    </div>`;
+  }).join('');
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendChatMsg() {
+  const input = document.getElementById('chatInput');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text || !chatPartnerCode) return;
+
+  const myName = JSON.parse(localStorage.getItem('sm_profile_caching') || '{}').name || CODE;
+
+  const msgs = getChatMessages();
+  msgs.push({ from: CODE, fromName: myName, text, ts: Date.now() });
+  saveChatMessages(msgs);
+  input.value = '';
+  renderChatMessages();
+
+  try {
+    await fetch(`${API}/message`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipient: chatPartnerCode,
+        sender_code: CODE,
+        sender_name: myName,
+        message: text,
+        spot_type: 'caching_chat'
+      })
+    });
+  } catch {}
+}
+
+function startChatPolling() {
+  stopChatPolling();
+  chatPollTimer = setInterval(async () => {
+    if (!chatPartnerCode || !CODE) return;
+    try {
+      const r = await fetch(`${API}/messages/${CODE}?spot_type=caching_chat`);
+      if (!r.ok) return;
+      const newMsgs = await r.json();
+      const fromPartner = newMsgs.filter(m => m.sender_code === chatPartnerCode);
+      if (!fromPartner.length) return;
+
+      const existing = getChatMessages();
+      let hasNew = false;
+      fromPartner.forEach(m => {
+        const isDuplicate = existing.some(e =>
+          e.from === m.sender_code && e.text === m.message &&
+          Math.abs(e.ts - new Date(m.created_at).getTime()) < 5000
+        );
+        if (!isDuplicate) {
+          existing.push({ from: m.sender_code, fromName: m.sender_name, text: m.message, ts: new Date(m.created_at).getTime() });
+          hasNew = true;
+        }
+      });
+      if (hasNew) { saveChatMessages(existing); renderChatMessages(); }
+    } catch {}
+  }, 4000);
+}
+function stopChatPolling() {
+  if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
+}
+
+function openChatOverlay(partnerCode, partnerName) {
+  if (!CODE) { showToast('⚠️ Bitte in der App anmelden'); return; }
+  chatPartnerCode = partnerCode;
+  chatPartnerName = partnerName || partnerCode;
+  chatRoom        = buildChatRoom(CODE, partnerCode);
+
+  document.getElementById('chatPartnerLabel').textContent = chatPartnerName;
+  document.getElementById('chatOverlay').classList.add('active');
+  renderChatMessages();
+  startChatPolling();
+}
+
+function closeChatOverlay() {
+  stopChatPolling();
+  document.getElementById('chatOverlay').classList.remove('active');
 }
 
 const params = new URLSearchParams(window.location.search);
