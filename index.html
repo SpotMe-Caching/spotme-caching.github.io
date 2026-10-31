@@ -840,32 +840,86 @@ async function checkBlueskyStatusForRail() {
   }
 }
 
-// Öffnet den Share-Dialog für Bluesky
+// Öffnet den Share-Dialog für Bluesky (normale Spots + Live Spots)
 async function openBlueskyShareDialog() {
   const select = document.getElementById('bskySpotSelect');
   if (!select) return;
-  
+
   select.innerHTML = '<option value="">Lade Spots…</option>';
   document.getElementById('bskyCustomMessage').value = '';
   document.getElementById('bskyCharCount').textContent = '0 / 200';
-  
+
   document.getElementById('blueskyShareModal').classList.add('show');
-  
-  try {
-    // Eigene Spots vom Server laden
-    const res = await fetch(`${API}/userspots/${CODE}`);
-    if (res.ok) {
-      const spots = await res.json();
-      if (!spots.length) {
-        select.innerHTML = '<option value="">Keine Spots vorhanden</option>';
-        return;
-      }
-      select.innerHTML = spots.map(s => `<option value="${s.id}">${esc(s.name)} (${s.wishTag || 'Spot'})</option>`).join('');
-    } else {
-      select.innerHTML = '<option value="">Fehler beim Laden</option>';
-    }
-  } catch {
+
+  const token = localStorage.getItem('sm_token');
+  const [spotsRes, liveRes] = await Promise.allSettled([
+    fetch(`${API}/userspots/${CODE}`).then(r => r.ok ? r.json() : null),
+    fetch(`${API}/live-spots/mine?code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(token || '')}`)
+      .then(r => r.ok ? r.json() : null)
+  ]);
+
+  const spots = spotsRes.status === 'fulfilled' && Array.isArray(spotsRes.value) ? spotsRes.value : null;
+  const lives = liveRes.status === 'fulfilled' && Array.isArray(liveRes.value) ? liveRes.value : null;
+
+  if (spots === null && lives === null) {
     select.innerHTML = '<option value="">Server nicht erreichbar</option>';
+    return;
+  }
+
+  let html = '';
+  if (spots && spots.length) {
+    html += '<optgroup label="📍 Spots">' +
+      spots.map(s => `<option value="spot:${s.id}">${esc(s.name)} (${esc(s.wishTag || 'Spot')})</option>`).join('') +
+      '</optgroup>';
+  }
+  if (lives && lives.length) {
+    html += '<optgroup label="🔴 Live Spots">' +
+      lives.map(s => `<option value="live:${s.id}">${esc(s.name)}${s.status === 'online' ? ' · LIVE' : ''}</option>`).join('') +
+      '</optgroup>';
+  }
+  select.innerHTML = html || '<option value="">Keine Spots vorhanden</option>';
+}
+
+// Postet den ausgewählten Spot / Live Spot mit Custom Message und Direktlink auf Bluesky
+async function postToBluesky() {
+  const select = document.getElementById('bskySpotSelect');
+  const raw = select?.value;
+  if (!raw) { toast('⚠️ Bitte wähle einen Spot aus'); return; }
+
+  const [kind, spotId] = raw.includes(':') ? raw.split(':') : ['spot', raw];
+  const customMessage = document.getElementById('bskyCustomMessage').value.trim();
+  const btn = document.getElementById('bskyPostBtn');
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Poste…';
+
+  let finalMessage;
+  if (kind === 'live') {
+    // Live Spots haben eine eigene Seite (öffentliche ID, nicht der geheime Token)
+    const liveUrl = `${window.location.origin}/live-spot.html?id=${spotId}`;
+    finalMessage = customMessage
+      ? `${customMessage}\n\n🔴 Live Spot: \n\n ${liveUrl}`
+      : `🔴 Mein Live Spot auf SpotMe Caching: \n\n ${liveUrl}`;
+  } else {
+    const spotUrl = `${window.location.origin}${window.location.pathname}?spot=${spotId}`;
+    finalMessage = customMessage
+      ? `${customMessage}\n\n📍 Zum Spot: \n\n ${spotUrl}`
+      : `📍 Mein Spot auf SpotMe Caching: \n\n ${spotUrl}`;
+  }
+
+  try {
+    const res = await window.shareSpotOnBluesky(spotId, finalMessage);
+    if (res.success) {
+      toast('🦋 Erfolgreich auf Bluesky geteilt!');
+      closeModals();
+    } else {
+      toast('❌ ' + (res.error || 'Fehler beim Teilen'));
+    }
+  } catch (e) {
+    toast('⚠️ Fehler: Verbindung abgebrochen');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🦋 Posten';
   }
 }
 
@@ -878,40 +932,6 @@ document.getElementById('bskyCustomMessage')?.addEventListener('input', function
     counter.classList.toggle('warn', len > 170);
   }
 });
-
-// Postet den ausgewählten Spot mit Custom Message und Direktlink auf Bluesky
-async function postToBluesky() {
-  const select = document.getElementById('bskySpotSelect');
-  const spotId = select?.value;
-  if (!spotId) { toast('⚠️ Bitte wähle einen Spot aus'); return; }
-  
-  const customMessage = document.getElementById('bskyCustomMessage').value.trim();
-  const btn = document.getElementById('bskyPostBtn');
-  
-  btn.disabled = true;
-  btn.textContent = '⏳ Poste…';
-  
-  // Direkt-Link zum Spot dynamisch konstruieren
-  const spotUrl = `${window.location.origin}${window.location.pathname}?spot=${spotId}`;
-  const finalMessage = customMessage 
-    ? `${customMessage}\n\n📍 Zum Spot: \n\n ${spotUrl}` 
-    : `📍 Mein Spot auf SpotMe Caching: \n\n ${spotUrl}`;
-  
-  try {
-    const res = await window.shareSpotOnBluesky(spotId, finalMessage);
-    if (res.success) {
-      toast('🦋 Erfolgreich auf Bluesky geteilt!');
-      closeModals();
-    } else {
-      toast('❌ ' + (res.error || 'Fehler beim Teilen'));
-    }
-  } catch(e) {
-    toast('⚠️ Fehler: Verbindung abgebrochen');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '🦋 Posten';
-  }
-}
 
 // ── SPOTS ────────────────────────────────────────────────────────────────────
 async function loadAllSpots() {
