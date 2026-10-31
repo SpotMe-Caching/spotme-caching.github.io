@@ -154,6 +154,7 @@ select.finp{appearance:none;cursor:pointer}
 <input type="file" id="avatarInput" accept="image/*">
 
 <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
+<script src="live-events-client.js"></script>
 <script>
 'use strict';
 
@@ -261,6 +262,7 @@ function renderPage() {
     </div>
   `;
   bindAvatarUpload();
+  if (activeSpot) LiveEvents.loadPeople(activeSpot.id);
 }
 
 function renderActivePanel(s) {
@@ -297,6 +299,8 @@ function renderActivePanel(s) {
         `}
       </div>
     </div>
+
+    ${LiveEvents.peopleHTML(s)}
 
     <!-- Profil bearbeiten -->
     <div class="section">
@@ -335,6 +339,7 @@ function createFormHTML(s) {
     <textarea class="finp" id="lsDesc" placeholder="Was machst du? Wann bist du wo?" maxlength="300">${esc(s?.description||'')}</textarea>
     <span class="finp-label">Kategorie</span>
     <select class="finp" id="lsCat">${cats}</select>
+    ${LiveEvents.capacityField(s)}
     ${!s ? `<button class="btn btn-save" onclick="createLiveSpot()" style="margin-top:0.75rem;">📡 Live Spot anlegen</button>` : ''}
   `;
 }
@@ -452,11 +457,14 @@ async function saveProfile(id) {
   const desc = document.getElementById('lsDesc')?.value.trim();
   const cat  = document.getElementById('lsCat')?.value;
   if (!name) { toast('⚠️ Name erforderlich'); return; }
+  const cap = LiveEvents.readCapacity();
+  if (cap.error) { toast('⚠️ ' + cap.error); return; }
   try {
-    await fetch(`${API}/live-spots/${id}`, {
+    const pr = await fetch(`${API}/live-spots/${id}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: CODE, token: TOK, name, description: desc, category: cat, avatar: avatarB64 })
+      body: JSON.stringify({ code: CODE, token: TOK, name, description: desc, category: cat, avatar: avatarB64, max_participants: cap.value })
     });
+    if (!pr.ok) { const e = await pr.json().catch(()=>({})); toast('❌ ' + (e.error || 'Fehler beim Speichern')); return; }
     toast('✅ Profil gespeichert');
     await loadMySpots();
     activeSpot = mySpots.find(s => s.id === id) || null;
@@ -470,10 +478,12 @@ async function createLiveSpot() {
   const desc = document.getElementById('lsDesc')?.value.trim();
   const cat  = document.getElementById('lsCat')?.value;
   if (!name) { toast('⚠️ Bitte einen Namen eingeben'); return; }
+  const cap = LiveEvents.readCapacity();
+  if (cap.error) { toast('⚠️ ' + cap.error); return; }
   try {
     const r = await fetch(`${API}/live-spots`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: CODE, token: TOK, name, description: desc, category: cat, avatar: avatarB64 })
+      body: JSON.stringify({ code: CODE, token: TOK, name, description: desc, category: cat, avatar: avatarB64, max_participants: cap.value })
     });
     const data = await r.json();
     if (!r.ok) { toast('❌ ' + (data.error||'Fehler')); return; }

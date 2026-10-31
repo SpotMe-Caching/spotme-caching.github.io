@@ -17,6 +17,8 @@
 
 const CHECKIN_RADIUS_M = 100; // GPS-Radius für "Eingecheckt"
 const MAX_LIMIT = 100000; // größtes erlaubtes Teilnehmer-Limit
+const CHECKIN_EARLY_MIN = 30; // Check-in bei geplanten Terminen ab x Min vor Start
+const PLANNED_GRACE_H = 6; // geplanter Termin bleibt so lange nach Start in der Liste
 const FOLLOWER_PUSH_KM = 10; // wie bisher: Follower-Push nur im Umkreis
 
 function haversineM(lat1, lng1, lat2, lng2) {
@@ -51,6 +53,7 @@ module.exports = function mountLiveEvents(app, deps) {
       `ALTER TABLE live_spots ADD COLUMN IF NOT EXISTS max_participants INTEGER
          CHECK (max_participants IS NULL OR max_participants >= 1)`,
     );
+    await pool.query("ALTER TABLE live_spots ADD COLUMN IF NOT EXISTS starts_at TIMESTAMPTZ");
     await pool.query(`
       CREATE TABLE IF NOT EXISTS live_participants (
         id               SERIAL PRIMARY KEY,
@@ -131,6 +134,32 @@ module.exports = function mountLiveEvents(app, deps) {
     return { provided: true, value: n };
   }
 
+  // Termin: undefined = unverändert, null/"" = löschen, sonst ISO-Datum (Zukunft, max. 1 Jahr)
+  function parseStart(v) {
+    if (v === undefined) return { provided: false };
+    if (v === null || v === "") return { provided: true, value: null };
+    const d = new Date(v);
+    if (typeof v !== "string" || isNaN(d.getTime()))
+      return { error: "Ungültiges Datum" };
+    const now = Date.now();
+    if (d.getTime() < now - 5 * 60000)
+      return { error: "Der Termin liegt in der Vergangenheit" };
+    if (d.getTime() > now + 366 * 86400000)
+      return { error: "Der Termin darf höchstens ein Jahr in der Zukunft liegen" };
+    return { provided: true, value: d.toISOString() };
+  }
+
+  function parsePlace(b) {
+    if (b.lat == null && b.lng == null) return { provided: false };
+    const la = Number(b.lat), ln = Number(b.lng);
+    if (!Number.isFinite(la) || !Number.isFinite(ln) || Math.abs(la) > 90 || Math.abs(ln) > 180)
+      return { error: "Ungültiger Treffpunkt" };
+    return {
+      provided: true, lat: la, lng: ln,
+      note: b.location_note ? String(b.location_note).slice(0, 200) : null,
+    };
+  }
+
   const COUNT_SQL =
     "(SELECT COUNT(*)::int FROM live_participants lp WHERE lp.live_spot_id = ls.id)";
 
@@ -147,7 +176,7 @@ module.exports = function mountLiveEvents(app, deps) {
   // Gleiche Felder wie bisher öffentlich + Limit und Anmeldezahl
   const PUBLIC_COLS = `ls.id, ls.token, ls.name, ls.description, ls.category, ls.avatar,
     ls.status, ls.lat, ls.lng, ls.location_note, ls.stream_url, ls.follower_count,
-    ls.updated_at, ls.max_participants, ${COUNT_SQL} AS participant_count`;
+    ls.updated_at, ls.starts_at, ls.max_participants, ${COUNT_SQL} AS participant_count`;
 
   const notFound = (res) =>
     res.status(404).json({ error: "Live Spot nicht gefunden" });
@@ -167,8 +196,11 @@ module.exports = function mountLiveEvents(app, deps) {
       const viewer = await viewerOf(req.query.code, req.query.token);
       const { rows } = await pool.query(
         `SELECT ${PUBLIC_COLS} FROM live_spots ls
-         WHERE ls.status = 'online' AND ${visible("$1")}
-         ORDER BY ls.updated_at DESC`,
+         WHERE (ls.status = 'online'
+                OR (ls.status = 'planned' AND ls.lat IS NOT NULL
+                    AND ls.starts_at > NOW() - INTERVAL '${PLANNED_GRACE_H} hours'))
+           AND ${visible("$1")}
+         ORDER BY (ls.status = 'online') DESC, ls.starts_at ASC NULLS LAST, ls.updated_at DESC`,
         [viewer],
       );
       res.json(rows);
@@ -256,6 +288,17 @@ module.exports = function mountLiveEvents(app, deps) {
       if (id === null) return notFound(res);
       const cap = parseCapacity(req.body.max_participants);
       if (cap.error) return res.status(400).json({ error: cap.error });
+      const st = parseStart(req.body.starts_at);
+      if (st.error) return res.status(400).json({ error: st.error });
+      const pl = parsePlace(req.body);
+      if (pl.error) return res.status(400).json({ error: pl.error });
+      if (st.provided && st.value !== null && !pl.provided) {
+        // Termin braucht einen Treffpunkt (neu oder schon vorhanden)
+        const h = await pool.query(
+          "SELECT lat FROM live_spots WHERE id = $1 AND creator_code = $2", [id, code]);
+        if (h.rows.length && h.rows[0].lat == null)
+          return res.status(400).json({ error: "Bitte einen Treffpunkt auf der Karte wählen" });
+      }
 
       const out = await tx(async (c) => {
         const s = await c.query(
@@ -282,6 +325,14 @@ module.exports = function mountLiveEvents(app, deps) {
           `UPDATE live_spots SET
              name = COALESCE($1, name), description = $2, category = $3, avatar = $4,
              max_participants = CASE WHEN $5::boolean THEN $6::int ELSE max_participants END,
+             starts_at = CASE WHEN $9::boolean THEN $10::timestamptz ELSE starts_at END,
+             status = CASE
+               WHEN $9::boolean AND $10::timestamptz IS NOT NULL AND status <> 'online' THEN 'planned'
+               WHEN $9::boolean AND $10::timestamptz IS NULL AND status = 'planned' THEN 'offline'
+               ELSE status END,
+             lat = CASE WHEN $11::boolean AND status <> 'online' THEN $12::float8 ELSE lat END,
+             lng = CASE WHEN $11::boolean AND status <> 'online' THEN $13::float8 ELSE lng END,
+             location_note = CASE WHEN $11::boolean AND status <> 'online' THEN $14::text ELSE location_note END,
              updated_at = NOW()
            WHERE id = $7 AND creator_code = $8`,
           [
@@ -293,6 +344,12 @@ module.exports = function mountLiveEvents(app, deps) {
             cap.provided ? cap.value : null,
             id,
             code,
+            st.provided,
+            st.provided ? st.value : null,
+            pl.provided,
+            pl.provided ? pl.lat : null,
+            pl.provided ? pl.lng : null,
+            pl.provided ? pl.note : null,
           ],
         );
         return { status: 200, body: { success: true } };
@@ -463,15 +520,22 @@ module.exports = function mountLiveEvents(app, deps) {
       const noTicket = { error: "Du bist für diesen Live Spot nicht angemeldet." };
       if (id === null) return res.status(403).json(noTicket);
       const r = await pool.query(
-        `SELECT ls.status, ls.lat, ls.lng
+        `SELECT ls.status, ls.lat, ls.lng, ls.starts_at
          FROM live_participants lp JOIN live_spots ls ON ls.id = lp.live_spot_id
          WHERE lp.live_spot_id = $1 AND lp.participant_code = $2`,
         [id, code],
       );
       if (!r.rows.length) return res.status(403).json(noTicket);
       const s = r.rows[0];
-      if (s.status !== "online" || s.lat == null || s.lng == null)
-        return res.status(400).json({ error: "Der Live Spot ist gerade nicht live." });
+      const earlyOk =
+        s.status === "planned" && s.starts_at &&
+        new Date(s.starts_at).getTime() - Date.now() <= CHECKIN_EARLY_MIN * 60000;
+      if ((s.status !== "online" && !earlyOk) || s.lat == null || s.lng == null)
+        return res.status(400).json({
+          error: s.status === "planned"
+            ? `Der Check-in startet ${CHECKIN_EARLY_MIN} Minuten vor Beginn.`
+            : "Der Live Spot ist gerade nicht live.",
+        });
       const dist = haversineM(la, ln, Number(s.lat), Number(s.lng));
       if (dist > CHECKIN_RADIUS_M)
         return res.status(400).json({
@@ -590,6 +654,78 @@ module.exports = function mountLiveEvents(app, deps) {
           since: r.created_at,
         })),
       });
+    }),
+  );
+
+  // ── Termin absagen (Veranstalter): Termin weg, Anmeldungen gelöscht ────────
+  app.post(
+    "/api/live-spots/:id/cancel",
+    wrap(async (req, res) => {
+      const own = await ownerOnly(req, res);
+      if (!own) return;
+      const out = await tx(async (c) => {
+        const u = await c.query(
+          `UPDATE live_spots SET starts_at = NULL,
+             status = CASE WHEN status = 'planned' THEN 'offline' ELSE status END,
+             updated_at = NOW()
+           WHERE id = $1 RETURNING id`,
+          [own.id],
+        );
+        const d = await c.query("DELETE FROM live_participants WHERE live_spot_id = $1", [own.id]);
+        return { status: 200, body: { success: !!u.rows.length, removed: d.rowCount } };
+      });
+      res.status(out.status).json(out.body);
+    }),
+  );
+
+  // Offline gehen räumt den Termin mit auf (ersetzt die Route aus server.js)
+  app.post(
+    "/api/live-spots/:id/gooffline",
+    wrap(async (req, res) => {
+      const { code, token } = req.body;
+      if (!code || !token)
+        return res.status(400).json({ error: "code + token erforderlich" });
+      if (!(await viewerOf(code, token)))
+        return res.status(403).json({ error: "Ungültiger Token" });
+      const id = intId(req.params.id);
+      if (id !== null)
+        await pool.query(
+          `UPDATE live_spots SET status='offline', stream_url=NULL, starts_at=NULL, updated_at=NOW()
+           WHERE id=$1 AND creator_code=$2`,
+          [id, code],
+        );
+      res.json({ success: true });
+    }),
+  );
+
+  // Kalenderdatei (.ics) für sichtbare Spots mit Termin
+  app.get(
+    "/api/live-spots/:id/ics",
+    wrap(async (req, res) => {
+      const viewer = await viewerOf(req.query.code, req.query.token);
+      const id = intId(req.params.id);
+      if (id === null) return notFound(res);
+      const { rows } = await pool.query(
+        `SELECT ls.id, ls.name, ls.location_note, ls.starts_at FROM live_spots ls
+         WHERE ls.id = $1 AND ls.starts_at IS NOT NULL AND ${visible("$2")}`,
+        [id, viewer],
+      );
+      if (!rows.length) return notFound(res);
+      const r = rows[0];
+      const f = (d) => new Date(d).toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
+      const t = (x) => String(x || "").replace(/[\\;,]/g, (m) => "\\" + m).replace(/\r?\n/g, "\\n");
+      const start = new Date(r.starts_at);
+      const ics = [
+        "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//SpotMe//Live Spot//DE", "BEGIN:VEVENT",
+        `UID:livespot-${r.id}@spotme`, `DTSTAMP:${f(new Date())}`,
+        `DTSTART:${f(start)}`, `DTEND:${f(new Date(start.getTime() + 2 * 3600000))}`,
+        `SUMMARY:${t(r.name)}`, `LOCATION:${t(r.location_note)}`,
+        `URL:${req.protocol}://${req.get("host")}/live-spot.html?id=${r.id}`,
+        "END:VEVENT", "END:VCALENDAR",
+      ].join("\r\n");
+      res.set("Content-Type", "text/calendar; charset=utf-8");
+      res.set("Content-Disposition", `attachment; filename="live-spot-${r.id}.ics"`);
+      res.send(ics);
     }),
   );
 

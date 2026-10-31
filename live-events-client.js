@@ -32,6 +32,28 @@
       return new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
     } catch (e) { return ""; }
   }
+  function fmtWhen(iso) {
+    try {
+      return new Date(iso).toLocaleString("de-DE", {
+        weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit"
+      }) + " Uhr";
+    } catch (e) { return ""; }
+  }
+  function gcalUrl(spot) {
+    var s = new Date(spot.starts_at), e = new Date(s.getTime() + 2 * 3600000);
+    var f = function (d) { return d.toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z"); };
+    return "https://calendar.google.com/calendar/render?action=TEMPLATE" +
+      "&text=" + encodeURIComponent(spot.name) +
+      "&dates=" + f(s) + "/" + f(e) +
+      "&location=" + encodeURIComponent(spot.location_note || "") +
+      "&details=" + encodeURIComponent(location.origin + "/live-spot.html?id=" + spot.id);
+  }
+  // Check-in möglich? live, oder geplant und höchstens 30 Min vor Start
+  function canCheckin(spot) {
+    if (spot.status === "online") return true;
+    return spot.status === "planned" && !!spot.starts_at &&
+      new Date(spot.starts_at).getTime() - Date.now() <= 30 * 60000;
+  }
   function authBody(extra) {
     var b = { code: CODE, token: TOK };
     for (var k in extra || {}) b[k] = extra[k];
@@ -61,6 +83,7 @@
       ".le-btn.ghost{background:transparent;border:1px solid var(--bord2,#374151);color:var(--text,#f5f1ea)}" +
       ".le-btn:disabled{opacity:.5;cursor:not-allowed}" +
       ".le-ok{color:var(--green,#00e676);font-weight:700}" +
+      ".le-when{font-weight:700;color:var(--acc,#f59e0b);margin-bottom:.2rem}" +
       ".le-hint{font-size:.74rem;color:var(--muted2,#9ca3af);margin-top:.45rem;line-height:1.45}" +
       ".le-hint a{color:var(--acc,#f59e0b)}" +
       ".le-p{display:flex;align-items:center;gap:.5rem;padding:.45rem 0;border-bottom:1px solid var(--bord,#1f2937);font-size:.85rem}" +
@@ -100,12 +123,20 @@
         (online
           ? '<button class="le-btn" id="leCheckBtn" onclick="LiveEvents.checkinNow(' + spot.id + ')">📍 Ich bin da – einchecken</button>' +
             '<div class="le-hint">Der Check-in erfolgt automatisch, sobald du dich in der Nähe (ca. 100 m) befindest und diese Seite geöffnet ist.</div>'
-          : '<div class="le-hint">Der Check-in startet, sobald der Live Spot online ist.</div>') +
+          : '<div class="le-hint">' + (spot.status === "planned"
+              ? "Der Check-in startet 30 Minuten vor Beginn."
+              : "Der Check-in startet, sobald der Live Spot online ist.") + '</div>') +
         '<button class="le-btn ghost" onclick="LiveEvents.unregister(' + spot.id + ')">Abmelden</button>';
     } else {
       action = '<button class="le-btn" id="leRegBtn" onclick="LiveEvents.register(' + spot.id + ')">🎟️ Anmelden</button>';
     }
-    return '<div class="le-box" id="leTicket"><div class="le-head">🎟️ TEILNAHME</div>' +
+    var when = "";
+    if (spot.status === "planned" && spot.starts_at) {
+      when = '<div class="le-when">📅 ' + esc(fmtWhen(spot.starts_at)) + '</div>' +
+        '<div class="le-hint" style="margin:0 0 .5rem"><a href="' + esc(gcalUrl(spot)) + '" target="_blank" rel="noopener">In Kalender eintragen</a>' +
+        ' · <a href="' + esc(API + "/live-spots/" + spot.id + "/ics" + (CODE ? "?" + qs() : "")) + '">.ics</a></div>';
+    }
+    return '<div class="le-box" id="leTicket"><div class="le-head">🎟️ TEILNAHME</div>' + when +
       '<div class="le-count">' + head + '</div>' + bar + action + '</div>';
   }
 
@@ -234,6 +265,63 @@
     return { value: +v };
   }
 
+  // Ankündigung (Veranstalter): Datum + Treffpunkt (Karte/Notiz oben im Steuerungs-Bereich)
+  function toLocalInput(iso) {
+    if (!iso) return "";
+    var d = new Date(iso), p = function (n) { return String(n).padStart(2, "0"); };
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T" + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+  function scheduleHTML(s) {
+    injectCss();
+    var planned = s.status === "planned" && s.starts_at;
+    return '<div class="section"><div class="section-head">📅 TERMIN ANKÜNDIGEN</div><div class="section-body">' +
+      (planned ? '<div class="le-when">Geplant: ' + esc(fmtWhen(s.starts_at)) + '</div>' : "") +
+      '<span class="finp-label">Datum &amp; Uhrzeit</span>' +
+      '<input class="finp" id="lsStart" type="datetime-local" value="' + esc(toLocalInput(s.starts_at)) + '">' +
+      '<div class="le-hint">Treffpunkt: Karte oben antippen, Notiz oben eintragen. ' +
+      'Angemeldet wird schon vorab; der Check-in öffnet 30 Minuten vor Beginn. Live gehst du selbst mit „Jetzt live gehen".</div>' +
+      '<button class="btn btn-save" onclick="LiveEvents.saveSchedule(' + s.id + ')">📅 ' + (planned ? "Termin ändern" : "Termin ankündigen") + '</button>' +
+      (planned ? '<button class="btn btn-danger" onclick="LiveEvents.cancelEvent(' + s.id + ')">✕ Termin absagen</button>' : "") +
+      '</div></div>';
+  }
+  function reloadManage(id) {
+    return loadMySpots().then(function () {
+      activeSpot = mySpots.find(function (x) { return x.id === id; }) || null;
+      renderPage();
+      if (activeSpot) setTimeout(function () { initLiveMap(activeSpot.lat, activeSpot.lng); }, 80);
+    });
+  }
+  function saveSchedule(id) {
+    var v = (document.getElementById("lsStart") || {}).value;
+    if (!v) return say("⚠️ Bitte Datum und Uhrzeit wählen");
+    var when = new Date(v);
+    if (isNaN(when.getTime())) return say("⚠️ Ungültiges Datum");
+    var place = (typeof tapCoords !== "undefined" && tapCoords) ? tapCoords
+      : (activeSpot && activeSpot.lat != null ? { lat: activeSpot.lat, lng: activeSpot.lng } : null);
+    if (!place) return say("⚠️ Bitte den Treffpunkt auf der Karte antippen");
+    var note = ((document.getElementById("locationNote") || {}).value || "").trim();
+    fetch(API + "/live-spots/" + id, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: authBody({ name: activeSpot.name, description: activeSpot.description, category: activeSpot.category,
+        avatar: activeSpot.avatar, starts_at: when.toISOString(), lat: place.lat, lng: place.lng, location_note: note })
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (x) {
+        if (!x.ok) return say("❌ " + (x.j.error || "Fehler"));
+        say("📅 Termin gespeichert");
+        return reloadManage(id);
+      }).catch(function () { say("⚠️ Verbindungsfehler"); });
+  }
+  function cancelEvent(id) {
+    if (!confirm("Termin absagen? Alle Anmeldungen werden gelöscht.")) return;
+    fetch(API + "/live-spots/" + id + "/cancel", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: authBody()
+    }).then(function (r) {
+      if (!r.ok) return say("⚠️ Absagen fehlgeschlagen");
+      say("Termin abgesagt");
+      return reloadManage(id);
+    }).catch(function () { say("⚠️ Verbindungsfehler"); });
+  }
+
   function peopleHTML(s) {
     injectCss();
     return '<div class="section"><div class="section-head">TEILNEHMER &amp; FOLLOWER</div>' +
@@ -300,6 +388,8 @@
     loadMe: loadMe, ticketHTML: ticketHTML, initTicket: initTicket,
     register: register, unregister: unregister, checkinNow: checkinNow,
     capacityField: capacityField, readCapacity: readCapacity,
+    scheduleHTML: scheduleHTML, saveSchedule: saveSchedule, cancelEvent: cancelEvent,
+    canCheckin: canCheckin, fmtWhen: fmtWhen,
     peopleHTML: peopleHTML, loadPeople: loadPeople, kick: kick, resetList: resetList
   };
 })();

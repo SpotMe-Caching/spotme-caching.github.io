@@ -3543,7 +3543,8 @@ function updateLastLocation() {
 
 async function renderLiveSpotMarkers() {
   try {
-    const r = await fetch(`${API}/live-spots`);
+    const lsTok = localStorage.getItem('sm_token'); const lsAuth = (CODE && lsTok) ? `?code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(lsTok)}` : '';
+    const r = await fetch(`${API}/live-spots${lsAuth}`);
     if (!r.ok) return;
     liveSpots = await r.json();
   } catch { return; }

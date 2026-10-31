@@ -328,6 +328,8 @@ async function loadSpot(id) {
 
   const online = spot.status === 'online';
   const me = await LiveEvents.loadMe(spot.id);
+  const planned = spot.status === 'planned' && !!spot.starts_at;
+  const canCheck = LiveEvents.canCheckin(spot);
   const EMOJI = { 'Park':'🌳','Restaurant':'🍽️','Strand':'🏖️','Café':'☕','Club':'🎉','Fitness':'💪','Natur':'🌿','Bahnhof':'🚉','Sonstiges':'📌' };
   const catIcon = EMOJI[spot.category] || '📡';
 
@@ -351,9 +353,9 @@ async function loadSpot(id) {
     <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
       <div class="status-badge ${online?'online':'offline'}">
         <div class="status-dot ${online?'pulse':''}"></div>
-        ${online ? 'LIVE' : 'Offline'}
+        ${online ? 'LIVE' : (planned ? '📅 Geplant' : 'Offline')}
       </div>
-      <span style="font-size:0.72rem;color:var(--muted2);">Aktualisiert ${timeAgo(spot.updated_at)}</span>
+      <span style="font-size:0.72rem;color:var(--muted2);">${planned && !online ? esc(LiveEvents.fmtWhen(spot.starts_at)) : 'Aktualisiert ' + timeAgo(spot.updated_at)}</span>
     </div>
 
     ${spot.description ? `
@@ -362,9 +364,9 @@ async function loadSpot(id) {
       <div class="info-text">${esc(spot.description)}</div>
     </div>` : ''}
 
-    ${online && spot.location_note ? `
+    ${(online || planned) && spot.location_note ? `
     <div class="info-card">
-      <div class="info-label">📍 AKTUELLER STANDORT</div>
+      <div class="info-label">${online ? '📍 AKTUELLER STANDORT' : '📍 TREFFPUNKT'}</div>
       <div class="location-note">${esc(spot.location_note)}</div>
     </div>` : ''}
 
@@ -374,19 +376,19 @@ async function loadSpot(id) {
         <div class="stat-label">Follower</div>
       </div>
       <div class="stat-box">
-        <div class="stat-val" style="color:${online?'var(--green)':'var(--muted)'};">${online?'●':'○'}</div>
-        <div class="stat-label">${online?'Live jetzt':'Offline'}</div>
+        <div class="stat-val" style="color:${online?'var(--green)':'var(--muted)'};">${online?'●':(planned?'📅':'○')}</div>
+        <div class="stat-label">${online?'Live jetzt':(planned?'Geplant':'Offline')}</div>
       </div>
     </div>
 
-    ${LiveEvents.ticketHTML(spot, me, online)}
+    ${LiveEvents.ticketHTML(spot, me, canCheck)}
 
     <div class="btn-row" style="margin-top:0.75rem;">
       ${CODE ? `<button class="btn btn-follow ${isFollowing?'following':''}" id="followBtn"
         onclick="toggleFollow(${spot.id})">
         ${isFollowing ? '✓ Gefolgt' : '+ Folgen'}
       </button>` : ''}
-      ${online && spot.lat ? `<button class="btn btn-nav" onclick="navigate(${spot.lat},${spot.lng},'${esc(spot.name).replace(/'/g,"\\'")}')">🧭 Route</button>` : ''}
+      ${(online || planned) && spot.lat ? `<button class="btn btn-nav" onclick="navigate(${spot.lat},${spot.lng},'${esc(spot.name).replace(/'/g,"\\'")}')">🧭 Route</button>` : ''}
       ${CODE && spot.creator_code && spot.creator_code !== CODE ? `<button class="btn btn-nav" onclick="openChatOverlay('${spot.creator_code}','${esc(spot.name).replace(/'/g,"\\'")}')">💬 Chat</button>` : ''}
     </div>
 
@@ -394,7 +396,7 @@ async function loadSpot(id) {
       <a href="/" style="color:var(--acc);">App öffnen</a> um zu folgen und Benachrichtigungen zu erhalten.
     </div>` : ''}
   `;
-  LiveEvents.initTicket(spot, me, online);
+  LiveEvents.initTicket(spot, me, canCheck);
 }
 
 let currentlyFollowing = false;

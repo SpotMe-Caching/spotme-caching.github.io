@@ -897,9 +897,17 @@ async function postToBluesky() {
   if (kind === 'live') {
     // Live Spots haben eine eigene Seite (öffentliche ID, nicht der geheime Token)
     const liveUrl = `${window.location.origin}/live-spot.html?id=${spotId}`;
+    let whenTxt = '';
+    try {
+      const lr = await fetch(`${API}/live-spots/${spotId}?code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(localStorage.getItem('sm_token') || '')}`);
+      const ld = lr.ok ? await lr.json() : null;
+      if (ld && ld.status === 'planned' && ld.starts_at)
+        whenTxt = '📅 ' + new Date(ld.starts_at).toLocaleString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+    } catch {}
+    const head = whenTxt ? `📅 Neuer Termin auf SpotMe Caching: ${whenTxt}` : '🔴 Mein Live Spot auf SpotMe Caching:';
     finalMessage = customMessage
-      ? `${customMessage}\n\n🔴 Live Spot: \n\n ${liveUrl}`
-      : `🔴 Mein Live Spot auf SpotMe Caching: \n\n ${liveUrl}`;
+      ? `${customMessage}\n\n${whenTxt ? whenTxt + '\n\n' : '🔴 Live Spot: \n\n'} ${liveUrl}`
+      : `${head} \n\n ${liveUrl}`;
   } else {
     const spotUrl = `${window.location.origin}${window.location.pathname}?spot=${spotId}`;
     finalMessage = customMessage
@@ -3550,12 +3558,18 @@ async function renderLiveSpotMarkers() {
   } catch { return; }
 
   const badge = document.getElementById('liveBadge');
-  if (badge) { badge.textContent = liveSpots.length; badge.style.display = liveSpots.length ? 'flex' : 'none'; }
+  const nLive = liveSpots.filter(s => s.status === 'online').length;
+  if (badge) { badge.textContent = nLive; badge.style.display = nLive ? 'flex' : 'none'; }
 
+  if (!document.getElementById('plannedMarkerCss')) {
+    const st = document.createElement('style'); st.id = 'plannedMarkerCss';
+    st.textContent = '.live-spot-marker.planned::after{display:none}.live-spot-marker.planned::before{content:"📅";filter:drop-shadow(0 0 6px rgba(245,158,11,1)) drop-shadow(0 0 3px rgba(0,0,0,.9))}';
+    document.head.appendChild(st);
+  }
   liveSpots.forEach(s => {
     if (!s.lat || !s.lng) return;
     const el = document.createElement('div');
-    el.className = 'live-spot-marker';
+    el.className = 'live-spot-marker' + (s.status === 'planned' ? ' planned' : '');
     el.title = s.name;
     el.addEventListener('click', () => window.location.href = `live-spot.html?id=${s.id}`);
     new maplibregl.Marker({ element: el }).setLngLat([s.lng, s.lat]).addTo(map);
@@ -3586,7 +3600,7 @@ async function loadLiveDrawer(body) {
       <div class="sc-info">
         <div class="sc-name">${esc(s.name)}</div>
         <div class="sc-detail">
-          <span style="font-size:0.68rem;color:${online?'var(--green)':'var(--muted)'};font-weight:700;">${online?'● LIVE':'○ Offline'}</span>
+          <span style="font-size:0.68rem;color:${online?'var(--green)':'var(--muted)'};font-weight:700;">${online?'● LIVE':(s.status==='planned'&&s.starts_at?'📅 '+new Date(s.starts_at).toLocaleString('de-DE',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'○ Offline')}</span>
           <span style="font-size:0.68rem;color:var(--muted2);">👥 ${s.follower_count}</span>
           ${s.location_note?`<span style="font-size:0.68rem;color:var(--muted2);">${esc(s.location_note)}</span>`:''}
         </div>

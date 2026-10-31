@@ -10,6 +10,7 @@
 <link href="theme-vars.css" rel="stylesheet">
 <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
 <script src="nav.js"></script>
+<script src="live-events-client.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif}
@@ -303,7 +304,7 @@ async function loadSpot(id) {
   const content = document.getElementById('content');
   let spot;
   try {
-    const r = await fetch(`${API}/live-spots/${id}`);
+    const r = await fetch(`${API}/live-spots/${id}` + (CODE ? `?code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(TOK)}` : ''));
     if (!r.ok) throw new Error('not_found');
     spot = await r.json();
   } catch {
@@ -326,6 +327,7 @@ async function loadSpot(id) {
   }
 
   const online = spot.status === 'online';
+  const me = await LiveEvents.loadMe(spot.id);
   const EMOJI = { 'Park':'🌳','Restaurant':'🍽️','Strand':'🏖️','Café':'☕','Club':'🎉','Fitness':'💪','Natur':'🌿','Bahnhof':'🚉','Sonstiges':'📌' };
   const catIcon = EMOJI[spot.category] || '📡';
 
@@ -377,7 +379,9 @@ async function loadSpot(id) {
       </div>
     </div>
 
-    <div class="btn-row">
+    ${LiveEvents.ticketHTML(spot, me, online)}
+
+    <div class="btn-row" style="margin-top:0.75rem;">
       ${CODE ? `<button class="btn btn-follow ${isFollowing?'following':''}" id="followBtn"
         onclick="toggleFollow(${spot.id})">
         ${isFollowing ? '✓ Gefolgt' : '+ Folgen'}
@@ -390,6 +394,7 @@ async function loadSpot(id) {
       <a href="/" style="color:var(--acc);">App öffnen</a> um zu folgen und Benachrichtigungen zu erhalten.
     </div>` : ''}
   `;
+  LiveEvents.initTicket(spot, me, online);
 }
 
 let currentlyFollowing = false;
