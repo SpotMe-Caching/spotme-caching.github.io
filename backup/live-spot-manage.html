@@ -238,7 +238,7 @@ function renderPage() {
       <span style="font-size:1.1rem;">${CATEGORY_EMOJI[s.category]||'📡'}</span>
       <div class="spot-select-item-name">${esc(s.name)}</div>
       <span class="spot-select-item-status" style="color:${online?'var(--green)':'var(--muted)'}">
-        ${online?'● LIVE':'○ Offline'}
+        ${online?'● LIVE':(s.status==='planned'?'📅 geplant':'○ Offline')}
       </span>
       <span class="follower-badge">👥 ${s.follower_count}</span>
     </div>`;
@@ -274,7 +274,7 @@ function renderActivePanel(s) {
       <div class="section-body">
         <div class="status-pill ${online?'online':'offline'}">
           <div class="status-dot ${online?'pulse':''}"></div>
-          ${online ? '● LIVE – Du bist sichtbar' : '○ Offline – Nicht sichtbar'}
+          ${online ? '● LIVE – Du bist sichtbar' : (s.status === 'planned' && s.starts_at ? '📅 Geplant – ' + LiveEvents.fmtWhen(s.starts_at) : '○ Offline – Nicht sichtbar')}
         </div>
 
         ${online ? `
@@ -299,6 +299,8 @@ function renderActivePanel(s) {
         `}
       </div>
     </div>
+
+    ${online ? '' : LiveEvents.scheduleHTML(s)}
 
     ${LiveEvents.peopleHTML(s)}
 
