@@ -1,4 +1,4 @@
-// live-events-client.js – Oberfläche für Live Spots als Event (Anmeldung / Check-in)
+// live-events-client.js –- Oberfläche für Live Spots als Event (Anmeldung / Check-in)
 // Wird von live-spot.html (Besucher) und live-spot-manage.html (Veranstalter) geladen.
 // Nutzt die dortigen Konstanten API, CODE, TOK.
 (function () {
