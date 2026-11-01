@@ -1,6 +1,6 @@
 "use strict";
 // ═══════════════════════════════════════════════════════════════════════════
-// live-events.js – Live Spots als Event mit Anmeldung ("Ticket")
+// live-events.js –- Live Spots als Event mit Anmeldung ("Ticket")
 //
 //  • Anmeldung vorab (Reservieren), optionales Teilnehmer-Limit (leer = unbegrenzt)
 //  • Check-in per GPS (Radius CHECKIN_RADIUS_M) → "Eingecheckt"
