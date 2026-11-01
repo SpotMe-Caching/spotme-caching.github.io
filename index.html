@@ -909,7 +909,7 @@ async function postToBluesky() {
       ? `${customMessage}\n\n${whenTxt ? whenTxt + '\n\n' : '🔴 Live Spot: \n\n'} ${liveUrl}`
       : `${head} \n\n ${liveUrl}`;
   } else {
-    const spotUrl = `${window.location.origin}${window.location.pathname}?spot=${spotId}`;
+    const spotUrl = `${window.location.origin}/spot.html?id=${spotId}`;
     finalMessage = customMessage
       ? `${customMessage}\n\n📍 Zum Spot: \n\n ${spotUrl}`
       : `📍 Mein Spot auf SpotMe Caching: \n\n ${spotUrl}`;
@@ -2752,6 +2752,7 @@ async function openSpotDetail(spotId) {
     ${offers.length
       ? `<div>${offers.map(o => `<span class="profile-chip offer">🎁 ${esc(o)}</span>`).join('')}</div>`
       : ''}
+    <a href="spot.html?id=${spot.id}" style="display:block;text-align:center;margin-top:0.75rem;padding:0.6rem;border-radius:12px;border:1px solid var(--bord2);color:var(--acc);font-size:0.82rem;font-weight:600;text-decoration:none;">🔗 Zur Spot-Seite (teilen)</a>
   `;
 
   renderWeatherBar(spot.lat, spot.lng);
