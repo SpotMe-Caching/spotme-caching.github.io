@@ -34,13 +34,11 @@ html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Ou
   border: 1px solid var(--bord2);
   margin-bottom: 0.75rem;
   cursor: crosshair;
-  filter: var(--map-filter, var(--map-filter-dark));
 }
 
-/* ── Light Mode Kartenfilter ── */
-:root[data-theme="light"] #liveMap {
-  filter: var(--map-filter-light);
-}
+/* Karte: Filter nur auf den Canvas (Marker bleiben unberührt) – wie in der Haupt-App */
+.maplibregl-canvas-container{filter:invert(0.88) hue-rotate(180deg) brightness(0.8) saturate(0.85)}
+:root[data-theme="light"] .maplibregl-canvas-container{filter:brightness(1.04) saturate(0.92)}
 
 /* Header */
 .page-header{

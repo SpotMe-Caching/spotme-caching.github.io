@@ -27,8 +27,10 @@ html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Ou
 .back-link{font-size:0.8rem;background:var(--card);backdrop-filter:blur(16px);border:1px solid var(--bord2);border-radius:40px;padding:6px 14px;color:var(--muted2);text-decoration:none}
 .theme-toggle-btn{width:34px;height:34px;border-radius:50%;background:var(--card);backdrop-filter:blur(16px);border:1px solid var(--bord2);color:var(--muted2);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 
-#map{width:100%;height:48vmax;max-height:280px;filter:var(--map-filter-dark)}
-:root[data-theme="light"] #map{filter:var(--map-filter-light)}
+#map{width:100%;height:48vmax;max-height:280px}
+/* Karte: Filter nur auf den Canvas (Marker bleiben unberührt) – wie in der Haupt-App */
+.maplibregl-canvas-container{filter:invert(0.88) hue-rotate(180deg) brightness(0.8) saturate(0.85)}
+:root[data-theme="light"] .maplibregl-canvas-container{filter:brightness(1.04) saturate(0.92)}
 .content{padding:1.1rem;max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:0.85rem;padding-bottom:2rem}
 
 /* Avatar */
