@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// SpotMe Caching · Service Worker
+// SpotMe Caching  Service Worker
 //
 // Versionierung: CACHE_VERSION bei jedem Deploy hochzählen.
 // Der Browser erkennt den neuen SW, löscht den alten Cache
