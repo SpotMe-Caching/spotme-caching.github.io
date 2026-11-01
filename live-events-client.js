@@ -1,4 +1,4 @@
-// live-events-client.js –- Oberfläche für Live Spots als Event (Anmeldung / Check-in)
+// live-events-client.js – Oberfläche für Live Spots als Event (Anmeldung / Check-in)
 // Wird von live-spot.html (Besucher) und live-spot-manage.html (Veranstalter) geladen.
 // Nutzt die dortigen Konstanten API, CODE, TOK.
 (function () {
@@ -93,6 +93,13 @@
       ".le-x{background:none;border:1px solid var(--bord2,#374151);color:var(--muted2,#9ca3af);border-radius:8px;width:28px;height:28px;cursor:pointer}" +
       ".le-sub{font-weight:700;font-size:.82rem;margin:.2rem 0 .35rem}" +
       ".le-chips{display:flex;flex-wrap:wrap;gap:.35rem}" +
+      ".le-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;margin-top:.5rem}" +
+      ".le-th{position:relative;aspect-ratio:1/1;border-radius:10px;overflow:hidden;background:var(--card2,#1a2230);border:1px solid var(--bord,#1f2937)}" +
+      ".le-th img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in}" +
+      ".le-th .st{position:absolute;left:4px;top:4px;font-size:.6rem;font-weight:700;padding:1px 6px;border-radius:99px;background:rgba(0,0,0,.7);color:#fff}" +
+      ".le-th .acts{position:absolute;right:3px;bottom:3px;display:flex;gap:3px}" +
+      ".le-th .acts button{width:26px;height:26px;border-radius:7px;border:none;background:rgba(0,0,0,.7);color:#fff;font-size:.8rem;cursor:pointer}" +
+      ".le-cap{position:absolute;left:0;right:0;bottom:0;padding:2px 5px;font-size:.62rem;color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.75));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" +
       ".le-chip{font-size:.75rem;padding:.2rem .6rem;border-radius:99px;background:var(--card2,#1a2230);border:1px solid var(--bord,#1f2937)}";
     document.head.appendChild(st);
   }
@@ -322,6 +329,121 @@
     }).catch(function () { say("⚠️ Verbindungsfehler"); });
   }
 
+  // ── Event-Bilder ───────────────────────────────────────────────────────────
+  var MAX_IMAGES = 12;
+  function rawUrl(spotId, imgId) { return API + "/live-spots/" + spotId + "/images/" + imgId + "/raw"; }
+
+  // Bild im Browser verkleinern (max. 1280 px, JPEG) – spart Datenbank und Ladezeit
+  function shrink(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () {
+        var max = 1280, k = Math.min(1, max / Math.max(img.width, img.height));
+        var c = document.createElement("canvas");
+        c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        var q = 0.82, out = c.toDataURL("image/jpeg", q);
+        while (out.length > 900000 && q > 0.4) { q -= 0.1; out = c.toDataURL("image/jpeg", q); }
+        resolve(out);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error("Bild nicht lesbar")); };
+      img.src = url;
+    });
+  }
+
+  function imagesHTML(s) {
+    injectCss();
+    return '<div class="section"><div class="section-head">🖼️ BILDER ZUM EVENT</div>' +
+      '<div class="section-body" id="leImages" data-spot="' + s.id + '">Lade …</div></div>';
+  }
+
+  function loadImages(spotId) {
+    var box = document.getElementById("leImages");
+    if (!box) return;
+    fetch(API + "/live-spots/" + spotId + "/images?" + qs())
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!document.getElementById("leImages")) return;
+        if (!d) { box.textContent = "Bilder konnten nicht geladen werden."; return; }
+        var n = d.images.length;
+        var grid = d.images.map(function (im) {
+          var ok = im.status === "approved";
+          return '<div class="le-th"><img src="' + esc(im.image) + '" alt="" onclick="openImg(this.src)">' +
+            '<span class="st">' + (ok ? "✅ sichtbar" : "⏳ Prüfung") + '</span>' +
+            (im.caption ? '<div class="le-cap">' + esc(im.caption) + '</div>' : '') +
+            '<div class="acts"><button title="Beschriftung" onclick="LiveEvents.captionImage(' + spotId + "," + im.id + ')">✏️</button>' +
+            '<button title="Löschen" onclick="LiveEvents.deleteImage(' + spotId + "," + im.id + ')">🗑️</button></div></div>';
+        }).join("");
+        box.innerHTML =
+          '<div class="le-hint" style="margin:0 0 .4rem">Alle sehen freigegebene Bilder auf der Live-Spot-Seite. Neue Bilder prüfen wir kurz, bevor sie erscheinen. Sie bleiben, bis du sie löschst.</div>' +
+          '<div class="le-sub">' + n + " / " + MAX_IMAGES + " Bilder</div>" +
+          (n ? '<div class="le-grid">' + grid + "</div>" : "") +
+          (n < MAX_IMAGES
+            ? '<input type="file" id="leFile" accept="image/jpeg,image/png,image/webp" multiple style="display:none" onchange="LiveEvents.uploadImages(' + spotId + ', this.files)">' +
+              '<button class="btn btn-ghost" id="leUpBtn" onclick="document.getElementById(\'leFile\').click()">＋ Bilder hinzufügen</button>'
+            : "");
+      })
+      .catch(function () { box.textContent = "Verbindungsfehler"; });
+  }
+
+  async function uploadImages(spotId, files) {
+    var list = Array.prototype.slice.call(files || []);
+    if (!list.length) return;
+    var btn = document.getElementById("leUpBtn"); if (btn) btn.disabled = true;
+    var okN = 0, last = "";
+    for (var i = 0; i < list.length; i++) {
+      if (btn) btn.textContent = "⏳ " + (i + 1) + " / " + list.length;
+      try {
+        var data = await shrink(list[i]);
+        var r = await fetch(API + "/live-spots/" + spotId + "/images", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: authBody({ image: data })
+        });
+        if (r.ok) okN++;
+        else { var e = await r.json().catch(function () { return {}; }); last = e.error || "Fehler"; if (r.status === 400 && /Maximal/.test(last)) break; }
+      } catch (e) { last = e.message || "Fehler"; }
+    }
+    say(okN ? "🖼️ " + okN + " Bild(er) hochgeladen – in Prüfung" + (last ? " · " + last : "") : "❌ " + (last || "Upload fehlgeschlagen"));
+    loadImages(spotId);
+  }
+
+  function captionImage(spotId, imgId) {
+    var t = prompt("Beschriftung (max. 100 Zeichen, leer = keine):", "");
+    if (t === null) return;
+    fetch(API + "/live-spots/" + spotId + "/images/" + imgId, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: authBody({ caption: t })
+    }).then(function (r) { say(r.ok ? "Gespeichert" : "⚠️ Fehlgeschlagen"); loadImages(spotId); })
+      .catch(function () { say("⚠️ Verbindungsfehler"); });
+  }
+
+  function deleteImage(spotId, imgId) {
+    if (!confirm("Dieses Bild löschen?")) return;
+    fetch(API + "/live-spots/" + spotId + "/images/" + imgId, {
+      method: "DELETE", headers: { "Content-Type": "application/json" }, body: authBody()
+    }).then(function (r) { say(r.ok ? "Bild gelöscht" : "⚠️ Fehlgeschlagen"); loadImages(spotId); })
+      .catch(function () { say("⚠️ Verbindungsfehler"); });
+  }
+
+  // Galerie auf der Live-Spot-Seite (alle sehen freigegebene Bilder)
+  function loadGallery(spotId) {
+    var box = document.getElementById("leGallery");
+    if (!box) return;
+    var q = CODE ? "?" + qs() : "";
+    fetch(API + "/live-spots/" + spotId + "/images" + q)
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d) return;
+        var ims = d.images.filter(function (x) { return x.status === "approved"; });
+        if (!ims.length) { box.innerHTML = ""; return; }
+        injectCss();
+        box.innerHTML = '<div class="le-box"><div class="le-head">🖼️ BILDER</div><div class="le-grid">' +
+          ims.map(function (im) {
+            return '<div class="le-th"><img loading="lazy" alt="" src="' + esc(rawUrl(spotId, im.id)) + '" onclick="openImg(this.src)">' +
+              (im.caption ? '<div class="le-cap">' + esc(im.caption) + "</div>" : "") + "</div>";
+          }).join("") + "</div></div>";
+      }).catch(function () {});
+  }
+
   function peopleHTML(s) {
     injectCss();
     return '<div class="section"><div class="section-head">TEILNEHMER &amp; FOLLOWER</div>' +
@@ -384,12 +506,24 @@
     }).catch(function () { say("⚠️ Verbindungsfehler"); });
   }
 
+  // Fallback-Vollbild (Verwaltungsseite hat kein eigenes)
+  if (typeof window.openImg !== "function") {
+    window.openImg = function (src) {
+      var o = document.createElement("div");
+      o.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;cursor:zoom-out";
+      var i = document.createElement("img"); i.src = src; i.style.cssText = "max-width:96%;max-height:96%;border-radius:8px";
+      o.appendChild(i); o.onclick = function () { o.remove(); }; document.body.appendChild(o);
+    };
+  }
+
   window.LiveEvents = {
     loadMe: loadMe, ticketHTML: ticketHTML, initTicket: initTicket,
     register: register, unregister: unregister, checkinNow: checkinNow,
     capacityField: capacityField, readCapacity: readCapacity,
     scheduleHTML: scheduleHTML, saveSchedule: saveSchedule, cancelEvent: cancelEvent,
     canCheckin: canCheckin, fmtWhen: fmtWhen,
+    imagesHTML: imagesHTML, loadImages: loadImages, uploadImages: uploadImages,
+    captionImage: captionImage, deleteImage: deleteImage, loadGallery: loadGallery,
     peopleHTML: peopleHTML, loadPeople: loadPeople, kick: kick, resetList: resetList
   };
 })();

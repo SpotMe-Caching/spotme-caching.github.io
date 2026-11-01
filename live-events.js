@@ -19,6 +19,8 @@ const CHECKIN_RADIUS_M = 100; // GPS-Radius für "Eingecheckt"
 const MAX_LIMIT = 100000; // größtes erlaubtes Teilnehmer-Limit
 const CHECKIN_EARLY_MIN = 30; // Check-in bei geplanten Terminen ab x Min vor Start
 const PLANNED_GRACE_H = 6; // geplanter Termin bleibt so lange nach Start in der Liste
+const MAX_IMAGES = 12; // Event-Bilder pro Live Spot
+const MAX_IMAGE_BYTES = 700 * 1024; // pro Bild (nach dem Verkleinern in der App ca. 150 KB)
 const FOLLOWER_PUSH_KM = 10; // wie bisher: Follower-Push nur im Umkreis
 
 function haversineM(lat1, lng1, lat2, lng2) {
@@ -65,6 +67,15 @@ module.exports = function mountLiveEvents(app, deps) {
       );
       CREATE INDEX IF NOT EXISTS idx_lp_spot ON live_participants(live_spot_id);
       CREATE INDEX IF NOT EXISTS idx_lp_code ON live_participants(participant_code);
+      CREATE TABLE IF NOT EXISTS live_images (
+        id           SERIAL PRIMARY KEY,
+        live_spot_id INTEGER NOT NULL REFERENCES live_spots(id) ON DELETE CASCADE,
+        image        TEXT NOT NULL,
+        caption      TEXT,
+        status       TEXT NOT NULL DEFAULT 'pending',
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_li_spot ON live_images(live_spot_id);
     `);
   }
   const ready = ensureSchema().catch((e) => {
@@ -698,6 +709,159 @@ module.exports = function mountLiveEvents(app, deps) {
         ).rows.map((r) => Number(r.checkin_at));
       } catch {}
       res.json(out);
+    }),
+  );
+
+  // ── Event-Bilder (nur der Veranstalter lädt hoch, Freigabe immer durch Admin) ──
+  const IMG_RE = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/;
+  function sniffImage(buf) {
+    if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+    if (buf.length > 8 && buf.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "image/png";
+    if (buf.length > 12 && buf.slice(0, 4).toString() === "RIFF" && buf.slice(8, 12).toString() === "WEBP") return "image/webp";
+    return null;
+  }
+  const adminOnly = (req, res, next) => {
+    const key = req.headers["x-admin-key"] || req.query.key;
+    if (!process.env.ADMIN_KEY || key !== process.env.ADMIN_KEY)
+      return res.status(403).json({ error: "Kein Zugriff" });
+    next();
+  };
+  const cleanCaption = (c) => (c ? String(c).trim().slice(0, 100) || null : null);
+
+  app.post(
+    "/api/live-spots/:id/images",
+    wrap(async (req, res) => {
+      const own = await ownerOnly(req, res);
+      if (!own) return;
+      const m = typeof req.body.image === "string" ? IMG_RE.exec(req.body.image) : null;
+      if (!m) return res.status(400).json({ error: "Bild muss JPEG, PNG oder WebP sein" });
+      const buf = Buffer.from(m[2], "base64");
+      if (buf.length > MAX_IMAGE_BYTES)
+        return res.status(413).json({ error: "Bild ist zu groß (max. 700 KB)" });
+      if (!sniffImage(buf)) return res.status(400).json({ error: "Ungültige Bilddatei" });
+      const out = await tx(async (c) => {
+        await c.query("SELECT 1 FROM live_spots WHERE id = $1 FOR UPDATE", [own.id]);
+        const n = (await c.query("SELECT COUNT(*)::int AS n FROM live_images WHERE live_spot_id = $1", [own.id])).rows[0].n;
+        if (n >= MAX_IMAGES)
+          return { status: 400, body: { error: `Maximal ${MAX_IMAGES} Bilder pro Live Spot` } };
+        const r = await c.query(
+          "INSERT INTO live_images (live_spot_id, image, caption) VALUES ($1,$2,$3) RETURNING id, caption, status, created_at",
+          [own.id, req.body.image, cleanCaption(req.body.caption)],
+        );
+        return { status: 200, body: { success: true, image: r.rows[0] } };
+      });
+      res.status(out.status).json(out.body);
+    }),
+  );
+
+  // Liste: Veranstalter sieht alle (mit Bilddaten + Status), alle anderen nur freigegebene (ohne Bilddaten)
+  app.get(
+    "/api/live-spots/:id/images",
+    wrap(async (req, res) => {
+      const id = intId(req.params.id);
+      if (id === null) return notFound(res);
+      const viewer = await viewerOf(req.query.code, req.query.token);
+      const v = await pool.query(
+        `SELECT (ls.creator_code = $2::text) AS is_owner FROM live_spots ls WHERE ls.id = $1 AND ${visible("$2")}`,
+        [id, viewer],
+      );
+      if (!v.rows.length) return notFound(res);
+      const owner = v.rows[0].is_owner === true;
+      const { rows } = await pool.query(
+        `SELECT id, caption, status, created_at${owner ? ", image" : ""}
+         FROM live_images WHERE live_spot_id = $1 ${owner ? "" : "AND status = 'approved'"}
+         ORDER BY created_at ASC, id ASC`,
+        [id],
+      );
+      res.json({ is_owner: owner, images: rows });
+    }),
+  );
+
+  // Bilddatei (nur freigegebene) – für <img src>, gut cachebar
+  app.get(
+    "/api/live-spots/:id/images/:imgId/raw",
+    wrap(async (req, res) => {
+      const id = intId(req.params.id), imgId = intId(req.params.imgId);
+      if (id === null || imgId === null) return notFound(res);
+      const { rows } = await pool.query(
+        "SELECT image FROM live_images WHERE id = $1 AND live_spot_id = $2 AND status = 'approved'",
+        [imgId, id],
+      );
+      if (!rows.length) return notFound(res);
+      const m = IMG_RE.exec(rows[0].image);
+      const buf = m ? Buffer.from(m[2], "base64") : null;
+      const type = buf && sniffImage(buf);
+      if (!type) return notFound(res);
+      res.set({
+        "Content-Type": type,
+        "Cache-Control": "public, max-age=86400",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "default-src 'none'",
+        "Cross-Origin-Resource-Policy": "cross-origin",
+      });
+      res.send(buf);
+    }),
+  );
+
+  app.put(
+    "/api/live-spots/:id/images/:imgId",
+    wrap(async (req, res) => {
+      const own = await ownerOnly(req, res);
+      if (!own) return;
+      const imgId = intId(req.params.imgId);
+      if (imgId === null) return notFound(res);
+      const r = await pool.query(
+        "UPDATE live_images SET caption = $1 WHERE id = $2 AND live_spot_id = $3",
+        [cleanCaption(req.body.caption), imgId, own.id],
+      );
+      if (!r.rowCount) return notFound(res);
+      res.json({ success: true });
+    }),
+  );
+
+  app.delete(
+    "/api/live-spots/:id/images/:imgId",
+    wrap(async (req, res) => {
+      const own = await ownerOnly(req, res);
+      if (!own) return;
+      const imgId = intId(req.params.imgId);
+      if (imgId === null) return notFound(res);
+      const r = await pool.query(
+        "DELETE FROM live_images WHERE id = $1 AND live_spot_id = $2",
+        [imgId, own.id],
+      );
+      if (!r.rowCount) return notFound(res);
+      res.json({ success: true });
+    }),
+  );
+
+  // Admin: Freigabe
+  app.get(
+    "/api/admin/pending-live-images",
+    adminOnly,
+    wrap(async (req, res) => {
+      const { rows } = await pool.query(
+        `SELECT li.id, li.image, li.caption, li.created_at, ls.name AS spot_name, ls.creator_code AS code
+         FROM live_images li JOIN live_spots ls ON ls.id = li.live_spot_id
+         WHERE li.status = 'pending' ORDER BY li.created_at ASC`,
+      );
+      res.json(rows);
+    }),
+  );
+  app.post(
+    "/api/admin/live-image-action",
+    adminOnly,
+    wrap(async (req, res) => {
+      const { id, action } = req.body || {};
+      const imgId = intId(id);
+      if (imgId === null || !["approve", "reject"].includes(action))
+        return res.status(400).json({ error: "id und action (approve/reject) erforderlich" });
+      const r =
+        action === "approve"
+          ? await pool.query("UPDATE live_images SET status = 'approved' WHERE id = $1", [imgId])
+          : await pool.query("DELETE FROM live_images WHERE id = $1", [imgId]);
+      if (!r.rowCount) return res.status(404).json({ error: "Bild nicht gefunden" });
+      res.json({ success: true, action, id: imgId });
     }),
   );
 

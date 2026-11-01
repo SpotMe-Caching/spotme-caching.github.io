@@ -383,6 +383,8 @@ async function loadSpot(id) {
 
     ${LiveEvents.ticketHTML(spot, me, canCheck)}
 
+    <div id="leGallery"></div>
+
     <div class="btn-row" style="margin-top:0.75rem;">
       ${CODE ? `<button class="btn btn-follow ${isFollowing?'following':''}" id="followBtn"
         onclick="toggleFollow(${spot.id})">
@@ -397,6 +399,7 @@ async function loadSpot(id) {
     </div>` : ''}
   `;
   LiveEvents.initTicket(spot, me, canCheck);
+  LiveEvents.loadGallery(spot.id);
 }
 
 let currentlyFollowing = false;

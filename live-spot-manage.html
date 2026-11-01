@@ -262,7 +262,7 @@ function renderPage() {
     </div>
   `;
   bindAvatarUpload();
-  if (activeSpot) LiveEvents.loadPeople(activeSpot.id);
+  if (activeSpot) { LiveEvents.loadPeople(activeSpot.id); LiveEvents.loadImages(activeSpot.id); }
 }
 
 function renderActivePanel(s) {
@@ -303,6 +303,8 @@ function renderActivePanel(s) {
     ${online ? '' : LiveEvents.scheduleHTML(s)}
 
     ${LiveEvents.peopleHTML(s)}
+
+    ${LiveEvents.imagesHTML(s)}
 
     <!-- Profil bearbeiten -->
     <div class="section">

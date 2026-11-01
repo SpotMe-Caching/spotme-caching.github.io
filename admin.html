@@ -97,6 +97,10 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',system-ui,
       <div class="stat-label">Spot-Bilder ausstehend</div>
     </div>
     <div class="stat">
+      <div class="stat-num" id="stat-live-pending">—</div>
+      <div class="stat-label">Event-Bilder ausstehend</div>
+    </div>
+    <div class="stat">
       <div class="stat-num" id="stat-done">—</div>
       <div class="stat-label">Heute bearbeitet</div>
     </div>
@@ -106,11 +110,19 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',system-ui,
   <div style="display:flex;gap:0.5rem;margin-bottom:1rem;">
     <button id="tab-btn-avatars" onclick="switchTab('avatars')" style="flex:1;padding:.55rem;border-radius:10px;border:1px solid var(--acc);background:var(--acc);color:#000;font-weight:700;font-size:.85rem;cursor:pointer;">👤 Avatare</button>
     <button id="tab-btn-spots"   onclick="switchTab('spots')"   style="flex:1;padding:.55rem;border-radius:10px;border:1px solid var(--bord);background:transparent;color:var(--muted);font-weight:700;font-size:.85rem;cursor:pointer;">📍 Spot-Bilder</button>
+    <button id="tab-btn-live"    onclick="switchTab('live')"    style="flex:1;padding:.55rem;border-radius:10px;border:1px solid var(--bord);background:transparent;color:var(--muted);font-weight:700;font-size:.85rem;cursor:pointer;">🎟️ Event-Bilder</button>
   </div>
 
   <div id="tab-avatars">
     <div class="section-title">Avatare zur Freigabe</div>
     <div class="grid" id="pending-grid">
+      <div class="empty">Lade...</div>
+    </div>
+  </div>
+
+  <div id="tab-live" style="display:none;">
+    <div class="section-title">Event-Bilder (Live Spots) zur Freigabe</div>
+    <div class="grid" id="pending-live-grid">
       <div class="empty">Lade...</div>
     </div>
   </div>
@@ -159,7 +171,62 @@ function logout() {
   document.getElementById('admin-key').value = '';
 }
 
+async function loadLiveImages() {
+  try {
+    const res = await fetch(`${API}/admin/pending-live-images`, { headers: { 'x-admin-key': adminKey } });
+    if (!res.ok) return;
+    const items = await res.json();
+    document.getElementById('stat-live-pending').textContent = items.length;
+    const grid = document.getElementById('pending-live-grid');
+    if (!items.length) { grid.innerHTML = '<div class="empty">✅ Keine Event-Bilder zur Freigabe</div>'; return; }
+    grid.innerHTML = items.map(s => {
+      const d = new Date(s.created_at);
+      const time = d.toLocaleDateString('de-DE') + ' ' + d.toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit' });
+      return `<div class="av-card" id="live-card-${s.id}">
+        <div class="av-img-wrap"><img src="${escHtml(s.image)}" alt="Event"><div class="av-spot-badge">🎟️ Event</div></div>
+        <div class="av-info">
+          <div class="av-code">${escHtml(s.spot_name)}</div>
+          <div class="av-time">👤 ${escHtml(s.code)}</div>
+          ${s.caption ? `<div class="av-time">💬 ${escHtml(s.caption)}</div>` : ''}
+          <div class="av-time">📅 ${time}</div>
+          <div class="av-btns">
+            <button class="btn-approve" id="live-btn-a-${s.id}" onclick="liveAction(${s.id},'approve')">✅ Freigeben</button>
+            <button class="btn-reject"  id="live-btn-r-${s.id}" onclick="liveAction(${s.id},'reject')">❌ Ablehnen</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch {}
+}
+
+async function liveAction(id, act) {
+  const ba = document.getElementById(`live-btn-a-${id}`), br = document.getElementById(`live-btn-r-${id}`);
+  if (ba) { ba.disabled = true; ba.style.opacity = '0.5'; }
+  if (br) { br.disabled = true; br.style.opacity = '0.5'; }
+  try {
+    const res = await fetch(`${API}/admin/live-image-action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+      body: JSON.stringify({ id, action: act })
+    });
+    if (res.ok) {
+      const card = document.getElementById(`live-card-${id}`);
+      if (card) { card.style.transition = 'opacity .3s'; card.style.opacity = '0'; setTimeout(() => card.remove(), 300); }
+      doneToday++;
+      document.getElementById('stat-done').textContent = doneToday;
+      const cur = parseInt(document.getElementById('stat-live-pending').textContent) || 0;
+      document.getElementById('stat-live-pending').textContent = Math.max(0, cur - 1);
+      showToast(act === 'approve' ? '✅ Event-Bild freigegeben' : '❌ Event-Bild abgelehnt & gelöscht');
+    } else {
+      showToast('⚠️ Fehler');
+      if (ba) { ba.disabled = false; ba.style.opacity = '1'; }
+      if (br) { br.disabled = false; br.style.opacity = '1'; }
+    }
+  } catch { showToast('⚠️ Keine Verbindung'); }
+}
+
 async function loadData() {
+  loadLiveImages();
   try {
     const res = await fetch(`${API}/admin/pending-avatars`, {
       headers: { 'x-admin-key': adminKey }
@@ -274,10 +341,12 @@ async function action(code, spot, act) {
 function switchTab(tab) {
   document.getElementById('tab-avatars').style.display = tab === 'avatars' ? 'block' : 'none';
   document.getElementById('tab-spots').style.display   = tab === 'spots'   ? 'block' : 'none';
+  document.getElementById('tab-live').style.display    = tab === 'live'    ? 'block' : 'none';
   const on  = 'flex:1;padding:.55rem;border-radius:10px;border:1px solid var(--acc);background:var(--acc);color:#000;font-weight:700;font-size:.85rem;cursor:pointer;';
   const off = 'flex:1;padding:.55rem;border-radius:10px;border:1px solid var(--bord);background:transparent;color:var(--muted);font-weight:700;font-size:.85rem;cursor:pointer;';
   document.getElementById('tab-btn-avatars').style.cssText = tab === 'avatars' ? on : off;
   document.getElementById('tab-btn-spots').style.cssText   = tab === 'spots'   ? on : off;
+  document.getElementById('tab-btn-live').style.cssText    = tab === 'live'    ? on : off;
 }
 
 function escHtml(s) {
