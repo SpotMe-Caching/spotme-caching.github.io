@@ -1,11 +1,11 @@
 // ═══════════════════════════════════════════════════════════════
-// SpotMe Caching  Service Worker
+// SpotMe Caching · Service Worker
 //
 // Versionierung: CACHE_VERSION bei jedem Deploy hochzählen.
 // Der Browser erkennt den neuen SW, löscht den alten Cache
 // und installiert die neuen Dateien automatisch.
 // ════════════════════════════════════════════════════════════
-const CACHE_VERSION = "v396.0"; // Erhöht für SW-Update
+const CACHE_VERSION = "v396.1"; // Erhöht für SW-Update
 const CACHE_STATIC = `spotme-caching-${CACHE_VERSION}`;
 const CACHE_API = `spotme-api-${CACHE_VERSION}`;
 const CACHE_TILES = `spotme-map-tiles-${CACHE_VERSION}`;

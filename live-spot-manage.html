@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 
-<!-- Eruda –- Mobile Console (nur für Debugging)
+<!-- Eruda – Mobile Console (nur für Debugging)
 <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
 <script>eruda.init();</script> -->
   
@@ -498,17 +498,18 @@ async function createLiveSpot() {
 }
 
 async function confirmDelete(id) {
-  if (!confirm('Live Spot wirklich löschen? Das kann nicht rückgängig gemacht werden.')) return;
+  if (!confirm('Live Spot wirklich löschen?\n\nAlle Angemeldeten und Follower werden benachrichtigt. Das kann nicht rückgängig gemacht werden.')) return;
   try {
-    await fetch(`${API}/live-spots/${id}`, {
+    const r = await fetch(`${API}/live-spots/${id}`, {
       method: 'DELETE', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: CODE, token: TOK })
     });
+    if (!r.ok) { const e = await r.json().catch(() => ({})); toast('❌ ' + (e.error || 'Löschen fehlgeschlagen')); return; }
     toast('🗑️ Live Spot gelöscht');
     await loadMySpots();
     activeSpot = null;
     renderPage();
-  } catch { toast('⚠️ Fehler'); }
+  } catch { toast('⚠️ Verbindungsfehler'); }
 }
 
 function copyShareLink(id) {

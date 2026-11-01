@@ -1,6 +1,6 @@
 "use strict";
 // ═══════════════════════════════════════════════════════════════════════════
-// live-events.js –- Live Spots als Event mit Anmeldung ("Ticket")
+// live-events.js – Live Spots als Event mit Anmeldung ("Ticket")
 //
 //  • Anmeldung vorab (Reservieren), optionales Teilnehmer-Limit (leer = unbegrenzt)
 //  • Check-in per GPS (Radius CHECKIN_RADIUS_M) → "Eingecheckt"
@@ -657,12 +657,62 @@ module.exports = function mountLiveEvents(app, deps) {
     }),
   );
 
+  // Abonnenten eines Spots (Angemeldete + Follower, ohne Veranstalter) – VOR dem Löschen holen
+  async function audienceOf(spotId, ownerCode) {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT ON (ps.endpoint) ps.endpoint, ps.p256dh, ps.auth
+       FROM (SELECT follower_code AS code FROM live_followers WHERE live_spot_id = $1
+             UNION
+             SELECT participant_code FROM live_participants WHERE live_spot_id = $1) u
+       JOIN push_subscriptions ps ON ps.code = u.code
+       WHERE u.code <> $2
+       ORDER BY ps.endpoint`,
+      [spotId, ownerCode],
+    );
+    return rows;
+  }
+
+  function pushTo(subs, payload) {
+    const body = JSON.stringify(payload);
+    for (const f of subs) {
+      webpush
+        .sendNotification({ endpoint: f.endpoint, keys: { p256dh: f.p256dh, auth: f.auth } }, body)
+        .catch(async (err) => {
+          if (err && (err.statusCode === 410 || err.statusCode === 404))
+            await pool.query("DELETE FROM push_subscriptions WHERE endpoint=$1", [f.endpoint]).catch(() => {});
+        });
+    }
+  }
+
+  // ── Live Spot löschen (Veranstalter): Angemeldete + Follower werden benachrichtigt ──
+  app.delete(
+    "/api/live-spots/:id",
+    wrap(async (req, res) => {
+      const own = await ownerOnly(req, res);
+      if (!own) return;
+      const code = String((req.body || {}).code);
+      const s = await pool.query("SELECT name FROM live_spots WHERE id = $1", [own.id]);
+      if (!s.rows.length) return notFound(res);
+      const subs = await audienceOf(own.id, code);
+      await pool.query("DELETE FROM live_spots WHERE id = $1 AND creator_code = $2", [own.id, code]);
+      pushTo(subs, {
+        title: `🗑️ ${s.rows[0].name} wurde gelöscht`,
+        body: "Der Veranstalter hat diesen Live Spot entfernt.",
+        url: "/",
+        tag: `live-${own.id}`,
+      });
+      res.json({ success: true, notified: subs.length });
+    }),
+  );
+
   // ── Termin absagen (Veranstalter): Termin weg, Anmeldungen gelöscht ────────
   app.post(
     "/api/live-spots/:id/cancel",
     wrap(async (req, res) => {
       const own = await ownerOnly(req, res);
       if (!own) return;
+      const info = await pool.query("SELECT name, creator_code FROM live_spots WHERE id = $1", [own.id]);
+      const subs = info.rows.length ? await audienceOf(own.id, info.rows[0].creator_code) : [];
       const out = await tx(async (c) => {
         const u = await c.query(
           `UPDATE live_spots SET starts_at = NULL,
@@ -674,6 +724,13 @@ module.exports = function mountLiveEvents(app, deps) {
         const d = await c.query("DELETE FROM live_participants WHERE live_spot_id = $1", [own.id]);
         return { status: 200, body: { success: !!u.rows.length, removed: d.rowCount } };
       });
+      if (out.status === 200 && out.body.success)
+        pushTo(subs, {
+          title: `❌ Termin abgesagt: ${info.rows[0].name}`,
+          body: "Der Veranstalter hat den Termin abgesagt. Deine Anmeldung wurde gelöscht.",
+          url: `/live-spot.html?id=${own.id}`,
+          tag: `live-${own.id}`,
+        });
       res.status(out.status).json(out.body);
     }),
   );
