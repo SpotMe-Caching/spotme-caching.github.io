@@ -53,7 +53,7 @@
     <div class="logo">
       <div class="logo-dot"></div>
       SPOT<span style="color:var(--text);font-weight:300;">ME</span>
-      <span class="logo-sub">· DATING</span>
+      <span class="logo-sub">· CACHING</span>
     </div>
 
   <div style="display:flex;align-items:center;gap:5px;margin-left:auto;overflow-x:auto;">
@@ -1564,23 +1564,22 @@ async function loadInvitesIntoDrawer(body) {
 
   active
     .filter(inv => inv.status === 'accepted')
-    .forEach(inv => {
-      const spot = allSpots.find(s => s.id == inv.spot_id);
-      if (spot) {
-        renderMeetingWeather(inv.id, spot.lat, spot.lng, inv.time_start);
-      } else if (inv.spot_lat && inv.spot_lng) {
-        renderMeetingWeather(inv.id, inv.spot_lat, inv.spot_lng, inv.time_start);
-      } else {
-        loadAllSpots().then(() => {
-          const s = allSpots.find(x => x.id == inv.spot_id);
-          if (s) renderMeetingWeather(inv.id, s.lat, s.lng, inv.time_start);
-          else {
-            const el = document.getElementById(`mtgWeather_${inv.id}`);
-            if (el) el.style.display = 'none';
-          }
-        });
-      }
-    });
+    .forEach(inv => resolveInviteWeather(inv, `invWeather_${inv.id}`));
+}
+
+// Koordinaten: erst aus der Einladung (Server liefert lat/lng), sonst Spot-Liste
+async function resolveInviteWeather(inv, elId) {
+  let lat = parseFloat(inv.lat ?? inv.spot_lat);
+  let lng = parseFloat(inv.lng ?? inv.spot_lng);
+  if (isNaN(lat) || isNaN(lng)) {
+    let spot = allSpots.find(s => s.id == inv.spot_id);
+    if (!spot) { try { await loadAllSpots(); } catch {} spot = allSpots.find(s => s.id == inv.spot_id); }
+    if (spot) { lat = parseFloat(spot.lat); lng = parseFloat(spot.lng); }
+  }
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (isNaN(lat) || isNaN(lng)) { el.style.display = 'none'; return; }
+  renderMeetingWeather(inv.id, lat, lng, inv.time_start, elId);
 }
 
 // ── CHAT-LISTE ────────────────────────────────────────────────────────────────
@@ -2378,13 +2377,13 @@ async function fetchWeather(lat, lng) {
       `&hourly=temperature_2m,weather_code,precipitation_probability` +
       `&wind_speed_unit=kmh` +
       `&timezone=auto` +
-      `&forecast_days=2`;
+      `&forecast_days=7`;
 
     const res  = await fetch(url);
     if (!res.ok) return null;
     const json = await res.json();
 
-    const data = { current: json.current, hourly: json.hourly };
+    const data = { current: json.current, hourly: json.hourly, off: json.utc_offset_seconds || 0 };
     weatherCache.set(key, { data, ts: now });
     return data;
   } catch {
@@ -2589,21 +2588,19 @@ async function openMeetingsModal() {
     b.addEventListener('click', () => cancelInvite(+b.dataset.cancel))
   );
 
-  upcoming.forEach(inv => {
-    const spot = allSpots.find(s => s.id == inv.spot_id);
-    if (spot) renderMeetingWeather(inv.id, spot.lat, spot.lng, inv.time_start);
-  });
+  upcoming.forEach(inv => resolveInviteWeather(inv, `mtgWeather_${inv.id}`));
 }
 
-async function renderMeetingWeather(invId, lat, lng, timeStart) {
-  const el = document.getElementById(`mtgWeather_${invId}`);
+async function renderMeetingWeather(invId, lat, lng, timeStart, elId) {
+  const el = document.getElementById(elId || `mtgWeather_${invId}`);
   if (!el) return;
   const w = await fetchWeather(lat, lng);
   if (!w || !w.hourly) { el.style.display = 'none'; return; }
 
-  const meetingISO = new Date(timeStart).toISOString().slice(0, 13);
+  // open-meteo liefert Ortszeit (timezone=auto) → Treffzeit in Ortszeit umrechnen
+  const meetingISO = new Date(new Date(timeStart).getTime() + (w.off || 0) * 1000).toISOString().slice(0, 13);
   const centerIdx  = w.hourly.time.findIndex(t => t.startsWith(meetingISO));
-  if (centerIdx < 0) { el.innerHTML = '<span style="opacity:0.5;">Vorhersage nicht verfügbar</span>'; return; }
+  if (centerIdx < 0) { el.innerHTML = '<span style="opacity:0.5;font-size:0.7rem;">Vorhersage nicht verfügbar</span>'; return; }
 
   const startIdx = Math.max(0, centerIdx - 1);
   const hours    = w.hourly.time.slice(startIdx, centerIdx + 5);
