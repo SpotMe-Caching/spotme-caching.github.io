@@ -94,7 +94,7 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',system-ui,
     </div>
     <div class="stat">
       <div class="stat-num" id="stat-spots-pending">—</div>
-      <div class="stat-label">Spot-Bilder ausstehend</div>
+      <div class="stat-label">Platz-Spot-Bilder ausstehend</div>
     </div>
     <div class="stat">
       <div class="stat-num" id="stat-live-pending">—</div>
@@ -109,7 +109,7 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',system-ui,
   <!-- Tabs -->
   <div style="display:flex;gap:0.5rem;margin-bottom:1rem;">
     <button id="tab-btn-avatars" onclick="switchTab('avatars')" style="flex:1;padding:.55rem;border-radius:10px;border:1px solid var(--acc);background:var(--acc);color:#000;font-weight:700;font-size:.85rem;cursor:pointer;">👤 Avatare</button>
-    <button id="tab-btn-spots"   onclick="switchTab('spots')"   style="flex:1;padding:.55rem;border-radius:10px;border:1px solid var(--bord);background:transparent;color:var(--muted);font-weight:700;font-size:.85rem;cursor:pointer;">📍 Spot-Bilder</button>
+    <button id="tab-btn-spots"   onclick="switchTab('spots')"   style="flex:1;padding:.55rem;border-radius:10px;border:1px solid var(--bord);background:transparent;color:var(--muted);font-weight:700;font-size:.85rem;cursor:pointer;">📍 Platz-Spot-Bilder</button>
     <button id="tab-btn-live"    onclick="switchTab('live')"    style="flex:1;padding:.55rem;border-radius:10px;border:1px solid var(--bord);background:transparent;color:var(--muted);font-weight:700;font-size:.85rem;cursor:pointer;">🎟️ Event-Bilder</button>
   </div>
 
@@ -128,7 +128,7 @@ body { background:var(--bg); color:var(--text); font-family:'DM Sans',system-ui,
   </div>
 
   <div id="tab-spots" style="display:none;">
-    <div class="section-title">Spot-Bilder zur Freigabe</div>
+    <div class="section-title">Platz-Spot-Bilder zur Freigabe</div>
     <div class="grid" id="pending-spots-grid">
       <div class="empty">Lade...</div>
     </div>
@@ -277,14 +277,14 @@ async function loadData() {
       document.getElementById('stat-spots-pending').textContent = spots.length;
       const grid2 = document.getElementById('pending-spots-grid');
       if (!spots.length) {
-        grid2.innerHTML = '<div class="empty">✅ Keine Spot-Bilder zur Freigabe</div>';
+        grid2.innerHTML = '<div class="empty">✅ Keine Platz-Spot-Bilder zur Freigabe</div>';
       } else {
         grid2.innerHTML = spots.map(s => {
           const d = new Date(Number(s.created_at));
           const time = d.toLocaleDateString('de-DE') + ' ' + d.toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit' });
           return `<div class="av-card" id="spot-card-${s.id}">
             <div class="av-img-wrap">
-              ${s.image ? `<img src="${s.image}" alt="Spot">` : `<div class="no-img">📍</div>`}
+              ${s.image ? `<img src="${s.image}" alt="Platz Spot">` : `<div class="no-img">📍</div>`}
               <div class="av-spot-badge">🗺️ Caching</div>
             </div>
             <div class="av-info">
@@ -378,7 +378,7 @@ async function spotAction(id, act) {
       document.getElementById('stat-done').textContent = doneToday;
       const cur = parseInt(document.getElementById('stat-spots-pending').textContent) || 0;
       document.getElementById('stat-spots-pending').textContent = Math.max(0, cur - 1);
-      showToast(act === 'approve' ? '✅ Spot-Bild freigegeben' : '❌ Spot-Bild abgelehnt & gelöscht');
+      showToast(act === 'approve' ? '✅ Platz-Spot-Bild freigegeben' : '❌ Platz-Spot-Bild abgelehnt & gelöscht');
     } else {
       showToast('⚠️ Fehler');
       if (ba) { ba.disabled = false; ba.style.opacity = '1'; }

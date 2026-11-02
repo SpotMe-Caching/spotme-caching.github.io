@@ -134,7 +134,7 @@
 <!-- TABS -->
 <div class="tabs">
   <div class="tab active" id="tab-profil"  onclick="showTab('profil')">👤 Profil</div>
-  <div class="tab"        id="tab-spots"   onclick="showTab('spots')">📍 Spots</div>
+  <div class="tab"        id="tab-spots"   onclick="showTab('spots')">📍 Platz Spots</div>
   <div class="tab"        id="tab-bluesky" onclick="showTab('bluesky')">🦋 Bluesky</div>
   <div class="tab"        id="tab-account" onclick="showTab('account')">⚙️ Account</div>
 </div>
@@ -220,7 +220,7 @@
 <div class="tab-panel" id="panel-spots">
   <div style="margin-bottom:0.75rem;">
     <div style="font-size:0.82rem;color:var(--muted2);line-height:1.55;padding:0.75rem;background:var(--card);border-radius:12px;border:1px solid var(--bord);">
-      📍 Deine platzierten Spots auf der Caching-Karte. Andere sehen diese Liste in deinem Profil.
+      📍 Deine platzierten Platz Spots auf der Caching-Karte. Andere sehen diese Liste in deinem Profil.
     </div>
   </div>
   <div id="spots-list">
@@ -232,7 +232,7 @@
 <div class="tab-panel" id="panel-bluesky">
   <div style="margin-bottom:0.75rem;">
     <div style="font-size:0.82rem;color:var(--muted2);line-height:1.55;padding:0.75rem;background:var(--card);border-radius:12px;border:1px solid var(--bord);">
-      🦋 Verbinde dein Profil mit Bluesky, um gefundene Caches und Spots automatisch mit deiner Community im dezentralen Netzwerk zu teilen!
+      🦋 Verbinde dein Profil mit Bluesky, um gefundene Caches und Platz Spots automatisch mit deiner Community im dezentralen Netzwerk zu teilen!
     </div>
   </div>
 
@@ -284,7 +284,7 @@
 
   <div class="sec-label">Backup</div>
   <div style="font-size:0.78rem;color:var(--muted2);line-height:1.55;padding:0.65rem 0.75rem;background:var(--card);border-radius:10px;border:1px solid var(--bord);margin-bottom:0.75rem;">
-    💡 Sichere deinen Account als Datei. Falls du den Cache leerst oder das Gerät wechselst, kannst du mit dieser Datei alles wiederherstellen – dein Profil, deine Spots und deine Einladungen bleiben auf dem Server erhalten.
+    💡 Sichere deinen Account als Datei. Falls du den Cache leerst oder das Gerät wechselst, kannst du mit dieser Datei alles wiederherstellen – dein Profil, deine Platz Spots und deine Einladungen bleiben auf dem Server erhalten.
   </div>
   <div style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:1.5rem;">
 
@@ -782,8 +782,8 @@ async function loadMySpots() {
     container.innerHTML = `
       <div class="empty-state">
         <span class="es-icon">📍</span>
-        Noch keine Spots angelegt.<br>
-        <span style="font-size:0.78rem;color:var(--muted);margin-top:0.4rem;display:block;">Tippe in der Karte auf 📍 um deinen ersten Spot zu setzen.</span>
+        Noch keine Platz Spots angelegt.<br>
+        <span style="font-size:0.78rem;color:var(--muted);margin-top:0.4rem;display:block;">Tippe in der Karte auf 📍 um deinen ersten Platz Spot zu setzen.</span>
       </div>`;
     return;
   }
@@ -817,7 +817,7 @@ async function deleteSpot(id) {
       body: JSON.stringify({ code })
     });
   } catch {}
-  toast('🗑️ Spot gelöscht');
+  toast('🗑️ Platz Spot gelöscht');
   loadMySpots();
 }
 
@@ -902,7 +902,7 @@ async function exportBackup() {
   a.click();
   URL.revokeObjectURL(a.href);
 
-  toast(`✅ Backup gespeichert · ${backup.stats.spots} Spots · ${backup.stats.chatMessages} Nachrichten`);
+  toast(`✅ Backup gespeichert · ${backup.stats.spots} Platz Spots · ${backup.stats.chatMessages} Nachrichten`);
 }
 
 // ── BACKUP IMPORTIEREN ────────────────────────────────────────────────────────
@@ -975,7 +975,7 @@ async function importBackup(input) {
 
     if (backup.version >= 2 && backup.stats) {
       const s = backup.stats;
-      toast(`✅ Wiederhergestellt · ${s.spots} Spots · ${s.chatMessages} Nachrichten`);
+      toast(`✅ Wiederhergestellt · ${s.spots} Platz Spots · ${s.chatMessages} Nachrichten`);
     } else {
       toast('✅ Backup erfolgreich wiederhergestellt!');
     }

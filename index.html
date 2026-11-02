@@ -44,7 +44,7 @@
 <div class="crosshair" id="crosshair"></div>
 <div class="place-mode-bar" id="placeModeBar">
   <div class="pm-icon">📍</div>
-  <div class="pm-text" data-i18n="place_mode_text">Spot platzieren</div>
+  <div class="pm-text" data-i18n="place_mode_text">Platz Spot platzieren</div>
   <div class="pm-sub" data-i18n="place_mode_sub">Tippe auf die Karte</div>
 </div>
   
@@ -133,7 +133,7 @@
   </div>
 
 <div class="stats-strip">
-  <div class="stat-pill">SPOTS <span class="val" id="statSpots">0</span></div>
+  <div class="stat-pill">PLATZ SPOTS <span class="val" id="statSpots">0</span></div>
   <div class="stat-pill">INVITES <span class="val" id="statInvites">0</span></div>
 </div>
 
@@ -142,13 +142,13 @@
 
 <div class="fab-wrap">
   <button class="fab" id="fabBtn" onclick="togglePlaceMode()">📍</button>
-  <span class="fab-label" id="fabLabel">SPOT</span>
+  <span class="fab-label" id="fabLabel">PLATZ SPOT</span>
 </div>
 
 <div class="dock">
-  <button class="dock-btn" onclick="openDrawer('myspots')"><span class="di">🟠</span>Meine Spots</button>
-  <button class="dock-btn" onclick="openDrawer('all')"><span class="di">🌐</span>Alle Spots</button>
-  <button class="dock-btn" id="newSpotsBtn" onclick="openNewSpots()"><span class="di">✨</span>Neue Spots</button>
+  <button class="dock-btn" onclick="openDrawer('myspots')"><span class="di">🟠</span>Meine Platz Spots</button>
+  <button class="dock-btn" onclick="openDrawer('all')"><span class="di">🌐</span>Alle Platz Spots</button>
+  <button class="dock-btn" id="newSpotsBtn" onclick="openNewSpots()"><span class="di">✨</span>Neue Platz Spots</button>
 </div>
 
 <!-- ── Help Page Overlay (iframe, 80% Screen, scrollable) ──────────────── -->
@@ -166,7 +166,7 @@
 <div class="drawer" id="drawer">
   <div class="drawer-handle"></div>
   <div class="drawer-head">
-    <div class="drawer-title" id="drawerTitle">Spots</div>
+    <div class="drawer-title" id="drawerTitle">Platz Spots</div>
     <button class="drawer-close" id="drawerCloseBtn">✕</button>
   </div>
   <div class="drawer-body" id="drawerBody"></div>
@@ -175,11 +175,11 @@
 <div class="modal-overlay" id="spotModal">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title" id="spotModalTitle">📍 Spot anlegen</div>
+    <div class="modal-title" id="spotModalTitle">📍 Platz Spot anlegen</div>
     <span class="finp-label">Name</span>
     <input id="spotName" class="finp" placeholder="z.B. Schöner Brunnen" maxlength="50">
     <span class="finp-label">Beschreibung (optional)</span>
-    <input id="spotDesc" class="finp" placeholder="Was macht diesen Spot besonders?" maxlength="120">
+    <input id="spotDesc" class="finp" placeholder="Was macht diesen Platz Spot besonders?" maxlength="120">
     <span class="finp-label">Wunsch-Tag</span>
     <select id="spotWish" class="finp"></select>
     <span class="finp-label">Kategorie</span>
@@ -294,7 +294,7 @@
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title">🔍 Radius-Suche</div>
-    <p style="font-size:0.82rem;color:var(--muted2);margin-bottom:0.75rem;">Spots anderer Profile in deiner Umgebung.</p>
+    <p style="font-size:0.82rem;color:var(--muted2);margin-bottom:0.75rem;">Platz Spots anderer Profile in deiner Umgebung.</p>
 
     <!-- Kategorie-Filter -->
     <span style="font-size:0.7rem;color:var(--muted);font-weight:500;display:block;margin-bottom:0.35rem;">Kategorie</span>
@@ -332,9 +332,9 @@
     <div class="modal-handle"></div>
     <div class="modal-title">🦋 Auf Bluesky teilen</div>
     <p style="font-size:0.8rem;color:var(--muted2);margin-bottom:0.75rem;">
-      Wähle einen deiner platzierten Spots aus, um ihn direkt auf Bluesky zu posten!
+      Wähle einen deiner platzierten Platz Spots aus, um ihn direkt auf Bluesky zu posten!
     </p>
-    <span class="finp-label">Wähle einen Spot</span>
+    <span class="finp-label">Wähle einen Platz Spot</span>
     <select id="bskySpotSelect" class="finp" style="margin-bottom:0.75rem;"></select>
     
     <span class="finp-label">Zusatznachricht (optional)</span>
@@ -416,7 +416,7 @@ let toastTimer, currentDrawer = null;
 let activeRadius = null, detailSpot = null, detailMiniMap = null;
 let radiusCatFilter = null;
 let weeklyMiniMap = null, weeklyMarker = null, weeklyCoords = null;
-let urlSpotChecked = false; // Verhindert mehrfaches Fliegen zum Spot beim Laden
+let urlSpotChecked = false; // Verhindert mehrfaches Fliegen zum Platz Spot beim Laden
 
 // Wanderwege einblenden //
 let hikingLayerActive = false;
@@ -596,7 +596,7 @@ function openSpotEdit(s) {
   document.getElementById('spotWish').innerHTML=wishes.map(w=>`<option value="${w}">${w}</option>`).join('');
 
   editSpotId = s.id;
-  document.getElementById('spotModalTitle').textContent = '✏️ Spot bearbeiten';
+  document.getElementById('spotModalTitle').textContent = '✏️ Platz Spot bearbeiten';
   document.getElementById('spotName').value = s.name || '';
   document.getElementById('spotDesc').value = s.description || '';
   document.getElementById('spotWish').value = s.wishTag || '';
@@ -880,7 +880,7 @@ async function openBlueskyShareDialog() {
   const select = document.getElementById('bskySpotSelect');
   if (!select) return;
 
-  select.innerHTML = '<option value="">Lade Spots…</option>';
+  select.innerHTML = '<option value="">Lade Platz Spots…</option>';
   document.getElementById('bskyCustomMessage').value = '';
   document.getElementById('bskyCharCount').textContent = '0 / 200';
 
@@ -903,8 +903,8 @@ async function openBlueskyShareDialog() {
 
   let html = '';
   if (spots && spots.length) {
-    html += '<optgroup label="📍 Spots">' +
-      spots.map(s => `<option value="spot:${s.id}">${esc(s.name)} (${esc(s.wishTag || 'Spot')})</option>`).join('') +
+    html += '<optgroup label="📍 Platz Spots">' +
+      spots.map(s => `<option value="spot:${s.id}">${esc(s.name)} (${esc(s.wishTag || 'Platz Spot')})</option>`).join('') +
       '</optgroup>';
   }
   if (lives && lives.length) {
@@ -912,14 +912,14 @@ async function openBlueskyShareDialog() {
       lives.map(s => `<option value="live:${s.id}">${esc(s.name)}${s.status === 'online' ? ' · LIVE' : ''}</option>`).join('') +
       '</optgroup>';
   }
-  select.innerHTML = html || '<option value="">Keine Spots vorhanden</option>';
+  select.innerHTML = html || '<option value="">Keine Platz Spots vorhanden</option>';
 }
 
 // Postet den ausgewählten Spot / Live Spot mit Custom Message und Direktlink auf Bluesky
 async function postToBluesky() {
   const select = document.getElementById('bskySpotSelect');
   const raw = select?.value;
-  if (!raw) { toast('⚠️ Bitte wähle einen Spot aus'); return; }
+  if (!raw) { toast('⚠️ Bitte wähle einen Platz Spot aus'); return; }
 
   const [kind, spotId] = raw.includes(':') ? raw.split(':') : ['spot', raw];
   const customMessage = document.getElementById('bskyCustomMessage').value.trim();
@@ -946,8 +946,8 @@ async function postToBluesky() {
   } else {
     const spotUrl = `${window.location.origin}/spot.html?id=${spotId}`;
     finalMessage = customMessage
-      ? `${customMessage}\n\n📍 Zum Spot: \n\n ${spotUrl}`
-      : `📍 Mein Spot auf SpotMe Caching: \n\n ${spotUrl}`;
+      ? `${customMessage}\n\n📍 Zum Platz Spot: \n\n ${spotUrl}`
+      : `📍 Mein Platz Spot auf SpotMe Caching: \n\n ${spotUrl}`;
   }
 
   try {
@@ -1129,7 +1129,7 @@ async function renderMarkers() {
 function openMarkerDrawer(s, isMine, isOnline) {
   document.getElementById('drawerOverlay').classList.add('show');
   document.getElementById('drawer').classList.add('open');
-  document.getElementById('drawerTitle').textContent = isMine ? 'MEIN SPOT' : 'SPOT';
+  document.getElementById('drawerTitle').textContent = isMine ? 'MEIN PLATZ SPOT' : 'PLATZ SPOT';
   currentDrawer = 'marker';
 
   const onlineBadge = isOnline
@@ -1188,7 +1188,7 @@ async function saveSpot() {
         body: JSON.stringify({ code:CODE, name, description:desc, wishTag:wish, area_type:category||null, image:spotPhotoData||null })
       });
     } catch {}
-    toast('✅ Spot aktualisiert');
+    toast('✅ Platz Spot aktualisiert');
     editSpotId=null; spotPhotoData=null;
     loadAllSpots();
   } else {
@@ -1200,7 +1200,7 @@ async function saveSpot() {
         body: JSON.stringify({ code:CODE, lat:tempLatLng.lat, lng:tempLatLng.lng, name, description:desc, wishTag:wish, image:spotPhotoData||null })
       });
     } catch {}
-    toast('✅ Spot gespeichert');
+    toast('✅ Platz Spot gespeichert');
     spotPhotoData=null;
     loadAllSpots();
   }
@@ -1210,7 +1210,7 @@ async function deleteSpot(id) {
   try {
     await fetch(`${API}/userspots/${id}`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:CODE})});
   } catch {}
-  toast('🗑️ Spot gelöscht');
+  toast('🗑️ Platz Spot gelöscht');
   loadAllSpots();
 }
 
@@ -1228,7 +1228,7 @@ function togglePlaceMode() {
 function hidePlaceModeUI() {
   placeMode=false;
   const fab=document.getElementById('fabBtn'), label=document.getElementById('fabLabel');
-  fab.classList.remove('active'); fab.textContent='📍'; label.textContent='SPOT';
+  fab.classList.remove('active'); fab.textContent='📍'; label.textContent='PLATZ SPOT';
   document.getElementById('placeModeBar').classList.remove('show');
   document.getElementById('crosshair').classList.remove('show');
 }
@@ -1237,7 +1237,7 @@ function openSpotForm() {
   const wishes=profile.wishes?.length?profile.wishes:['Kaffee','Strand','Park','Wandern','Kino'];
   document.getElementById('spotWish').innerHTML=wishes.map(w=>`<option value="${w}">${w}</option>`).join('');
   editSpotId = null;
-  document.getElementById('spotModalTitle').textContent = '📍 Spot anlegen';
+  document.getElementById('spotModalTitle').textContent = '📍 Platz Spot anlegen';
   document.getElementById('spotName').value='';
   document.getElementById('spotDesc').value='';
   spotPhotoData=null;
@@ -1269,7 +1269,7 @@ function openDrawer(type) {
     loadFavoritesIntoDrawer(body);
 
   } else if (type === 'myspots') {
-    title.textContent = 'MEINE SPOTS';
+    title.textContent = 'MEINE PLATZ SPOTS';
     body.innerHTML = mySpots.length
       ? mySpots.map(s => {
           const isActive = s.active !== false;
@@ -1299,7 +1299,7 @@ function openDrawer(type) {
                       style="background:rgba(245,158,11,0.08);
                              border-color:rgba(245,158,11,0.3);
                              color:var(--acc);"
-                      title="Spot bearbeiten">✏️</button>
+                      title="Platz Spot bearbeiten">✏️</button>
               <button class="sc-btn" data-toggle="${s.id}"
                       style="background:${isActive
                         ? 'rgba(245,158,11,0.12)'
@@ -1308,14 +1308,14 @@ function openDrawer(type) {
                         ? 'rgba(245,158,11,0.35)'
                         : 'rgba(16,185,129,0.35)'};
                              color:${isActive ? 'var(--acc)' : '#10b981'};"
-                      title="${isActive ? 'Spot pausieren' : 'Spot aktivieren'}">
+                      title="${isActive ? 'Platz Spot pausieren' : 'Platz Spot aktivieren'}">
                 ${isActive ? '⏸' : '▶'}
               </button>
               <button class="sc-btn danger" data-del="${s.id}">🗑️</button>
             </div>
           </div>`;
         }).join('')
-      : `<div class="empty-state"><div class="es-icon">🗺️</div>Noch keine Spots.</div>`;
+      : `<div class="empty-state"><div class="es-icon">🗺️</div>Noch keine Platz Spots.</div>`;
 
     body.querySelectorAll('[data-lat]').forEach(b =>
       b.addEventListener('click', () => navigateToSpot(+b.dataset.lat, +b.dataset.lng))
@@ -1354,7 +1354,7 @@ function openDrawer(type) {
             const spot = mySpots.find(s => s.id == b.dataset.toggle);
             if (spot) spot.active = data.active;
             openDrawer('myspots');
-            toast(data.active ? '▶ Spot aktiviert' : '⏸ Spot pausiert');
+            toast(data.active ? '▶ Platz Spot aktiviert' : '⏸ Platz Spot pausiert');
             await loadAllSpots();
           }
         } catch (e) {
@@ -1368,7 +1368,7 @@ function openDrawer(type) {
     );
 
   } else if (type === 'all') {
-    title.textContent='ALLE SPOTS';
+    title.textContent='ALLE PLATZ SPOTS';
     const others=allSpots.filter(s=>s.code!==CODE);
     body.innerHTML=others.length
       ? others.map(s=>`<div class="spot-card">
@@ -1381,7 +1381,7 @@ function openDrawer(type) {
             <button class="sc-btn navigate" data-lat="${s.lat}" data-lng="${s.lng}">🧭</button>
             <button class="sc-btn primary" data-det="${s.id}">📋</button>
           </div></div>`).join('')
-      : `<div class="empty-state"><div class="es-icon">🌐</div>Keine Spots.</div>`;
+      : `<div class="empty-state"><div class="es-icon">🌐</div>Keine Platz Spots.</div>`;
     body.querySelectorAll('[data-lat]').forEach(b=>b.addEventListener('click',()=>navigateToSpot(+b.dataset.lat,+b.dataset.lng)));
     body.querySelectorAll('[data-det]').forEach(b=>b.addEventListener('click',()=>{const s=allSpots.find(x=>x.id==b.dataset.det);if(s){closeDrawer();setTimeout(()=>openSpotDetail(s.id),300);}}));
 
@@ -1476,7 +1476,7 @@ async function loadInvitesIntoDrawer(body) {
         <div style="display:flex;align-items:center;gap:0.75rem;">
           <div class="sc-icon">${isSender ? '📤' : '📨'}</div>
           <div class="sc-info">
-            <div class="sc-name">${esc(inv.spot_name || 'Spot')}</div>
+            <div class="sc-name">${esc(inv.spot_name || 'Platz Spot')}</div>
             <div class="sc-detail">${statusHtml} ${cd}</div>
             <div class="sc-detail">
               ${formatDateTime(timeStart)} – ${formatDateTime(timeEnd)}
@@ -1623,7 +1623,7 @@ function loadChatListIntoDrawer(body) {
         <div class="es-icon">💬</div>
         Noch keine Chats.
         <div style="font-size:0.78rem;color:var(--muted);margin-top:0.5rem;text-align:center;line-height:1.5;">
-          Tippe auf einen Spot auf der Karte<br>und starte ein Gespräch.
+          Tippe auf einen Platz Spot auf der Karte<br>und starte ein Gespräch.
         </div>
       </div>`;
     return;
@@ -1695,7 +1695,7 @@ function loadChatListIntoDrawer(body) {
 
 function openInviteFromSpot(spotId, name, wish) {
   selectedInviteSpot={id:spotId,name,wish};
-  document.getElementById('inviteSpotInfo').textContent=`Spot: ${name} · ${wish}`;
+  document.getElementById('inviteSpotInfo').textContent=`Platz Spot: ${name} · ${wish}`;
   document.getElementById('inviteStart').value='';
   document.getElementById('inviteEnd').value='';
   document.getElementById('inviteModal').classList.add('show');
@@ -1793,7 +1793,7 @@ function startInvitePolling() {
         document.getElementById('inviteHeaderBtn').classList.add('active');
         if (Notification.permission === 'granted') {
           new Notification('🧭 Neue Einladung!', {
-            body: 'Jemand möchte sich an deinem Spot treffen.'
+            body: 'Jemand möchte sich an deinem Platz Spot treffen.'
           });
         }
       }
@@ -2089,7 +2089,7 @@ async function loadFavoritesIntoDrawer(body) {
       <div class="es-icon">⭐</div>
       Noch keine Favoriten.
       <div style="font-size:0.78rem;color:var(--muted);margin-top:0.5rem;text-align:center;line-height:1.5;">
-        Öffne einen Spot auf der Karte<br>und tippe auf ⭐ um ihn zu speichern.
+        Öffne einen Platz Spot auf der Karte<br>und tippe auf ⭐ um ihn zu speichern.
       </div>
     </div>`;
     return;
@@ -2137,7 +2137,7 @@ async function loadFavoritesIntoDrawer(body) {
       <div style="display:flex;align-items:center;gap:0.75rem;">
         <div class="fav-icon">📍</div>
         <div class="fav-info" style="flex:1;min-width:0;">
-          <div class="fav-name">${esc(f.spot_name || 'Spot')}</div>
+          <div class="fav-name">${esc(f.spot_name || 'Platz Spot')}</div>
           <div class="fav-meta">${esc(f.wishTag || '')}</div>
           <div class="fav-checkin">${lastCheckin}</div>
         </div>
@@ -2160,7 +2160,7 @@ async function loadFavoritesIntoDrawer(body) {
 
       <button class="sc-btn success"
               style="margin-top:0.5rem;width:100%;padding:0.6rem;font-size:0.78rem;"
-              data-announce="${f.spot_id}" data-spotname="${esc(f.spot_name || 'Spot')}">
+              data-announce="${f.spot_id}" data-spotname="${esc(f.spot_name || 'Platz Spot')}">
         📍 Check-in ankündigen
       </button>
     </div>`;
@@ -2218,7 +2218,7 @@ function openCheckinAnnouncement(spotId, spotName, drawerBody) {
       </div>
       <div style="font-size:0.75rem;color:var(--muted2);margin-bottom:0.75rem;">
         Wähle einen Zeitpunkt mindestens 4 Stunden in der Zukunft.<br>
-        Alle Favoriten dieses Spots werden benachrichtigt.
+        Alle Favoriten dieses Platz Spots werden benachrichtigt.
       </div>
       <input type="datetime-local" id="checkinTime"
              min="${minTimeStr}"
@@ -2543,7 +2543,7 @@ async function openMeetingsModal() {
     const isSender  = inv.from_code === CODE;
 
     return `<div class="meeting-card ${urgency}">
-      <div class="meeting-spot">${esc(inv.spot_name || 'Spot')}</div>
+      <div class="meeting-spot">${esc(inv.spot_name || 'Platz Spot')}</div>
       <div class="meeting-time">
         ${formatDateTime(timeStart)} – ${formatDateTime(timeEnd)}
       </div>
@@ -2671,7 +2671,7 @@ function checkUpcomingMeetings(invites) {
     shownUrgentToasts.add(urgent.id);
     const countdown = formatCountdown(urgent.time_start);
     document.getElementById('urgentToastText').textContent =
-      `Treffen bei "${urgent.spot_name || 'Spot'}" ${countdown}`;
+      `Treffen bei "${urgent.spot_name || 'Platz Spot'}" ${countdown}`;
     document.getElementById('urgentToast').classList.add('show');
   }
 }
@@ -2787,7 +2787,7 @@ async function openSpotDetail(spotId) {
     ${offers.length
       ? `<div>${offers.map(o => `<span class="profile-chip offer">🎁 ${esc(o)}</span>`).join('')}</div>`
       : ''}
-    <a href="spot.html?id=${spot.id}" style="display:block;text-align:center;margin-top:0.75rem;padding:0.6rem;border-radius:12px;border:1px solid var(--bord2);color:var(--acc);font-size:0.82rem;font-weight:600;text-decoration:none;">🔗 Zur Spot-Seite (teilen)</a>
+    <a href="spot.html?id=${spot.id}" style="display:block;text-align:center;margin-top:0.75rem;padding:0.6rem;border-radius:12px;border:1px solid var(--bord2);color:var(--acc);font-size:0.82rem;font-weight:600;text-decoration:none;">🔗 Zur Platz-Spot-Seite (teilen)</a>
   `;
 
   renderWeatherBar(spot.lat, spot.lng);
@@ -2903,14 +2903,14 @@ function openNewSpots() {
 
   document.getElementById('drawerOverlay').classList.add('show');
   document.getElementById('drawer').classList.add('open');
-  document.getElementById('drawerTitle').textContent = `✨ NEUE SPOTS (2 KM)`;
+  document.getElementById('drawerTitle').textContent = `✨ NEUE PLATZ SPOTS (2 KM)`;
   currentDrawer = 'newspots';
   document.getElementById('newSpotsBtn').classList.add('active');
 
   const body = document.getElementById('drawerBody');
 
   if (!nearby.length) {
-    body.innerHTML = `<div class="empty-state"><div class="es-icon">✨</div>Keine neuen Spots<br>in den letzten 24h in 2 km.</div>`;
+    body.innerHTML = `<div class="empty-state"><div class="es-icon">✨</div>Keine neuen Platz Spots<br>in den letzten 24h in 2 km.</div>`;
     return;
   }
 
@@ -2969,7 +2969,7 @@ function openRadiusSearch() {
     );
     const catSuffix = radiusCatFilter ? ` · ${CATEGORY_EMOJI[radiusCatFilter]||'📌'} ${radiusCatFilter}` : '';
     document.getElementById('radiusResult').textContent =
-      `${nearby.length} Spot${nearby.length!==1?'s':''} innerhalb ${activeRadius} km${catSuffix}`;
+      `${nearby.length} Platz Spot${nearby.length!==1?'s':''} innerhalb ${activeRadius} km${catSuffix}`;
   } else {
     document.getElementById('radiusResult').textContent = '';
   }
@@ -3014,7 +3014,7 @@ function selectRadius(km) {
 
   const catSuffix = radiusCatFilter ? ` · ${CATEGORY_EMOJI[radiusCatFilter]||'📌'} ${radiusCatFilter}` : '';
   document.getElementById('radiusResult').textContent =
-    `${nearby.length} Spot${nearby.length!==1?'s':''} innerhalb ${km} km${catSuffix}`;
+    `${nearby.length} Platz Spot${nearby.length!==1?'s':''} innerhalb ${km} km${catSuffix}`;
   document.getElementById('radiusTopBtn').classList.add('active');
   setTimeout(()=>{closeModals();openDrawerFiltered(nearby,km);},600);
 }
@@ -3038,7 +3038,7 @@ async function openDrawerFiltered(spots, km) {
 
   if (!spots.length) {
     const catNote = radiusCatFilter ? ` in der Kategorie „${radiusCatFilter}"` : '';
-    body.innerHTML = `<div class="empty-state"><div class="es-icon">🔍</div>Keine Spots${catNote} innerhalb ${km} km.</div>`;
+    body.innerHTML = `<div class="empty-state"><div class="es-icon">🔍</div>Keine Platz Spots${catNote} innerhalb ${km} km.</div>`;
     return;
   }
 
@@ -3173,7 +3173,7 @@ function openWeeklyCreateModal() {
   document.getElementById('weeklyModalContent').innerHTML = `
     <div class="modal-title">✨ Wochen-Spot erstellen</div>
     <p style="font-size:0.8rem;color:var(--muted2);margin-bottom:0.75rem;">
-      Tippe auf die Karte um den Ort festzulegen – der Spot läuft nach 7 Tagen ab.
+      Tippe auf die Karte um den Ort festzulegen – der Platz Spot läuft nach 7 Tagen ab.
     </p>
     <div id="weeklyCreateMap"></div>
     <span class="finp-label">Name</span>
@@ -3266,7 +3266,7 @@ function showWeeklyShare(token, name) {
     </div>
     <button class="btn-ghost" style="width:100%;margin-top:0.5rem;font-size:0.82rem;"
             onclick="closeWeeklyModal();setTimeout(()=>openDrawer('weekly'),300);">
-      ← Zurück zu meinen Spots
+      ← Zurück zu meinen Platz Spots
     </button>
   `;
 
@@ -3556,9 +3556,9 @@ function initHelpSystem() {
   });
 
   const dockMap = [
-    { text: 'Meine Spots', key: 'myspots',  action: () => openDrawer('myspots') },
-    { text: 'Alle Spots',  key: 'allspots', action: () => openDrawer('all') },
-    { text: 'Neue Spots',  key: 'newspots', action: () => openNewSpots() },
+    { text: 'Meine Platz Spots', key: 'myspots',  action: () => openDrawer('myspots') },
+    { text: 'Alle Platz Spots',  key: 'allspots', action: () => openDrawer('all') },
+    { text: 'Neue Platz Spots',  key: 'newspots', action: () => openNewSpots() },
   ];
   document.querySelectorAll('.dock-btn').forEach(btn => {
     const match = dockMap.find(d => btn.textContent.includes(d.text));

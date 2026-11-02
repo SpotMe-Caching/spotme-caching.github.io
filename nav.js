@@ -44,7 +44,7 @@ function navigate(lat, lng, name) {
 }
 
 function openNavOverlay(lat, lng, name) {
-  naviTarget = { lat, lng, name: name || 'Spot' };
+  naviTarget = { lat, lng, name: name || 'Platz Spot' };
   naviLastRoutePos = null;
   naviRouting = false;
   naviCentered = true;

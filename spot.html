@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>SpotMe · Spot</title>
+<title>SpotMe · Platz Spot</title>
 <meta name="theme-color" content="#080b10">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.css" rel="stylesheet">
@@ -250,7 +250,7 @@ html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Ou
 
 <div id="map"></div>
 <div class="content" id="content">
-  <div class="loading"><div class="loading-icon">📡</div>Lädt Spot…</div>
+  <div class="loading"><div class="loading-icon">📡</div>Lädt Platz Spot…</div>
 </div>
 <div class="toast" id="toast"></div>
 
@@ -325,7 +325,7 @@ async function loadSpot(id) {
     if (!r.ok) throw new Error('not_found');
     spot = await r.json();
   } catch {
-    content.innerHTML = `<div class="loading"><div class="loading-icon">🔍</div>Spot nicht gefunden.<br><a href="/" style="color:var(--acc);margin-top:1rem;display:block;">← Zur App</a></div>`;
+    content.innerHTML = `<div class="loading"><div class="loading-icon">🔍</div>Platz Spot nicht gefunden.<br><a href="/" style="color:var(--acc);margin-top:1rem;display:block;">← Zur App</a></div>`;
     return;
   }
 
@@ -366,13 +366,13 @@ async function loadSpot(id) {
     </div>
 
     <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
-      <div class="status-badge offline"><div class="status-dot"></div>📍 Spot</div>
+      <div class="status-badge offline"><div class="status-dot"></div>📍 Platz Spot</div>
       <span style="font-size:0.72rem;color:var(--muted2);">${timeAgoDays(spot.created_at)}</span>
     </div>
 
     ${spot.description ? `
     <div class="info-card">
-      <div class="info-label">ÜBER DIESEN SPOT</div>
+      <div class="info-label">ÜBER DIESEN PLATZ SPOT</div>
       <div class="info-text">${esc(spot.description)}</div>
     </div>` : ''}
 

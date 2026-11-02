@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
-  <title>SpotMe · Spot erstellen</title>
+  <title>SpotMe · Platz Spot erstellen</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.css" rel="stylesheet">
   <style>
@@ -344,7 +344,7 @@
   <!-- Karte -->
   <div class="map-card">
     <div id="map"></div>
-    <div class="map-note">📍 Tippe auf die Karte um den Spot-Standort zu setzen</div>
+    <div class="map-note">📍 Tippe auf die Karte um den Platz-Spot-Standort zu setzen</div>
     <div id="coordsDisplay">– GPS wird geladen –</div>
   </div>
 
@@ -352,7 +352,7 @@
   <div class="form-section">
     <div class="section-title">📍 Basis</div>
 
-    <label class="field-label">Name des Spots *</label>
+    <label class="field-label">Name des Platz Spots *</label>
     <input type="text" id="spotName" class="input-field"
            placeholder='z.B. "Café Central" oder "Park am See"'
            maxlength="60" autocomplete="off">
@@ -423,7 +423,7 @@
   <div class="form-section">
     <div class="section-title">📝 Beschreibung</div>
     <textarea id="description" class="input-field"
-              placeholder="Was macht diesen Spot besonders? Atmosphäre, Tipps, Besonderheiten …"
+              placeholder="Was macht diesen Platz Spot besonders? Atmosphäre, Tipps, Besonderheiten …"
               maxlength="250"></textarea>
     <div class="pill-hint">Optional · max. 250 Zeichen</div>
   </div>
@@ -451,7 +451,7 @@
 
   <!-- Speichern -->
   <button class="save-btn" id="saveBtn" onclick="saveSpot()">
-    ✨ Spot speichern
+    ✨ Platz Spot speichern
   </button>
 
 </div><!-- /container -->
@@ -459,7 +459,7 @@
 <!-- Ladeoverlay -->
 <div id="loadingOverlay">
   <div class="spinner"></div>
-  Spot wird gespeichert …
+  Platz Spot wird gespeichert …
 </div>
 
 <!-- Toast -->
@@ -694,7 +694,7 @@ async function saveSpot() {
 
     if (res.ok && data.success) {
       document.getElementById('loadingOverlay').classList.remove('show');
-      showToast('✅ Spot gespeichert!');
+      showToast('✅ Platz Spot gespeichert!');
       // Kurz warten damit der Nutzer den Toast sieht, dann zurück zur Karte
       setTimeout(() => {
         window.location.href = 'index.html';
