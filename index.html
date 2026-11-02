@@ -675,13 +675,46 @@ function openImg(src) {
 }
 
 // ── MAP ──────────────────────────────────────────────────────────────────────
+// Letzte Kartenansicht merken (nur in dieser Sitzung): Beim Zurückkehren von einer Spot-Seite
+// bleibt die Karte beim zuletzt angesehenen Spot, statt zum eigenen Standort zu springen.
+let viewRestored = false;
+function loadSavedMapView() {
+  try {
+    const v = JSON.parse(sessionStorage.getItem('sm_map_view') || 'null');
+    if (v && isFinite(v.lat) && isFinite(v.lng) && Date.now() - v.ts < 6 * 3600 * 1000) return v;
+  } catch {}
+  return null;
+}
+function saveMapView(lat, lng, zoom) {
+  try { sessionStorage.setItem('sm_map_view', JSON.stringify({ lat, lng, zoom, ts: Date.now() })); } catch {}
+}
+function showMyLocationPill() {
+  if (document.getElementById('myLocPill')) return;
+  const b = document.createElement('button');
+  b.id = 'myLocPill';
+  b.textContent = '📍 Mein Standort';
+  b.style.cssText = 'position:fixed;top:76px;left:50%;transform:translateX(-50%);z-index:300;padding:7px 16px;border-radius:100px;border:1px solid var(--bord2);background:var(--card);color:var(--acc);font-weight:700;font-size:0.8rem;cursor:pointer;backdrop-filter:blur(14px);box-shadow:0 4px 14px rgba(0,0,0,.3);';
+  b.onclick = () => {
+    if (userPos) map.flyTo({ center: [userPos.lng, userPos.lat], zoom: 15 });
+    try { sessionStorage.removeItem('sm_map_view'); } catch {}
+    b.remove();
+  };
+  document.body.appendChild(b);
+}
+
 function initMap() {
+  const savedView = loadSavedMapView();
+  viewRestored = !!savedView;
   map = new maplibregl.Map({
     container: 'map',
     style: 'https://tiles.openfreemap.org/styles/liberty',
-    center: [-0.38, 39.47],
-    zoom: 14,
+    center: savedView ? [savedView.lng, savedView.lat] : [-0.38, 39.47],
+    zoom: savedView ? savedView.zoom : 14,
     attributionControl: false
+  });
+  // nur vom Nutzer bewegte Ansicht merken (nicht das automatische Zentrieren)
+  map.on('moveend', e => {
+    if (e && e.originalEvent) { const c = map.getCenter(); saveMapView(c.lat, c.lng, map.getZoom()); }
   });
 
   map.on('load', () => {
@@ -704,9 +737,11 @@ function initMap() {
 
     // Nur zentrieren, wenn wir nicht über einen geteilten Link reingekommen sind
     const urlParams = new URLSearchParams(window.location.search);
-    if (!urlParams.get('spot')) {
+    if (!urlParams.get('spot') && !viewRestored) {
       map.setCenter([userPos.lng, userPos.lat]);
       map.setZoom(15);
+    } else if (viewRestored && !urlParams.get('spot')) {
+      showMyLocationPill();
     }
 
     const el = document.createElement('div');

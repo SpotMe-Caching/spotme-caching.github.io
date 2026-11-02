@@ -315,6 +315,7 @@ async function loadSpot(id) {
   }
 
   if (spot.lat && spot.lng) initMap(+spot.lat, +spot.lng);
+  try { if (isFinite(+spot.lat) && isFinite(+spot.lng) && spot.lat != null) sessionStorage.setItem('sm_map_view', JSON.stringify({ lat: +spot.lat, lng: +spot.lng, zoom: 16, ts: Date.now() })); } catch {}
 
   // Follow-Status prüfen
   let isFollowing = false;
