@@ -387,6 +387,12 @@ async function initDB() {
       `ALTER TABLE offline_messages ADD COLUMN IF NOT EXISTS type TEXT`,
     );
     await pool.query(
+      `ALTER TABLE offline_messages ADD COLUMN IF NOT EXISTS client_id TEXT`,
+    );
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_offmsg_client ON offline_messages(sender_code, recipient, client_id)`,
+    );
+    await pool.query(
       `ALTER TABLE offline_messages ADD COLUMN IF NOT EXISTS source TEXT`,
     );
     await pool.query(
@@ -426,7 +432,7 @@ async function initDB() {
         `ALTER TABLE user_spots ADD COLUMN IF NOT EXISTS image_status TEXT DEFAULT 'pending'`,
       )
       .catch(() => {});
-    console.log("✅ v18.0 – Alle Spalten bereit (inkl. SpotCache)");
+    console.log("✅ v15.0 – Alle Spalten bereit (inkl. SpotCache)");
   } catch (e) {
     console.log(
       "ℹ️ Spalten existieren bereits oder konnten nicht angelegt werden",
@@ -1464,42 +1470,56 @@ app.get("/api/offline-messages/:code", async (req, res) => {
 // Das verhindert anonymen Spam ohne einen Login zu erzwingen.
 app.post("/api/message", async (req, res) => {
   const { recipient, sender_code, sender_name, message, spot_type, token } =
-    req.body;
+    req.body || {};
+  const clientId =
+    typeof req.body?.client_id === "string" && /^[\w-]{6,64}$/.test(req.body.client_id)
+      ? req.body.client_id
+      : null;
 
-  // Pflichtfelder prüfen
   if (!recipient || !sender_code || !message || !token) {
     return res.status(400).json({
       error: "recipient, sender_code, message und token sind Pflicht",
     });
   }
-
-  // Selbst-Nachrichten verhindern
+  if (typeof recipient !== "string" || typeof sender_code !== "string" || typeof token !== "string") {
+    return res.status(400).json({ error: "Ungültige Eingabe" });
+  }
   if (sender_code === recipient) {
     return res
       .status(400)
       .json({ error: "Nachrichten an sich selbst nicht erlaubt" });
   }
 
-  // Nachricht bereinigen – Links und E-Mails entfernen, auf 280 Zeichen kürzen
   const clean = sanitizeMessage(message);
   if (!clean.length) {
     return res.status(400).json({ error: "Nachricht ist leer oder ungültig" });
   }
 
   try {
-    // FIX: Vorher wurde nur geprüft OB der sender_code ein Profil hat –
-    // nicht OB der Aufrufer dieses Profil auch besitzt. Jeder konnte sich
-    // als jeder ausgeben. Jetzt: Token muss zum sender_code passen.
-    const senderCheck = await pool.query(
-      `SELECT token FROM profiles WHERE code = $1 AND spot = 'caching' LIMIT 1`,
-      [sender_code],
-    );
-    if (!senderCheck.rows.length || senderCheck.rows[0].token !== token) {
+    // Token muss zum sender_code passen (jedes Profil dieses Codes zählt –
+    // der alte Check mit LIMIT 1 hat bei mehreren Profil-Zeilen zufällig abgelehnt)
+    if (!(await authCheck(sender_code, token))) {
       return res.status(403).json({ error: "Ungültiger Absender-Token" });
     }
 
-    // Postfach-Limit: maximal 100 ungelesene Chat-Nachrichten pro Empfänger
-    // Das verhindert Spam auch wenn jemand ein Profil hat
+    // Empfänger muss existieren (sonst landen Nachrichten im Nirgendwo)
+    const rc = await pool.query("SELECT 1 FROM profiles WHERE code = $1 LIMIT 1", [recipient]);
+    if (!rc.rows.length) {
+      return res.status(404).json({ error: "Empfänger nicht gefunden" });
+    }
+
+    // Idempotenz: gleicher client_id (Wiederholung nach verlorener Antwort) → nicht doppelt speichern
+    if (clientId) {
+      const dup = await pool.query(
+        `SELECT id FROM offline_messages
+         WHERE sender_code = $1 AND recipient = $2 AND client_id = $3 LIMIT 1`,
+        [sender_code, recipient, clientId],
+      );
+      if (dup.rows.length) {
+        return res.json({ success: true, duplicate: true, id: dup.rows[0].id, message: clean, delivered: false });
+      }
+    }
+
     const countCheck = await pool.query(
       `SELECT COUNT(*) AS cnt FROM offline_messages
        WHERE recipient = $1 AND spot_type = 'caching_chat' AND read = FALSE`,
@@ -1509,31 +1529,36 @@ app.post("/api/message", async (req, res) => {
       return res.status(429).json({ error: "Postfach des Empfängers voll" });
     }
 
-    // Nachricht speichern
-    await pool.query(
+    const ins = await pool.query(
       `INSERT INTO offline_messages
-         (recipient, sender_code, sender_name, message, spot_type)
-       VALUES ($1, $2, $3, $4, $5)`,
+         (recipient, sender_code, sender_name, message, spot_type, client_id)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
       [
         recipient,
         sender_code,
-        encrypt(sender_name?.slice(0, 50) || sender_code),
+        encrypt(String(sender_name || sender_code).slice(0, 50)),
         encrypt(clean),
-        spot_type || "caching_chat",
+        "caching_chat",
+        clientId,
       ],
     );
 
     console.log(`💬 Chat: ${sender_code} → ${recipient}`);
-    // Push-Benachrichtigung an Empfänger – jetzt awaited für den
-    // "Zugestellt"-Haken. Zeigt NUR ob die Push-Zustellung an den Dienst
-    // geklappt hat, NICHT ob/wann der Empfänger sie gelesen hat.
-    const delivered = await sendPushToCode(
-      recipient,
-      "💬 Neue Nachricht",
-      `${sender_name || sender_code}: ${clean.slice(0, 80)}`,
-      "/",
-    );
-    res.json({ success: true, delivered });
+    // Push darf die Antwort nie blockieren oder den Versand fehlschlagen lassen
+    let delivered = false;
+    try {
+      delivered = await Promise.race([
+        sendPushToCode(
+          recipient,
+          "💬 Neue Nachricht",
+          `${String(sender_name || sender_code).slice(0, 50)}: ${clean.slice(0, 80)}`,
+          "/",
+        ),
+        new Promise((r) => setTimeout(() => r(false), 4000)),
+      ]);
+    } catch {}
+    // message = bereinigter Text, damit der Absender sieht was ankam
+    res.json({ success: true, id: ins.rows[0].id, message: clean, delivered });
   } catch (e) {
     console.error("POST /api/message:", e.message);
     res.status(500).json({ error: "Datenbankfehler" });
@@ -1547,26 +1572,19 @@ app.post("/api/message", async (req, res) => {
 // wie ein Briefkasten der geleert wird wenn man die Post holt.
 app.get("/api/messages/:code", async (req, res) => {
   const { code } = req.params;
-  const spot_type = req.query.spot_type || "caching_chat";
+  const spot_type = String(req.query.spot_type || "caching_chat");
   const token = req.query.token || req.headers["x-spotme-token"];
 
-  // FIX: Vorher kein Token-Check – jeder der den Code kannte, konnte fremde
-  // Nachrichten abholen (und sie damit serverseitig als "read" markieren,
-  // sodass der echte Empfänger sie nie zu sehen bekam). Jetzt: nur der
-  // Code-Besitzer selbst darf sein eigenes Postfach leeren.
   if (!token) return res.status(401).json({ error: "Token fehlt" });
 
   try {
-    const auth = await pool.query(
-      `SELECT token FROM profiles WHERE code = $1 AND spot = 'caching' LIMIT 1`,
-      [code],
-    );
-    if (!auth.rows.length || auth.rows[0].token !== token) {
+    if (!(await authCheck(code, String(token)))) {
       return res.status(403).json({ error: "Ungültiger Token" });
     }
 
-    // Nachrichten der letzten 48 Stunden abrufen
-    // Ältere Nachrichten sind im localStorage bereits gespeichert
+    // Nachrichten der letzten 48 Stunden. NICHT mehr beim Abruf als gelesen
+    // markieren: geht die Antwort unterwegs verloren (Mobilfunk), wären die
+    // Nachrichten sonst für immer weg. Der Client bestätigt mit /ack.
     const { rows } = await pool.query(
       `SELECT id, sender_code, sender_name, message, spot_type, created_at
        FROM offline_messages
@@ -1574,21 +1592,11 @@ app.get("/api/messages/:code", async (req, res) => {
          AND spot_type = $2
          AND read = FALSE
          AND created_at > NOW() - INTERVAL '48 hours'
-       ORDER BY created_at ASC`,
+       ORDER BY id ASC
+       LIMIT 200`,
       [code, spot_type],
     );
 
-    // Als gelesen markieren damit beim nächsten Poll keine Duplikate kommen
-    if (rows.length > 0) {
-      const ids = rows.map((r) => r.id);
-      await pool.query(
-        "UPDATE offline_messages SET read = TRUE WHERE id = ANY($1)",
-        [ids],
-      );
-      console.log(`📬 ${rows.length} Chat-Nachrichten abgerufen für ${code}`);
-    }
-
-    // Nachrichten entschlüsseln bevor sie ans Frontend geschickt werden
     res.json(
       rows.map((r) => ({
         ...r,
@@ -1598,6 +1606,31 @@ app.get("/api/messages/:code", async (req, res) => {
     );
   } catch (e) {
     console.error("GET /api/messages:", e.message);
+    res.status(500).json({ error: "Datenbankfehler" });
+  }
+});
+
+// Empfang bestätigen – erst jetzt gelten die Nachrichten als gelesen/zugestellt
+app.post("/api/messages/:code/ack", async (req, res) => {
+  const { code } = req.params;
+  const token = req.body?.token || req.headers["x-spotme-token"];
+  const ids = Array.isArray(req.body?.ids)
+    ? req.body.ids.map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 500)
+    : [];
+  if (!token) return res.status(401).json({ error: "Token fehlt" });
+  try {
+    if (!(await authCheck(code, String(token)))) {
+      return res.status(403).json({ error: "Ungültiger Token" });
+    }
+    if (ids.length) {
+      await pool.query(
+        "UPDATE offline_messages SET read = TRUE WHERE recipient = $1 AND id = ANY($2::int[])",
+        [code, ids],
+      );
+    }
+    res.json({ success: true, acked: ids.length });
+  } catch (e) {
+    console.error("POST /api/messages/ack:", e.message);
     res.status(500).json({ error: "Datenbankfehler" });
   }
 });
@@ -4012,12 +4045,7 @@ async function authCheck(code, token) {
 }
 
 // ── Live-Events (Tickets / Teilnehmerlimit) – überschreibt die Live-Routen darunter ──
-const liveEvents = require("./live-events")(app, {
-  pool,
-  authCheck,
-  decrypt,
-  webpush,
-});
+const liveEvents = require("./live-events")(app, { pool, authCheck, decrypt, webpush });
 
 // ── Live Spot erstellen ──────────────────────────────────────────────────────
 app.post("/api/live-spots", async (req, res) => {

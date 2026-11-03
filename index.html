@@ -35,6 +35,7 @@
   <link href="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.css" rel="stylesheet">
   <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
   <script src="nav.js"></script>
+  <script src="chat-core.js"></script>
   
 </head>
 <body>
@@ -1266,6 +1267,7 @@ function openDrawer(type) {
   } else if (type === 'favorites') {
     title.textContent = '⭐ FAVORITEN';
     document.getElementById('favBadge').style.display = 'none';
+    SMChat.ackType('favorite_checkin');
     loadFavoritesIntoDrawer(body);
 
   } else if (type === 'myspots') {
@@ -1805,66 +1807,36 @@ function startInvitePolling() {
 
 let globalChatPollTimer = null;
 
+// Ergebnis eines SMChat.pull() verarbeiten: Unread-Zähler für alle Chats außer dem offenen
+function handlePullResult(res) {
+  const partners = Object.keys(res.added || {});
+  if (!partners.length) return;
+  let unread = {};
+  try { unread = JSON.parse(localStorage.getItem('sm_unread_caching') || '{}'); } catch {}
+  partners.forEach(p => {
+    const isCurrentChat = (currentDrawer === 'chat' && chatPartnerCode === p);
+    if (!isCurrentChat) unread[p] = (unread[p] || 0) + res.added[p];
+  });
+  try { localStorage.setItem('sm_unread_caching', JSON.stringify(unread)); } catch {}
+  updateChatBadgeFromStorage();
+  if (currentDrawer === 'chat' && chatPartnerCode && res.added[chatPartnerCode]) renderChatMessages();
+}
+
+async function globalChatTick() {
+  if (!CODE || CODE === '000000') return;
+  try {
+    handlePullResult(await SMChat.pull());
+    checkFavoriteNotifications();
+  } catch {}
+}
+
 function startGlobalChatPolling() {
   if (globalChatPollTimer) clearInterval(globalChatPollTimer);
-
-  globalChatPollTimer = setInterval(async () => {
-    if (!CODE || CODE === '000000') return;
-
-    try {
-      const r = await fetch(`${API}/messages/${CODE}?spot_type=caching_chat`);
-      if (!r.ok) return;
-      const newMsgs = await r.json();
-      if (!newMsgs.length) return;
-
-      let unread = {};
-      try { unread = JSON.parse(localStorage.getItem('sm_unread_caching') || '{}'); } catch {}
-      let hadNewMessages = false;
-
-      newMsgs.forEach(m => {
-        const room = buildChatRoom(CODE, m.sender_code);
-        const key  = CHAT_PREFIX + room;
-
-        let existing = [];
-        try { existing = JSON.parse(localStorage.getItem(key) || '[]'); } catch {}
-
-        const isDuplicate = existing.some(e =>
-          e.from === m.sender_code &&
-          e.text === m.message &&
-          Math.abs(e.ts - new Date(m.created_at).getTime()) < 5000
-        );
-
-        if (!isDuplicate) {
-          existing.push({
-            from:     m.sender_code,
-            fromName: m.sender_name,
-            text:     m.message,
-            ts:       new Date(m.created_at).getTime()
-          });
-          localStorage.setItem(key, JSON.stringify(existing));
-
-          const isCurrentChat = (currentDrawer === 'chat' && chatPartnerCode === m.sender_code);
-          if (!isCurrentChat) {
-            unread[m.sender_code] = (unread[m.sender_code] || 0) + 1;
-            hadNewMessages = true;
-          }
-        }
-      });
-
-      if (hadNewMessages) {
-        localStorage.setItem('sm_unread_caching', JSON.stringify(unread));
-        updateChatBadgeFromStorage();
-      }
-
-      if (currentDrawer === 'chat' && chatPartnerCode) {
-        renderChatMessages();
-      }
-
-      checkFavoriteNotifications();
-
-    } catch {}
-
-  }, 10000);
+  globalChatPollTimer = setInterval(() => { if (!document.hidden) globalChatTick(); }, 10000);
+  // Sofort wenn die App wieder sichtbar / online wird
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) globalChatTick(); });
+  window.addEventListener('online', () => { globalChatTick(); if (chatPartnerCode) SMChat.retry(chatPartnerCode, chatMyName()).then(renderChatMessages); });
+  globalChatTick();
 }
 
 function updateChatBadgeFromStorage() {
@@ -1898,27 +1870,18 @@ function updateInviteBadge(n) {
 }
 
 // ── CHAT INTEGRATION ──────────────────────────────────────────────────────────
-const CHAT_PREFIX = 'sm_local_msg_';
+window.SM_CHAT_CFG = { get api() { return API; }, get code() { return CODE; } };
+const CHAT_PREFIX = SMChat.PREFIX;
 let chatMyCode      = null;
 let chatPartnerCode = null;
 let chatPartnerName = null;
 let chatRoom        = null;
 let chatPollTimer   = null;
 
-function buildChatRoom(a, b) {
-  return [a, b].sort().join('-');
-}
-
-function getChatMessages() {
-  if (!chatRoom) return [];
-  try {
-    return JSON.parse(localStorage.getItem(CHAT_PREFIX + chatRoom) || '[]');
-  } catch { return []; }
-}
-
-function saveChatMessages(msgs) {
-  if (!chatRoom) return;
-  localStorage.setItem(CHAT_PREFIX + chatRoom, JSON.stringify(msgs));
+function buildChatRoom(a, b) { return SMChat.room(a, b); }
+function getChatMessages() { return chatRoom ? SMChat.load(chatRoom) : []; }
+function chatMyName() {
+  try { return JSON.parse(localStorage.getItem('sm_profile_caching') || '{}').name || CODE; } catch { return CODE; }
 }
 
 function renderChatMessages() {
@@ -1932,88 +1895,64 @@ function renderChatMessages() {
     return;
   }
 
+  const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
   container.innerHTML = msgs.map(m => {
     const isMine = m.from === chatMyCode;
     const time   = new Date(m.ts).toLocaleTimeString('de-DE',
                    { hour: '2-digit', minute: '2-digit' });
+    let st = '';
+    if (isMine && m.st === 'sending') st = ' · ⏳';
+    else if (isMine && m.st === 'failed') st = '';
+    else if (isMine && m.st === 'delivered') st = ' · ✓✓';
+    else if (isMine && m.st === 'sent') st = ' · ✓';
+    const fail = (isMine && m.st === 'failed')
+      ? `<div class="chat-fail" data-retry="${esc(m.cid)}" style="color:#f87171;font-size:0.68rem;margin-top:3px;cursor:pointer;">
+           ⚠️ ${esc(m.err || 'Nicht gesendet')} – ${m.perm ? '' : 'tippen zum erneut Senden'}</div>`
+      : '';
     return `<div class="chat-bubble ${isMine ? 'mine' : 'theirs'}">
       ${!isMine
         ? `<span class="chat-bubble-author">${esc(m.fromName || chatPartnerCode)}</span>`
         : ''}
       ${esc(m.text)}
-      <div class="chat-bubble-time">${time}</div>
+      <div class="chat-bubble-time">${time}${st}</div>${fail}
     </div>`;
   }).join('');
 
-  container.scrollTop = container.scrollHeight;
+  container.querySelectorAll('[data-retry]').forEach(el =>
+    el.addEventListener('click', async () => {
+      el.textContent = '⏳ …';
+      await SMChat.retryOne(chatPartnerCode, el.dataset.retry, chatMyName());
+      renderChatMessages();
+    })
+  );
+  if (nearBottom || !container.dataset.init) { container.scrollTop = container.scrollHeight; container.dataset.init = '1'; }
 }
 
+let chatSending = false;
 async function sendChatMsg() {
   const input = document.getElementById('chatInput');
   if (!input) return;
   const text = input.value.trim();
   if (!text || !chatPartnerCode) return;
 
-  const myName = JSON.parse(localStorage.getItem('sm_profile_caching') || '{}').name || chatMyCode;
-
-  const msgs = getChatMessages();
-  msgs.push({ from: chatMyCode, fromName: myName, text, ts: Date.now() });
-  saveChatMessages(msgs);
+  const m = await SMChat.send(chatPartnerCode, text, chatMyName());
+  if (!m) return;
   input.value = '';
+  input.focus();
   renderChatMessages();
+  const container = document.getElementById('chatMsgs');
+  if (container) container.scrollTop = container.scrollHeight;
 
-  try {
-    await fetch(`${API}/message`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        recipient:   chatPartnerCode,
-        sender_code: chatMyCode,
-        sender_name: myName,
-        message:     text,
-        spot_type:   'caching_chat'
-      })
-    });
-  } catch {}
+  await SMChat.transmit(chatPartnerCode, m, chatMyName());
+  renderChatMessages();
 }
 
 function startChatPolling() {
   stopChatPolling();
   chatPollTimer = setInterval(async () => {
-    if (!chatPartnerCode || !chatMyCode) return;
-    try {
-      const r = await fetch(`${API}/messages/${chatMyCode}?spot_type=caching_chat`);
-      if (!r.ok) return;
-      const newMsgs = await r.json();
-
-      const fromPartner = newMsgs.filter(m => m.sender_code === chatPartnerCode);
-      if (!fromPartner.length) return;
-
-      const existing = getChatMessages();
-      let hasNew = false;
-
-      fromPartner.forEach(m => {
-        const isDuplicate = existing.some(e =>
-          e.from === m.sender_code &&
-          e.text === m.message &&
-          Math.abs(e.ts - new Date(m.created_at).getTime()) < 5000
-        );
-        if (!isDuplicate) {
-          existing.push({
-            from:     m.sender_code,
-            fromName: m.sender_name,
-            text:     m.message,
-            ts:       new Date(m.created_at).getTime()
-          });
-          hasNew = true;
-        }
-      });
-
-      if (hasNew) {
-        saveChatMessages(existing);
-        renderChatMessages();
-      }
-    } catch {}
+    if (!chatPartnerCode || !chatMyCode || document.hidden) return;
+    handlePullResult(await SMChat.pull());
+    SMChat.retry(chatPartnerCode, chatMyName()).then(n => { if (n) renderChatMessages(); });
   }, 4000);
 }
 
@@ -2057,6 +1996,8 @@ function openChatDrawer(partnerCode, partnerName) {
 
   renderChatMessages();
   startChatPolling();
+  SMChat.pull().then(handlePullResult);
+  SMChat.retry(partnerCode, chatMyName()).then(n => { if (n) renderChatMessages(); });
 }
 
 // ── FAVORITEN ────────────────────────────────────────────────────────────────
@@ -2303,11 +2244,10 @@ async function toggleFavorite(spotId, isFav) {
 
 async function checkFavoriteNotifications() {
   try {
-    const r = await fetch(`${API}/messages/${CODE}?spot_type=favorite_checkin`);
-    if (!r.ok) return;
-    const msgs = await r.json();
-    if (msgs.length > 0) {
-      const badge = document.getElementById('favBadge');
+    const msgs = await SMChat.peekType('favorite_checkin');
+    const badge = document.getElementById('favBadge');
+    if (!badge) return;
+    if (msgs.length > 0 && currentDrawer !== 'favorites') {
       badge.textContent = msgs.length > 9 ? '9+' : msgs.length;
       badge.style.display = 'inline-block';
     }

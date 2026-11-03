@@ -10,6 +10,7 @@
 <link href="theme-vars.css" rel="stylesheet">
 <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
 <script src="nav.js"></script>
+<script src="chat-core.js"></script>
 <script src="live-events-client.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -427,22 +428,16 @@ async function toggleFollow(id) {
 }
 
 // ── CHAT ──────────────────────────────────────────────────────────────────────
-const CHAT_PREFIX = 'sm_local_msg_';
+window.SM_CHAT_CFG = { get api() { return API; }, get code() { return CODE; } };
 let chatPartnerCode = null;
 let chatPartnerName = null;
 let chatRoom        = null;
 let chatPollTimer   = null;
 
-function buildChatRoom(a, b) { return [a, b].sort().join('-'); }
-
-function getChatMessages() {
-  if (!chatRoom) return [];
-  try { return JSON.parse(localStorage.getItem(CHAT_PREFIX + chatRoom) || '[]'); }
-  catch { return []; }
-}
-function saveChatMessages(msgs) {
-  if (!chatRoom) return;
-  localStorage.setItem(CHAT_PREFIX + chatRoom, JSON.stringify(msgs));
+function buildChatRoom(a, b) { return SMChat.room(a, b); }
+function getChatMessages() { return chatRoom ? SMChat.load(chatRoom) : []; }
+function chatMyName() {
+  try { return JSON.parse(localStorage.getItem('sm_profile_caching') || '{}').name || CODE; } catch (e) { return CODE; }
 }
 
 function renderChatMessages() {
@@ -453,16 +448,31 @@ function renderChatMessages() {
     container.innerHTML = `<div style="text-align:center;color:#64748b;font-size:0.85rem;padding:2rem 0;">💬 Noch keine Nachrichten.</div>`;
     return;
   }
+  const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
   container.innerHTML = msgs.map(m => {
     const isMine = m.from === CODE;
     const time = new Date(m.ts).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    let st = '';
+    if (isMine && m.st === 'sending') st = ' · ⏳';
+    else if (isMine && m.st === 'delivered') st = ' · ✓✓';
+    else if (isMine && m.st === 'sent') st = ' · ✓';
+    const fail = (isMine && m.st === 'failed')
+      ? `<div data-retry="${esc(m.cid)}" style="color:#b91c1c;font-size:0.68rem;margin-top:3px;cursor:pointer;">⚠️ ${esc(m.err || 'Nicht gesendet')}${m.perm ? '' : ' – tippen zum erneut Senden'}</div>`
+      : '';
     return `<div class="chat-bubble ${isMine ? 'mine' : 'theirs'}">
       ${!isMine ? `<span class="chat-bubble-author">${esc(m.fromName || chatPartnerName)}</span>` : ''}
       ${esc(m.text)}
-      <div class="chat-bubble-time">${time}</div>
+      <div class="chat-bubble-time">${time}${st}</div>${fail}
     </div>`;
   }).join('');
-  container.scrollTop = container.scrollHeight;
+  container.querySelectorAll('[data-retry]').forEach(el =>
+    el.addEventListener('click', async () => {
+      el.textContent = '⏳ …';
+      await SMChat.retryOne(chatPartnerCode, el.dataset.retry, chatMyName());
+      renderChatMessages();
+    })
+  );
+  if (nearBottom || !container.dataset.init) { container.scrollTop = container.scrollHeight; container.dataset.init = '1'; }
 }
 
 async function sendChatMsg() {
@@ -470,55 +480,23 @@ async function sendChatMsg() {
   if (!input) return;
   const text = input.value.trim();
   if (!text || !chatPartnerCode) return;
-
-  const myName = JSON.parse(localStorage.getItem('sm_profile_caching') || '{}').name || CODE;
-
-  const msgs = getChatMessages();
-  msgs.push({ from: CODE, fromName: myName, text, ts: Date.now() });
-  saveChatMessages(msgs);
+  const m = await SMChat.send(chatPartnerCode, text, chatMyName());
+  if (!m) return;
   input.value = '';
+  input.focus();
   renderChatMessages();
-
-  try {
-    await fetch(`${API}/message`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        recipient: chatPartnerCode,
-        sender_code: CODE,
-        sender_name: myName,
-        message: text,
-        spot_type: 'caching_chat'
-      })
-    });
-  } catch {}
+  const c = document.getElementById('chatMsgs'); if (c) c.scrollTop = c.scrollHeight;
+  await SMChat.transmit(chatPartnerCode, m, chatMyName());
+  renderChatMessages();
 }
 
 function startChatPolling() {
   stopChatPolling();
   chatPollTimer = setInterval(async () => {
-    if (!chatPartnerCode || !CODE) return;
-    try {
-      const r = await fetch(`${API}/messages/${CODE}?spot_type=caching_chat`);
-      if (!r.ok) return;
-      const newMsgs = await r.json();
-      const fromPartner = newMsgs.filter(m => m.sender_code === chatPartnerCode);
-      if (!fromPartner.length) return;
-
-      const existing = getChatMessages();
-      let hasNew = false;
-      fromPartner.forEach(m => {
-        const isDuplicate = existing.some(e =>
-          e.from === m.sender_code && e.text === m.message &&
-          Math.abs(e.ts - new Date(m.created_at).getTime()) < 5000
-        );
-        if (!isDuplicate) {
-          existing.push({ from: m.sender_code, fromName: m.sender_name, text: m.message, ts: new Date(m.created_at).getTime() });
-          hasNew = true;
-        }
-      });
-      if (hasNew) { saveChatMessages(existing); renderChatMessages(); }
-    } catch {}
+    if (!chatPartnerCode || !CODE || document.hidden) return;
+    const res = await SMChat.pull();
+    SMChat.retry(chatPartnerCode, chatMyName()).then(n => { if (n) renderChatMessages(); });
+    if (res.added[chatPartnerCode]) renderChatMessages();
   }, 4000);
 }
 function stopChatPolling() {
@@ -535,6 +513,8 @@ function openChatOverlay(partnerCode, partnerName) {
   document.getElementById('chatOverlay').classList.add('active');
   renderChatMessages();
   startChatPolling();
+  SMChat.pull().then(r => { if (r.added[partnerCode]) renderChatMessages(); });
+  SMChat.retry(partnerCode, chatMyName()).then(n => { if (n) renderChatMessages(); });
 }
 
 function closeChatOverlay() {
