@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SpotMe Caching – Doku</title>
+<meta name="description" content="Doku zu SpotMe Caching: Features, Architektur, Setup, API und Stolperfallen.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#12161a; --panel:#1a2026; --line:#2c353d; --text:#e6eaed; --mute:#9aa6af;
+  --amber:#ffb020; --cyan:#3fd0e0; --code:#0c0f12; --ok:#5fd38d; --warn:#ff7a59;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f6f4ef; --panel:#ffffff; --line:#d8d4c8; --text:#1b2126; --mute:#59646d;
+    --amber:#b36b00; --cyan:#007c8a; --code:#eeebe2; --ok:#1d7a45; --warn:#b8351a;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f6f4ef; --panel:#ffffff; --line:#d8d4c8; --text:#1b2126; --mute:#59646d;
+  --amber:#b36b00; --cyan:#007c8a; --code:#eeebe2; --ok:#1d7a45; --warn:#b8351a;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:70px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--bg);color:var(--text);font:400 1.05rem/1.65 "Outfit",system-ui,sans-serif}
+a{color:var(--cyan)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+code,pre,.mono{font-family:"Space Mono",ui-monospace,Menlo,Consolas,monospace}
+code{background:var(--code);padding:.1em .4em;border-radius:4px;font-size:.88em}
+pre{background:var(--code);border:1px solid var(--line);border-left:4px solid var(--amber);padding:1rem;overflow-x:auto;font-size:.82rem;line-height:1.55;border-radius:6px}
+pre code{background:none;padding:0;font-size:inherit}
+header.top{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(6px);border-bottom:1px solid var(--line)}
+nav{max-width:980px;margin:0 auto;padding:.6rem 1rem;display:flex;gap:1rem;overflow-x:auto;white-space:nowrap;font-size:.92rem}
+nav a{text-decoration:none;color:var(--mute)}
+nav a:hover{color:var(--amber)}
+main{max-width:980px;margin:0 auto;padding:0 1rem 4rem}
+.hero{padding:3.5rem 0 2rem}
+.hero h1{font-size:clamp(2.4rem,9vw,4.6rem);line-height:1;margin:0 0 1rem;font-weight:800;letter-spacing:-.02em}
+.hero h1 span{color:var(--amber)}
+.hero p.lead{font-size:1.25rem;max-width:34rem;color:var(--mute);margin:0 0 1.5rem}
+.pills{display:flex;flex-wrap:wrap;gap:.5rem}
+.pill{border:1px solid var(--line);background:var(--panel);padding:.2rem .7rem;border-radius:99px;font-size:.82rem;color:var(--mute)}
+.pill b{color:var(--cyan);font-weight:600}
+section{padding-top:3rem}
+h2{font-size:1.8rem;margin:0 0 .4rem;font-weight:800;letter-spacing:-.01em;border-bottom:2px solid var(--amber);display:inline-block;padding-bottom:.1rem}
+h3{font-size:1.15rem;margin:1.8rem 0 .3rem;color:var(--cyan)}
+.sub{color:var(--mute);margin:.2rem 0 1.2rem;max-width:40rem}
+.grid{display:grid;gap:.9rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:1rem 1.1rem}
+.card h3{margin:0 0 .3rem;color:var(--text);font-size:1.05rem}
+.card p{margin:0;color:var(--mute);font-size:.95rem}
+.card ul{margin:.4rem 0 0;padding-left:1.1rem;color:var(--mute);font-size:.93rem}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
+table{border-collapse:collapse;width:100%;font-size:.92rem;min-width:520px}
+th,td{text-align:left;padding:.6rem .8rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--panel);color:var(--amber);font-weight:600}
+tr:last-child td{border-bottom:0}
+.flow{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:1rem 0}
+.node{background:var(--panel);border:1px solid var(--cyan);border-radius:6px;padding:.5rem .8rem;font-size:.9rem}
+.node small{display:block;color:var(--mute);font-size:.75rem}
+.arr{color:var(--amber);font-weight:700}
+.note{border:1px solid var(--line);border-left:4px solid var(--cyan);background:var(--panel);padding:.8rem 1rem;border-radius:6px;margin:1rem 0}
+.note.warn{border-left-color:var(--warn)}
+.note.ok{border-left-color:var(--ok)}
+.note strong{color:var(--text)}
+ol.steps{padding-left:1.2rem}
+ol.steps li{margin:.5rem 0}
+details{background:var(--panel);border:1px solid var(--line);border-radius:6px;margin:.6rem 0;padding:.2rem 1rem}
+summary{cursor:pointer;padding:.6rem 0;font-weight:600}
+footer{max-width:980px;margin:0 auto;padding:2rem 1rem 3rem;border-top:1px solid var(--line);color:var(--mute);font-size:.9rem}
+.m{display:inline-block;min-width:3.6rem;font-family:"Space Mono",monospace;font-size:.75rem;font-weight:700}
+.GET{color:var(--ok)}.POST{color:var(--amber)}.PUT,.PATCH{color:var(--cyan)}.DELETE{color:var(--warn)}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <nav aria-label="Inhalt">
+    <a href="#was">Was ist das?</a>
+    <a href="#features">Features</a>
+    <a href="#architektur">Architektur</a>
+    <a href="#setup">Setup</a>
+    <a href="#api">API &amp; DB</a>
+    <a href="#stolperfallen">Stolperfallen</a>
+    <a href="#roadmap">Roadmap</a>
+  </nav>
+</header>
+
+<main>
+
+<div class="hero">
+  <h1>SpotMe<br><span>Caching</span></h1>
+  <p class="lead">Geocaching, aber ohne Tupperdose im Gebüsch. Spots setzen, teilen, finden – und dann auch noch jemanden treffen, der ebenfalls hingeht.</p>
+  <div class="pills">
+    <span class="pill"><b>PWA</b> mobile-first</span>
+    <span class="pill"><b>Vanilla JS</b> keine Frameworks</span>
+    <span class="pill"><b>Node + Express</b> Backend</span>
+    <span class="pill"><b>PostgreSQL</b> via Neon</span>
+    <span class="pill"><b>MIT</b> Open Source</span>
+  </div>
+</div>
+
+<section id="was">
+  <h2>Was ist das?</h2>
+  <p class="sub">Eine Progressive Web App, die direkt im Browser läuft. Kein App-Store, kein Installationsmarathon.</p>
+  <p>Klassisches Geocaching heißt: Dose suchen, Zettel unterschreiben, heimgehen. SpotMe packt eine soziale Ebene drauf: Du setzt einen Spot mit Foto und Beschreibung, andere entdecken ihn, schicken dir eine Einladung, und wenn ihr beide wirklich vor Ort seid, wird eingecheckt – inklusive Match-Screen. Dazu gibt’s Profile, Chat, Wetter, Navigation und ein paar Datenschutz-Regeln, die ernster gemeint sind, als man es bei einem Hobbyprojekt erwarten würde.</p>
+  <div class="note ok"><strong>Motto:</strong> „Nicht jeder Spot ist auf der Karte. Manche muss man sich verdienen.“</div>
+</section>
+
+<section id="features">
+  <h2>Features</h2>
+  <p class="sub">Alles, was die App heute kann. Ohne Marketing-Nebel.</p>
+  <div class="grid">
+    <div class="card"><h3>🗺️ Karte</h3>
+      <ul><li>MapLibre GL mit OpenFreeMap-Tiles – kein API-Key, kein Ärger</li><li>Eigene Marker in Amber, fremde mit Online-Status</li><li>Kategorie-Filter als Pills über der Karte</li><li>Radius-Suche (2 / 5 / 10 km), sortiert nach Entfernung, mit Wetter-Badge</li><li>„Neue Spots“: letzte 24 h im 2-km-Umkreis</li></ul></div>
+    <div class="card"><h3>🧭 In-App-Navigation</h3>
+      <ul><li>Vollbild-Overlay mit Live-GPS (<code>watchPosition</code>)</li><li>Fußweg über OpenRouteService <code>foot-hiking</code>, Auto über OSRM</li><li>Neuberechnung erst nach 25 m – kein API-Spam</li><li>Distanz, Fuß- und Fahrzeit immer sichtbar</li></ul></div>
+    <div class="card"><h3>📍 Spots</h3>
+      <ul><li>Eigene Erstellungsseite mit Kategorie, Tageszeit, Andrang, Intimität</li><li>Foto-Upload mit Canvas-Komprimierung (JPEG 72 %)</li><li>Bearbeiten, löschen oder per Soft Delete deaktivieren</li><li>Wetter für die nächsten 8 Stunden (Open-Meteo)</li><li>Neue Fotos brauchen die Freigabe vom Admin</li></ul></div>
+    <div class="card"><h3>🗓️ Wochen-Spots</h3>
+      <ul><li>Privater Spot, der nach 7 Tagen von selbst verschwindet</li><li>Link teilen, fertig – Besucher brauchen keinen Login</li><li>Anonyme Check-ins („Anonym #1, #2 …“)</li><li>Live-Countdown auf <code>spot-woche.html</code></li></ul></div>
+    <div class="card"><h3>📡 Live Spots</h3>
+      <p>Standort live für Freunde freigeben. Gedacht für spontane Treffen. Freiwillig, ein Spot zum Einschalten.</p></div>
+    <div class="card"><h3>📨 Einladungen</h3>
+      <ul><li>Einladung mit Zeitfenster, annehmen oder ablehnen</li><li>GPS-Check-in im 50-m-Radius</li><li>Match-Screen und gegenseitige Verifikation</li><li>Abgelaufene Einladungen: erst archiviert, nach 30 Tagen gelöscht</li></ul></div>
+    <div class="card"><h3>💬 Chat</h3>
+      <ul><li>Direktnachrichten an Spot-Inhaber, auch ohne Einladung</li><li>WhatsApp-artige Chatliste mit Ungelesen-Zähler</li><li>Offline-Nachrichten kommen an, sobald der andere wieder da ist</li><li>Echtzeit-Teil läuft über PeerJS (WebRTC) im Ordner <code>chat/</code></li></ul></div>
+    <div class="card"><h3>👤 Profile</h3>
+      <ul><li>Anzeigename, Geburtsjahr (einmalig), Region, Bio, Wünsche und Angebote als Chips</li><li>Avatar mit Admin-Moderation</li><li>Backup und Restore als JSON-Datei</li></ul></div>
+    <div class="card"><h3>🔐 Datenschutz</h3>
+      <ul><li>Dein Standort ist auf der Karte für andere unsichtbar</li><li>Andere sehen nur ● online / ○ offline</li><li>Profildaten liegen serverseitig AES-256-CBC-verschlüsselt</li><li>Fotos erscheinen erst nach Freigabe</li></ul></div>
+    <div class="card"><h3>📱 PWA &amp; Extras</h3>
+      <ul><li>Installierbar auf iOS und Android, offlinefähig per Service Worker</li><li>Wegpunkte, Routen-Erstellung, Bluesky-Anbindung, Wetter-Modul</li><li>Mehrsprachig: de / en / es (Ordner <code>locales/</code>)</li><li>Hilfe-Bereich (<code>help/</code>), Android-Wrapper (<code>android-app/</code>)</li></ul></div>
+  </div>
+</section>
+
+<section id="architektur">
+  <h2>Architektur</h2>
+  <p class="sub">Frontend liegt auf GitHub Pages, das Backend auf Render, die Daten bei Neon. Drei Hosts, null Serverwartung im Wohnzimmer.</p>
+  <div class="flow" role="img" aria-label="Browser zu GitHub Pages, API auf Render, Datenbank bei Neon">
+    <div class="node">Browser / PWA<small>Vanilla JS + Service Worker</small></div><span class="arr">⇄</span>
+    <div class="node">GitHub Pages<small>HTML, CSS, JS</small></div><span class="arr">→</span>
+    <div class="node">Render<small>Node + Express + PeerJS</small></div><span class="arr">→</span>
+    <div class="node">Neon<small>PostgreSQL</small></div>
+  </div>
+  <p>Der Browser holt sich die Seiten von GitHub Pages und redet für alles Dynamische mit dem Express-Server. Der Server verschlüsselt Profildaten, hält die Moderationsqueue und erledigt Push-Nachrichten (<code>web-push</code>) und Bluesky-Posts (<code>@atproto/api</code>). Externe Dienste für Tiles, Routing und Wetter spricht der Client direkt an.</p>
+
+  <h3>Tech-Stack</h3>
+  <div class="tbl"><table>
+    <tr><th>Bereich</th><th>Technik</th></tr>
+    <tr><td>Frontend</td><td>Vanilla JS, HTML5, CSS3 – keine Frameworks</td></tr>
+    <tr><td>Karte &amp; Tiles</td><td><a href="https://maplibre.org/">MapLibre GL</a> + <a href="https://openfreemap.org/">OpenFreeMap</a></td></tr>
+    <tr><td>Routing</td><td><a href="https://openrouteservice.org/">OpenRouteService</a> (Fußweg, Key nötig) · <a href="https://project-osrm.org/">OSRM</a> (Auto, kein Key)</td></tr>
+    <tr><td>Wetter</td><td><a href="https://open-meteo.com/">Open-Meteo</a> (gratis, kein Key)</td></tr>
+    <tr><td>Backend</td><td>Node.js ≥ 18, Express 4, <code>cors</code>, <code>pg</code>, <code>peer</code>, <code>web-push</code>, <code>@atproto/api</code></td></tr>
+    <tr><td>Datenbank</td><td>PostgreSQL bei <a href="https://neon.tech/">Neon</a> (serverless)</td></tr>
+    <tr><td>Hosting</td><td>GitHub Pages (Frontend) + <a href="https://render.com/">Render</a> (Backend)</td></tr>
+    <tr><td>Verschlüsselung</td><td>AES-256-CBC über Node <code>crypto</code></td></tr>
+    <tr><td>Schriften</td><td>Space Mono, Outfit (Google Fonts)</td></tr>
+  </table></div>
+
+  <h3>Was wo liegt</h3>
+<pre><code>spotme-caching.github.io/
+├── index.html            Hauptkarte: Spots, Navigation, Chat, Wochen-Spots
+├── spot-erstellen.html   Spot anlegen (Kategorie, Foto, GPS)
+├── spot-detail.html      Spot-Ansicht
+├── spot-caching.html     Spot-Check-in
+├── spot-navi.html        Navigation
+├── spot-woche.html       Öffentliche Ansicht für Wochen-Spots
+├── live-spot.html        Live Spot ansehen
+├── live-spot-manage.html Live Spots verwalten
+├── waypoints.html        Wegpunkte
+├── waypoint-creator.html Wegpunkte erstellen
+├── route-erstellen.html  Routen bauen
+├── profil-caching.html   Profil, Backup, Restore
+├── messenger.html        Messenger
+├── leaderboard.html      Rangliste
+├── admin.html            Moderation (Avatare, Spot-Fotos)
+├── landing.html          Startseite für Neue
+├── offline.html / 404.html
+├── nav.js · bluesky.js · wetter.js     Module
+├── spotme.css · theme-vars.css         Styling und Farbvariablen
+├── sw.js · manifest.json               PWA
+├── server.js · package.json            Backend
+├── chat/ · help/ · locales/ · doku/    Chat, Hilfe, Übersetzungen, Doku
+├── android-app/ · icons/ · screenshots/ · _res/ · backup/
+├── workflow/ · .github/workflows/      Automatisierung
+└── news.md                             News-Feed der App</code></pre>
+</section>
+
+<section id="setup">
+  <h2>Setup</h2>
+  <p class="sub">In zehn Minuten läuft das Ding. Versprochen, wenn Neon nicht gerade Kaffeepause hat.</p>
+  <h3>Voraussetzungen</h3>
+  <p>Node.js ≥ 18 und eine PostgreSQL-Datenbank (Neon reicht völlig).</p>
+
+  <h3>Backend starten</h3>
+<pre><code>npm install
+DATABASE_URL=postgres://... \
+ADMIN_KEY=dein-geheimer-key \
+CRYPTO_KEY=$(openssl rand -hex 32) \
+node server.js</code></pre>
+  <p>Die Tabellen legt <code>initDB()</code> beim ersten Start selbst an, inklusive <code>weekly_spots</code>. Migrationen von Hand gibt’s nicht.</p>
+
+  <h3>Environment-Variablen</h3>
+  <div class="tbl"><table>
+    <tr><th>Variable</th><th>Wofür</th></tr>
+    <tr><td><code>DATABASE_URL</code></td><td>PostgreSQL-Connection-String (Neon oder Render)</td></tr>
+    <tr><td><code>ADMIN_KEY</code></td><td>Passwort fürs Admin-Panel</td></tr>
+    <tr><td><code>CRYPTO_KEY</code></td><td>64 Hex-Zeichen für die AES-Verschlüsselung (<code>openssl rand -hex 32</code>)</td></tr>
+    <tr><td><code>PORT</code></td><td>Standard 3000, Render setzt es selbst</td></tr>
+  </table></div>
+  <div class="note warn"><strong>CRYPTO_KEY gut aufheben.</strong> Ohne ihn sind alle verschlüsselten Profile Datenmüll. Neu erzeugen heißt: alle Profile weg.</div>
+
+  <h3>Fußweg-Routing aktivieren</h3>
+  <p>Kostenlosen Key bei <a href="https://openrouteservice.org">openrouteservice.org</a> holen und in <code>index.html</code> eintragen (Zeile ca. 902):</p>
+<pre><code>const ORS_KEY = 'dein-ors-key-hier';</code></pre>
+  <p>Ohne Key fällt die App auf OSRM <code>foot</code> zurück, das kennt aber nur befestigte Wege.</p>
+
+  <h3>Frontend deployen</h3>
+  <ol class="steps">
+    <li>Alles auf GitHub Pages pushen.</li>
+    <li><code>CACHE_VERSION</code> in <code>sw.js</code> um 1 erhöhen.</li>
+    <li>Fertig. Der Service Worker registriert sich von selbst.</li>
+  </ol>
+<pre><code>const CACHE_VERSION = 'v9'; // bei jedem Deploy hochzählen</code></pre>
+  <div class="note"><strong>Warum das so wichtig ist:</strong> Statische Dateien laufen per Stale-While-Revalidate. Ohne neue Version sehen Nutzer munter weiter den alten Stand, und du suchst Bugs, die längst gefixt sind.</div>
+</section>
+
+<section id="api">
+  <h2>API &amp; Datenbank</h2>
+  <p class="sub">Alle Endpunkte, so wie sie im README stehen. Bei neueren Features (Live Spots, Push, Bluesky) lohnt ein Blick in <code>server.js</code>.</p>
+
+  <h3>Tabellen</h3>
+  <div class="tbl"><table>
+    <tr><th>Tabelle</th><th>Inhalt</th></tr>
+    <tr><td><code>profiles</code></td><td>Nutzerprofile, AES-verschlüsselt</td></tr>
+    <tr><td><code>user_spots</code></td><td>Spots mit Koordinaten, Foto, Kategorie und <code>active</code>-Flag</td></tr>
+    <tr><td><code>spot_cache_invites</code></td><td>Einladungen mit Zeitfenster und Status-Lifecycle</td></tr>
+    <tr><td><code>offline_messages</code></td><td>Nachrichten für Offline-Nutzer und Chat (<code>spot_type</code>)</td></tr>
+    <tr><td><code>verifications</code></td><td>Verifikationen nach erfolgreichem Check-in</td></tr>
+    <tr><td><code>profile_comments</code></td><td>Story-Kommentare</td></tr>
+    <tr><td><code>weekly_spots</code></td><td>Wochen-Spots mit Token und anonymen Check-ins</td></tr>
+  </table></div>
+
+  <h3>Endpunkte</h3>
+  <details open><summary>Spots</summary>
+<pre><code>GET    /api/userspots/all          alle aktiven Spots
+GET    /api/userspots/:code        Spots eines Nutzers
+POST   /api/userspots              Spot anlegen
+PUT    /api/userspots/:id          Spot bearbeiten
+PATCH  /api/userspots/:id/toggle   aktivieren / deaktivieren
+DELETE /api/userspots/:id          endgültig löschen</code></pre></details>
+  <details><summary>Profile &amp; Avatare</summary>
+<pre><code>POST   /api/profile                Profil anlegen / aktualisieren
+GET    /api/profile/:code          Profil abrufen (entschlüsselt)
+POST   /api/avatar                 Avatar hochladen (Status: pending)
+GET    /api/avatar/:code           Avatar abrufen (nur approved)</code></pre></details>
+  <details><summary>Einladungen &amp; Check-in</summary>
+<pre><code>POST   /api/spotcache/invite          Einladung senden
+GET    /api/spotcache/invites/:code   Einladungen abrufen (inkl. expired)
+POST   /api/spotcache/invite/respond  annehmen / ablehnen
+POST   /api/spotcache/checkin         Check-in (50-m-Prüfung)</code></pre></details>
+  <details><summary>Chat</summary>
+<pre><code>POST   /api/message                Nachricht senden
+GET    /api/messages/:code         Nachrichten abrufen</code></pre></details>
+  <details><summary>Wochen-Spots</summary>
+<pre><code>POST   /api/weekly-spots                  erstellen (Auth)
+GET    /api/weekly-spots/mine             meine (Auth)
+GET    /api/weekly-spots/:token           öffentlich, kein Login
+POST   /api/weekly-spots/:token/checkin   anonym einchecken
+DELETE /api/weekly-spots/:token           löschen (Auth)</code></pre></details>
+  <details><summary>Admin</summary>
+<pre><code>GET    /api/admin/pending-avatars        Avatar-Queue
+POST   /api/admin/avatar-action          freigeben / ablehnen
+GET    /api/admin/pending-spot-images    Spot-Bild-Queue
+POST   /api/admin/spot-image-action      freigeben / ablehnen</code></pre></details>
+
+  <h3>Admin-Panel</h3>
+  <p><code>admin.html</code> ist dein Türsteher: Neue Fotos stehen auf <code>pending</code>, bis du sie freigibst. Rein kommst du mit dem <code>ADMIN_KEY</code>.</p>
+</section>
+
+<section id="stolperfallen">
+  <h2>Stolperfallen &amp; Befunde</h2>
+  <p class="sub">Die ehrliche Ecke. Hier steht, was beim Durchlesen aufgefallen ist.</p>
+
+  <div class="note warn"><strong>Das README hinkt hinterher.</strong> Die Dateistruktur dort nennt 9 Dateien, im Repo liegen deutlich mehr (Live Spots, Wegpunkte, Routen, Messenger, Leaderboard, <code>chat/</code>, <code>locales/</code> …). Auch Push, Bluesky und PeerJS fehlen im Text, obwohl sie in <code>package.json</code> stehen. Wer neu einsteigt, kriegt ein zu kleines Bild.</div>
+
+  <div class="note warn"><strong>Datenschutz-Versprechen und Live Spots.</strong> Das README sagt, der eigene Standort sei für andere nie sichtbar. Live Spots teilen ihn aber live mit Freunden. Das ist okay, weil freiwillig – aber der Satz sollte das sagen: „…außer du aktivierst einen Live Spot.“</div>
+
+  <div class="note warn"><strong>Das Backup ist ein Schlüsselbund.</strong> Die JSON-Datei enthält Code und Token. Wer sie in die Finger kriegt, ist du. Nutzer sollten das vor dem Download lesen, nicht danach.</div>
+
+  <div class="note"><strong>AES-256-CBC hat keine Manipulationserkennung.</strong> Für Profildaten geht das. Wer später nachrüsten will: AES-256-GCM prüft die Integrität gleich mit. Alte Daten müssten einmal umgezogen werden.</div>
+
+  <div class="note"><strong>Der ORS-Key steckt im Frontend.</strong> Das ist bei reinen GitHub-Pages-Apps nicht vermeidbar. Im ORS-Dashboard das Kontingent im Blick behalten, und der Key sollte nur dafür taugen, wofür er gedacht ist.</div>
+
+  <div class="note"><strong><code>CACHE_VERSION</code> vergessen</strong> ist der Klassiker Nummer eins. Siehe Setup.</div>
+
+  <div class="note"><strong>PeerJS: „ID is taken“.</strong> Wird <code>initWebRTC</code> doppelt aufgerufen, versucht die Seite zweimal dieselbe Peer-ID zu belegen. Einmalig initialisieren und die Instanz wiederverwenden.</div>
+
+  <div class="note"><strong>Eine Quelle der Wahrheit.</strong> Zwei Versionen derselben Datei parallel zu bearbeiten hat schon Regressionen gebracht. Eine Datei, ein Stand.</div>
+
+  <div class="note ok"><strong>Stand dieser Analyse:</strong> Gelesen wurden README, <code>package.json</code>, <code>news.md</code> und die Dateiliste. Die Quelltexte (<code>server.js</code>, <code>index.html</code>, <code>sw.js</code>, Unterordner) waren nicht abrufbar. Details zu Live Spots, Push und Bluesky bitte gegen den Code prüfen.</div>
+</section>
+
+<section id="roadmap">
+  <h2>Roadmap</h2>
+  <p class="sub">Was schon steht und was noch kommt.</p>
+  <div class="grid">
+    <div class="card"><h3>✅ Läuft</h3>
+      <ul><li>Spots setzen, bearbeiten, deaktivieren</li><li>Kategorien, Filter, Radius-Suche</li><li>Einladungen, Check-in, Verifikation</li><li>Chat mit Offline-Zustellung</li><li>Wochen-Spots, Live Spots</li><li>In-App-Navigation (Fuß + Auto)</li><li>Backup/Restore, Moderation, AES-Verschlüsselung</li><li>Service Worker, Wetter</li></ul></div>
+    <div class="card"><h3>🔜 Kommt</h3>
+      <ul><li><b>Ankunftserkennung:</b> „Du bist da“ bei unter 20 m</li><li><b>SSE statt Polling:</b> Express-SSE plus <code>LISTEN/NOTIFY</code>, sinnvoll ab ca. 500 gleichzeitigen Nutzern</li><li><b>Besuchshistorie</b> im Profil</li><li><b>Marker-Clustering</b></li><li><b>Haptik</b> bei Check-in und neuer Nachricht</li><li><b>Spot-Ablaufdatum</b> durch den Eigentümer</li></ul></div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <p><strong>Dragons Chain</strong> · Costa Brava, Spanien – entwickelt im SpotMe-Ökosystem, radikal transparent, zero-profit. Lizenz: MIT.</p>
+  <p><a href="https://github.com/SpotMe-Caching/spotme-caching.github.io">Repo auf GitHub</a> · <a href="https://spotme-caching.github.io/">App öffnen</a></p>
+</footer>
+
+</body>
+</html>
