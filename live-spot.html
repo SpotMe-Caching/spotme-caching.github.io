@@ -248,6 +248,7 @@ html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Ou
   </div>
 </div>
 
+<div id="locNotice" style="display:none;padding:0.55rem 1rem;font-size:0.8rem;text-align:center;background:rgba(245,158,11,0.14);color:var(--acc);border-bottom:1px solid rgba(245,158,11,0.3);">🔒 Der genaue Standort wird nach der Anmeldung angezeigt.</div>
 <div id="map"></div>
 <div class="content" id="content">
   <div class="loading"><div class="loading-icon">📡</div>Lädt Live Spot…</div>
@@ -288,15 +289,31 @@ function openImg(src) {
   document.getElementById('imgFullscreen').classList.add('show');
 }
 
-function initMap(lat, lng) {
+function circlePoly(lat, lng, r) {
+  const pts = [];
+  for (let i = 0; i <= 64; i++) {
+    const a = (i / 64) * 2 * Math.PI;
+    pts.push([lng + (r * Math.sin(a)) / (111320 * Math.cos(lat * Math.PI / 180)), lat + (r * Math.cos(a)) / 111320]);
+  }
+  return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [pts] } };
+}
+
+function initMap(lat, lng, approxR) {
   if (spotMap) spotMap.remove();
   spotMap = new maplibregl.Map({
     container: 'map',
     style: 'https://tiles.openfreemap.org/styles/liberty',
-    center: [lng, lat], zoom: 14,
+    center: [lng, lat], zoom: approxR ? 14.3 : 14,
     interactive: false, attributionControl: false
   });
   spotMap.on('load', () => {
+    if (approxR) {
+      // ungefährer Bereich statt Punkt – Mitte ≠ echter Standort
+      spotMap.addSource('approx', { type: 'geojson', data: circlePoly(lat, lng, approxR) });
+      spotMap.addLayer({ id: 'approx-fill', type: 'fill', source: 'approx', paint: { 'fill-color': '#f59e0b', 'fill-opacity': 0.18 } });
+      spotMap.addLayer({ id: 'approx-line', type: 'line', source: 'approx', paint: { 'line-color': '#f59e0b', 'line-width': 2, 'line-dasharray': [2, 2] } });
+      return;
+    }
     const el = document.createElement('div');
     el.style.cssText = 'width:22px;height:22px;background:#00e676;border-radius:50%;border:3px solid white;box-shadow:0 0 16px rgba(0,230,118,0.9);';
     new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(spotMap);
@@ -315,8 +332,10 @@ async function loadSpot(id) {
     return;
   }
 
-  if (spot.lat && spot.lng) initMap(+spot.lat, +spot.lng);
-  try { if (isFinite(+spot.lat) && isFinite(+spot.lng) && spot.lat != null) sessionStorage.setItem('sm_map_view', JSON.stringify({ lat: +spot.lat, lng: +spot.lng, zoom: 16, ts: Date.now() })); } catch {}
+  const hidden = !!spot.location_hidden;
+  const ln = document.getElementById('locNotice'); if (ln) ln.style.display = hidden ? 'block' : 'none';
+  if (spot.lat && spot.lng) initMap(+spot.lat, +spot.lng, hidden ? (spot.approx_radius_m || 500) : 0);
+  try { if (isFinite(+spot.lat) && isFinite(+spot.lng) && spot.lat != null) sessionStorage.setItem('sm_map_view', JSON.stringify({ lat: +spot.lat, lng: +spot.lng, zoom: hidden ? 14 : 16, ts: Date.now() })); } catch {}
 
   // Follow-Status prüfen
   let isFollowing = false;
@@ -394,7 +413,7 @@ async function loadSpot(id) {
         onclick="toggleFollow(${spot.id})">
         ${isFollowing ? '✓ Gefolgt' : '+ Folgen'}
       </button>` : ''}
-      ${(online || planned) && spot.lat ? `<button class="btn btn-nav" onclick="navigate(${spot.lat},${spot.lng},'${esc(spot.name).replace(/'/g,"\\'")}')">🧭 Route</button>` : ''}
+      ${(online || planned) && spot.lat && !hidden ? `<button class="btn btn-nav" onclick="navigate(${spot.lat},${spot.lng},'${esc(spot.name).replace(/'/g,"\\'")}')">🧭 Route</button>` : ''}
       ${CODE && spot.creator_code && spot.creator_code !== CODE ? `<button class="btn btn-nav" onclick="openChatOverlay('${spot.creator_code}','${esc(spot.name).replace(/'/g,"\\'")}')">💬 Chat</button>` : ''}
     </div>
 
@@ -524,6 +543,8 @@ function closeChatOverlay() {
 
 const params = new URLSearchParams(window.location.search);
 const id = params.get('id') || params.get('token');
+// Nach Anmeldung/Abmeldung Spot neu laden (echter bzw. ungefährer Standort)
+window.onLiveEventChange = () => { if (id) loadSpot(id); };
 if (id) loadSpot(id);
 </script>
 </body>

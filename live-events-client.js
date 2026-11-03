@@ -180,7 +180,7 @@
 
   function initTicket(spot, me, online) {
     state = { spot: spot, me: me, online: !!online };
-    if (me && me.registered && !me.checked_in && online && spot.lat != null) startWatch();
+    if (me && me.registered && !me.checked_in && online && spot.lat != null && !spot.location_hidden) startWatch();
   }
 
   function postCheckin(spotId, lat, lng, silent) {
@@ -229,7 +229,9 @@
           state.spot.participant_count = x.j.participant_count;
           render();
           say("🎟️ Angemeldet!");
-          if (state.online && state.spot.lat != null) startWatch();
+          // Seite lädt den Spot jetzt mit Zugangsdaten neu → echter Standort
+          if (typeof window.onLiveEventChange === "function") window.onLiveEventChange();
+          else if (state.online && state.spot.lat != null && !state.spot.location_hidden) startWatch();
         } else if (x.s === 404) {
           say("Leider ausgebucht – dieser Live Spot ist nicht mehr verfügbar.");
           setTimeout(function () { location.reload(); }, 1800);
@@ -252,6 +254,7 @@
       state.spot.participant_count = Math.max(0, (state.spot.participant_count | 0) - 1);
       render();
       say("Abgemeldet");
+      if (typeof window.onLiveEventChange === "function") window.onLiveEventChange();
     }).catch(function () { say("⚠️ Verbindungsfehler"); });
   }
 
@@ -260,7 +263,18 @@
     return '<span class="finp-label">Max. Teilnehmer (leer = unbegrenzt)</span>' +
       '<input class="finp" id="lsMax" type="number" min="1" max="100000" inputmode="numeric" ' +
       'placeholder="z. B. 20 – leer lassen für unbegrenzt" value="' + (s && s.max_participants ? s.max_participants : "") + '">' +
-      '<div class="le-hint">Ist das Limit erreicht, ist der Live Spot für alle ausgeblendet, die nicht angemeldet sind.</div>';
+      '<div class="le-hint">Ist das Limit erreicht, ist der Live Spot für alle ausgeblendet, die nicht angemeldet sind.</div>' +
+      '<label style="display:flex;gap:0.5rem;align-items:flex-start;margin-top:0.75rem;font-size:0.85rem;cursor:pointer;">' +
+      '<input type="checkbox" id="lsHide" style="margin-top:0.2rem;width:18px;height:18px;flex-shrink:0;"' +
+      (!s || s.hide_location !== false ? " checked" : "") + '>' +
+      '<span>🔒 Genauen Standort erst nach Anmeldung zeigen</span></label>' +
+      '<div class="le-hint">Wer nicht angemeldet ist, sieht nur einen ungefähren Bereich (ca. 500 m) ohne Treffpunkt-Notiz. ' +
+      'Das hält spontane, unangemeldete Besucher ein Stück weit fern – eine Garantie ist es nicht.</div>';
+  }
+
+  function readHideLocation() {
+    var el = document.getElementById("lsHide");
+    return el ? !!el.checked : true;
   }
 
   function readCapacity() {
@@ -519,7 +533,7 @@
   window.LiveEvents = {
     loadMe: loadMe, ticketHTML: ticketHTML, initTicket: initTicket,
     register: register, unregister: unregister, checkinNow: checkinNow,
-    capacityField: capacityField, readCapacity: readCapacity,
+    capacityField: capacityField, readCapacity: readCapacity, readHideLocation: readHideLocation,
     scheduleHTML: scheduleHTML, saveSchedule: saveSchedule, cancelEvent: cancelEvent,
     canCheckin: canCheckin, fmtWhen: fmtWhen,
     imagesHTML: imagesHTML, loadImages: loadImages, uploadImages: uploadImages,

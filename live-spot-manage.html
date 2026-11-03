@@ -464,7 +464,7 @@ async function saveProfile(id) {
   try {
     const pr = await fetch(`${API}/live-spots/${id}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: CODE, token: TOK, name, description: desc, category: cat, avatar: avatarB64, max_participants: cap.value })
+      body: JSON.stringify({ code: CODE, token: TOK, name, description: desc, category: cat, avatar: avatarB64, max_participants: cap.value, hide_location: LiveEvents.readHideLocation() })
     });
     if (!pr.ok) { const e = await pr.json().catch(()=>({})); toast('❌ ' + (e.error || 'Fehler beim Speichern')); return; }
     toast('✅ Profil gespeichert');
@@ -485,7 +485,7 @@ async function createLiveSpot() {
   try {
     const r = await fetch(`${API}/live-spots`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: CODE, token: TOK, name, description: desc, category: cat, avatar: avatarB64, max_participants: cap.value })
+      body: JSON.stringify({ code: CODE, token: TOK, name, description: desc, category: cat, avatar: avatarB64, max_participants: cap.value, hide_location: LiveEvents.readHideLocation() })
     });
     const data = await r.json();
     if (!r.ok) { toast('❌ ' + (data.error||'Fehler')); return; }

@@ -3575,7 +3575,8 @@ async function renderLiveSpotMarkers() {
     if (!s.lat || !s.lng) return;
     const el = document.createElement('div');
     el.className = 'live-spot-marker' + (s.status === 'planned' ? ' planned' : '');
-    el.title = s.name;
+    el.title = s.name + (s.location_hidden ? ' (ungefährer Bereich)' : '');
+    if (s.location_hidden) el.style.opacity = '0.7';
     el.addEventListener('click', () => window.location.href = `live-spot.html?id=${s.id}`);
     new maplibregl.Marker({ element: el }).setLngLat([s.lng, s.lat]).addTo(map);
   });
@@ -3611,7 +3612,7 @@ async function loadLiveDrawer(body) {
         </div>
       </div>
       <div class="sc-actions">
-        ${online&&s.lat?`<button class="sc-btn navigate" data-lat="${s.lat}" data-lng="${s.lng}">🧭</button>`:''}
+        ${online&&s.lat&&!s.location_hidden?`<button class="sc-btn navigate" data-lat="${s.lat}" data-lng="${s.lng}">🧭</button>`:''}
         <button class="sc-btn primary" onclick="window.location.href='live-spot.html?id=${s.id}'">${own?'⚙️':'📋'}</button>
       </div>
     </div>`;

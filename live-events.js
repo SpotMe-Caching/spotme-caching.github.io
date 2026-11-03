@@ -56,6 +56,8 @@ module.exports = function mountLiveEvents(app, deps) {
          CHECK (max_participants IS NULL OR max_participants >= 1)`,
     );
     await pool.query("ALTER TABLE live_spots ADD COLUMN IF NOT EXISTS starts_at TIMESTAMPTZ");
+    // Datenschutz: genauer Standort nur für Veranstalter + Angemeldete (Standard: an)
+    await pool.query("ALTER TABLE live_spots ADD COLUMN IF NOT EXISTS hide_location BOOLEAN NOT NULL DEFAULT true");
     await pool.query(`
       CREATE TABLE IF NOT EXISTS live_participants (
         id               SERIAL PRIMARY KEY,
@@ -187,7 +189,39 @@ module.exports = function mountLiveEvents(app, deps) {
   // Gleiche Felder wie bisher öffentlich + Limit und Anmeldezahl
   const PUBLIC_COLS = `ls.id, ls.token, ls.name, ls.description, ls.category, ls.avatar,
     ls.status, ls.lat, ls.lng, ls.location_note, ls.stream_url, ls.follower_count,
-    ls.updated_at, ls.starts_at, ls.max_participants, ${COUNT_SQL} AS participant_count`;
+    ls.updated_at, ls.starts_at, ls.max_participants, ls.hide_location, ${COUNT_SQL} AS participant_count`;
+
+  // Ungefährer Bereich statt Standort: fester (pro Spot gleicher) Versatz, damit
+  // wiederholtes Abfragen nichts verrät. Der echte Punkt liegt IM Kreis, aber nie in der Mitte.
+  const FUZZ_R = 500; // Meter
+  const FUZZ_SECRET = process.env.FUZZ_SECRET || process.env.ADMIN_KEY || "spotme-loc";
+  function fuzzed(id, lat, lng) {
+    const h = require("crypto").createHmac("sha256", FUZZ_SECRET).update("loc:" + id).digest();
+    const ang = (h.readUInt32BE(0) / 0xffffffff) * 2 * Math.PI;
+    const d = (0.3 + 0.45 * (h.readUInt32BE(4) / 0xffffffff)) * FUZZ_R;
+    const dLat = (d * Math.cos(ang)) / 111320;
+    const dLng = (d * Math.sin(ang)) / (111320 * Math.max(0.05, Math.cos((+lat * Math.PI) / 180)));
+    const r5 = (x) => Math.round(x * 1e5) / 1e5;
+    return { lat: r5(+lat + dLat), lng: r5(+lng + dLng) };
+  }
+  // Betrachter darf den genauen Ort sehen: Veranstalter oder Angemeldeter
+  const canSeeSql = (vp) => `(ls.creator_code = ${vp}::text
+    OR EXISTS (SELECT 1 FROM live_participants lps
+               WHERE lps.live_spot_id = ls.id AND lps.participant_code = ${vp}::text)) AS can_see_place`;
+  function maskPlace(row) {
+    const hide = row.hide_location !== false && !row.can_see_place;
+    delete row.can_see_place;
+    if (hide && row.lat != null && row.lng != null) {
+      const f = fuzzed(row.id, row.lat, row.lng);
+      row.lat = f.lat; row.lng = f.lng;
+      row.location_note = null;
+      row.location_hidden = true;
+      row.approx_radius_m = FUZZ_R;
+    } else {
+      row.location_hidden = false;
+    }
+    return row;
+  }
 
   const notFound = (res) =>
     res.status(404).json({ error: "Live Spot nicht gefunden" });
@@ -206,7 +240,7 @@ module.exports = function mountLiveEvents(app, deps) {
     wrap(async (req, res) => {
       const viewer = await viewerOf(req.query.code, req.query.token);
       const { rows } = await pool.query(
-        `SELECT ${PUBLIC_COLS} FROM live_spots ls
+        `SELECT ${PUBLIC_COLS}, ${canSeeSql("$1")} FROM live_spots ls
          WHERE (ls.status = 'online'
                 OR (ls.status = 'planned' AND ls.lat IS NOT NULL
                     AND ls.starts_at > NOW() - INTERVAL '${PLANNED_GRACE_H} hours'))
@@ -214,7 +248,7 @@ module.exports = function mountLiveEvents(app, deps) {
          ORDER BY (ls.status = 'online') DESC, ls.starts_at ASC NULLS LAST, ls.updated_at DESC`,
         [viewer],
       );
-      res.json(rows);
+      res.json(rows.map(maskPlace));
     }),
   );
 
@@ -228,13 +262,13 @@ module.exports = function mountLiveEvents(app, deps) {
       if (!(await viewerOf(code, token)))
         return res.status(403).json({ error: "Ungültiger Token" });
       const { rows } = await pool.query(
-        `SELECT ls.*, ${COUNT_SQL} AS participant_count FROM live_spots ls
+        `SELECT ls.*, ${COUNT_SQL} AS participant_count, ${canSeeSql("$1")} FROM live_spots ls
          INNER JOIN live_followers lf ON lf.live_spot_id = ls.id
          WHERE lf.follower_code = $1 AND ${visible("$1")}
          ORDER BY ls.status DESC, ls.updated_at DESC`,
         [String(code)],
       );
-      res.json(rows);
+      res.json(rows.map(maskPlace));
     }),
   );
 
@@ -248,12 +282,12 @@ module.exports = function mountLiveEvents(app, deps) {
       const key = byId ? intId(raw) : raw;
       if (key === null) return notFound(res);
       const { rows } = await pool.query(
-        `SELECT ${PUBLIC_COLS} FROM live_spots ls
+        `SELECT ${PUBLIC_COLS}, ${canSeeSql("$2")} FROM live_spots ls
          WHERE ${byId ? "ls.id" : "ls.token"} = $1 AND ${visible("$2")}`,
         [key, viewer],
       );
       if (!rows.length) return notFound(res); // verborgen = nicht vorhanden
-      res.json(rows[0]);
+      res.json(maskPlace(rows[0]));
     }),
   );
 
@@ -270,8 +304,8 @@ module.exports = function mountLiveEvents(app, deps) {
       if (cap.error) return res.status(400).json({ error: cap.error });
       const lsToken = require("crypto").randomBytes(16).toString("hex");
       const { rows } = await pool.query(
-        `INSERT INTO live_spots (token, creator_code, name, description, category, avatar, max_participants)
-         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+        `INSERT INTO live_spots (token, creator_code, name, description, category, avatar, max_participants, hide_location)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
         [
           lsToken,
           code,
@@ -280,6 +314,7 @@ module.exports = function mountLiveEvents(app, deps) {
           category || null,
           avatar || null,
           cap.provided ? cap.value : null,
+          req.body.hide_location === false || req.body.hide_location === "false" ? false : true,
         ],
       );
       console.log(`📡 Live Spot erstellt: "${String(name).slice(0, 80)}" von ${code}`);
@@ -336,6 +371,7 @@ module.exports = function mountLiveEvents(app, deps) {
           `UPDATE live_spots SET
              name = COALESCE($1, name), description = $2, category = $3, avatar = $4,
              max_participants = CASE WHEN $5::boolean THEN $6::int ELSE max_participants END,
+             hide_location = CASE WHEN $15::boolean THEN $16::boolean ELSE hide_location END,
              starts_at = CASE WHEN $9::boolean THEN $10::timestamptz ELSE starts_at END,
              status = CASE
                WHEN $9::boolean AND $10::timestamptz IS NOT NULL AND status <> 'online' THEN 'planned'
@@ -361,6 +397,8 @@ module.exports = function mountLiveEvents(app, deps) {
             pl.provided ? pl.lat : null,
             pl.provided ? pl.lng : null,
             pl.provided ? pl.note : null,
+            typeof req.body.hide_location === "boolean",
+            req.body.hide_location === true,
           ],
         );
         return { status: 200, body: { success: true } };
@@ -971,12 +1009,13 @@ module.exports = function mountLiveEvents(app, deps) {
       const id = intId(req.params.id);
       if (id === null) return notFound(res);
       const { rows } = await pool.query(
-        `SELECT ls.id, ls.name, ls.location_note, ls.starts_at FROM live_spots ls
+        `SELECT ls.id, ls.name, ls.location_note, ls.starts_at, ls.hide_location, ${canSeeSql("$2")} FROM live_spots ls
          WHERE ls.id = $1 AND ls.starts_at IS NOT NULL AND ${visible("$2")}`,
         [id, viewer],
       );
       if (!rows.length) return notFound(res);
       const r = rows[0];
+      if (r.hide_location !== false && !r.can_see_place) r.location_note = ""; // Standort erst nach Anmeldung
       const f = (d) => new Date(d).toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
       const t = (x) => String(x || "").replace(/[\\;,]/g, (m) => "\\" + m).replace(/\r?\n/g, "\\n");
       const start = new Date(r.starts_at);
@@ -1001,7 +1040,7 @@ module.exports = function mountLiveEvents(app, deps) {
     if (!spot.lat || !spot.lng) return;
     await ready;
     const cur = await pool.query(
-      `SELECT max_participants,
+      `SELECT max_participants, hide_location,
               (SELECT COUNT(*)::int FROM live_participants WHERE live_spot_id = $1) AS n
        FROM live_spots WHERE id = $1`,
       [spot.id],
@@ -1025,12 +1064,17 @@ module.exports = function mountLiveEvents(app, deps) {
       [spot.id],
     );
 
+    const hidePlace = cur.rows[0].hide_location !== false;
     const base = {
       body: spot.location_note || "Tippe um den Standort zu sehen.",
       url: `/live-spot.html?id=${spot.id}`,
       tag: `live-${spot.id}`,
     };
-    const forFollowers = JSON.stringify({ title: `📡 ${spot.name} ist jetzt live!`, ...base });
+    const forFollowers = JSON.stringify({
+      title: `📡 ${spot.name} ist jetzt live!`,
+      ...base,
+      ...(hidePlace ? { body: "Melde dich an – der genaue Standort wird danach angezeigt." } : {}),
+    });
     const forParticipants = JSON.stringify({
       title: `🎟️ ${spot.name} ist live – du bist angemeldet`,
       ...base,
