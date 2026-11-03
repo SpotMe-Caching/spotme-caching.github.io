@@ -106,7 +106,7 @@
 
     <div class="rail-sep"></div>
 
-    <button class="nav-btn" id="pushBtn" onclick="togglePushNotifications()" title="Benachrichtigungen">
+    <button class="nav-btn" id="pushBtn" onclick="location.href='benachrichtigungen.html'" title="Benachrichtigungen">
       <i data-lucide="bell" class="nav-icon"></i>
     </button>
     <button class="nav-btn" onclick="location.href='waypoints.html'" title="WayPoint Caching">
@@ -1838,6 +1838,29 @@ function startInvitePolling() {
 
 let globalChatPollTimer = null;
 
+function notifPrefs() {
+  try { return JSON.parse(localStorage.getItem('sm_notif_prefs') || '{}'); } catch { return {}; }
+}
+
+// „Nur Browser“-Hinweise (Postfach) abholen und anzeigen. Silent → nichts.
+async function pullNotificationInbox() {
+  const tok = localStorage.getItem('sm_token');
+  if (!CODE || CODE === '000000' || !tok) return;
+  try {
+    const r = await fetch(`${API}/notifications/inbox?code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(tok)}`);
+    if (!r.ok) return;
+    const d = await r.json();
+    try { localStorage.setItem('sm_notif_prefs', JSON.stringify({ silent: !!d.silent, prefs: d.prefs || {} })); } catch {}
+    if (d.silent || !Array.isArray(d.items) || !d.items.length) return;
+    d.items.slice(0, 3).forEach((n, i) => setTimeout(() => toast(`${n.title}${n.body ? ' – ' + n.body : ''}`), i * 3200));
+    if (d.items.length > 3) setTimeout(() => toast(`🔔 +${d.items.length - 3} weitere Hinweise`), 3 * 3200);
+    fetch(`${API}/notifications/inbox/ack`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: CODE, token: tok, ids: d.items.map(n => n.id) })
+    }).catch(() => {});
+  } catch {}
+}
+
 // Ergebnis eines SMChat.pull() verarbeiten: Unread-Zähler für alle Chats außer dem offenen
 function handlePullResult(res) {
   const partners = Object.keys(res.added || {});
@@ -1850,12 +1873,17 @@ function handlePullResult(res) {
   });
   try { localStorage.setItem('sm_unread_caching', JSON.stringify(unread)); } catch {}
   updateChatBadgeFromStorage();
+  // „Nur Browser“ für Chat: Hinweis in der App (kein Push). Silent/Aus: still.
+  const np = notifPrefs();
+  if (!np.silent && np.prefs && np.prefs.chat === 'browser'
+      && partners.some(p => !(currentDrawer === 'chat' && chatPartnerCode === p))) toast('💬 Neue Chat-Nachricht');
   if (currentDrawer === 'chat' && chatPartnerCode && res.added[chatPartnerCode]) renderChatMessages();
 }
 
 async function globalChatTick() {
   if (!CODE || CODE === '000000') return;
   try {
+    await pullNotificationInbox();   // zuerst: aktuelle Einstellungen (Silent!) laden
     handlePullResult(await SMChat.pull());
     checkFavoriteNotifications();
   } catch {}
@@ -3410,7 +3438,7 @@ const HELP_MAP = {
   invites:   { file: 'einladungen',   action: () => openDrawer('invites') },
   chats:     { file: 'chat',          action: () => openDrawer('chats') },
   meetings:  { file: 'treffen',       action: () => openMeetingsModal() },
-  push:      { file: 'push',          action: () => togglePushNotifications() },
+  push:      { file: 'push',          action: () => { location.href = 'benachrichtigungen.html'; } },
   filter:    { file: 'kategorien',    action: () => toggleFilterStrip() },
   radius:    { file: 'radius-suche',  action: () => openRadiusSearch() },
   waypoints: { file: 'waypoints',     action: () => location.href='waypoints.html' },
@@ -3512,7 +3540,7 @@ function initHelpSystem() {
     { id: 'inviteHeaderBtn', key: 'invites',  action: () => openDrawer('invites') },
     { id: 'chatHeaderBtn',   key: 'chats',    action: () => openDrawer('chats') },
     { id: 'meetingsBtn',     key: 'meetings', action: () => openMeetingsModal() },
-    { id: 'pushBtn',         key: 'push',     action: () => togglePushNotifications() },
+    { id: 'pushBtn',         key: 'push',     action: () => { location.href = 'benachrichtigungen.html'; } },
     { id: 'filterTopBtn',    key: 'filter',   action: () => toggleFilterStrip() },
     { id: 'radiusTopBtn',    key: 'radius',   action: () => openRadiusSearch() },
   ];

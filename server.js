@@ -432,7 +432,7 @@ async function initDB() {
         `ALTER TABLE user_spots ADD COLUMN IF NOT EXISTS image_status TEXT DEFAULT 'pending'`,
       )
       .catch(() => {});
-    console.log("✅ v20.0 – Alle Spalten bereit (inkl. SpotCache)");
+    console.log("✅ v15.0 – Alle Spalten bereit (inkl. SpotCache)");
   } catch (e) {
     console.log(
       "ℹ️ Spalten existieren bereits oder konnten nicht angelegt werden",
@@ -1553,6 +1553,7 @@ app.post("/api/message", async (req, res) => {
           "💬 Neue Nachricht",
           `${String(sender_name || sender_code).slice(0, 50)}: ${clean.slice(0, 80)}`,
           "/",
+          "chat",
         ),
         new Promise((r) => setTimeout(() => r(false), 4000)),
       ]);
@@ -2147,6 +2148,7 @@ app.post("/api/weekly-spots/:token/checkin", async (req, res) => {
       "🗓️ Neuer Check-in",
       `Jemand hat deinen Wochen-Spot „${name}" besucht`,
       `/spot-woche.html?token=${token}`,
+      "weekly",
     );
 
     res.json({ success: true, label: "anonym", count: checkin_count });
@@ -2788,6 +2790,7 @@ app.post("/api/spotcache/invite", async (req, res) => {
       "📨 Neue Einladung",
       "Jemand möchte deinen Spot besuchen – tippe zum Antworten",
       "/",
+      "invite",
     );
   } catch (e) {
     console.error("POST /api/spotcache/invite:", e.message);
@@ -2855,6 +2858,7 @@ app.post("/api/spotcache/invite/respond", async (req, res) => {
         ? `${code} hat deine Einladung angenommen`
         : `${code} hat deine Einladung abgelehnt`,
       "/",
+      "invite",
     );
 
     console.log(`📨 Einladung ${id} wurde von ${code} ${status}`);
@@ -3454,7 +3458,14 @@ app.delete("/api/bluesky/disconnect", async (req, res) => {
 // Helper – sendet Push an alle Geräte eines Nutzers.
 // Fire-and-forget (kein await nötig), blockiert den Request-Handler nicht.
 // Abgelaufene Subscriptions (410/404) werden automatisch aus der DB gelöscht.
-async function sendPushToCode(code, title, body, url = "/") {
+async function sendPushToCode(code, title, body, url = "/", category = null) {
+  // Nutzer-Einstellungen: Silent / „nur Browser“ / aus → kein Push aufs Gerät
+  if (category) {
+    try {
+      const allowed = await notify.route([code], category, { title, body, url });
+      if (!allowed.has(String(code))) return false;
+    } catch (e) { console.error("notify route:", e.message); }
+  }
   if (!process.env.VAPID_PUBLIC_KEY) return false;
   try {
     const { rows } = await pool.query(
@@ -4045,7 +4056,10 @@ async function authCheck(code, token) {
 }
 
 // ── Live-Events (Tickets / Teilnehmerlimit) – überschreibt die Live-Routen darunter ──
-const liveEvents = require("./live-events")(app, { pool, authCheck, decrypt, webpush });
+const notify = require("./notify-prefs")(pool);
+notify.ensureSchema().catch((e) => console.error("notify Schema:", e.message));
+notify.mount(app, { authCheck, sendPush: (c, t, b, u) => sendPushToCode(c, t, b, u) });
+const liveEvents = require("./live-events")(app, { pool, authCheck, decrypt, webpush, notify });
 
 // ── Live Spot erstellen ──────────────────────────────────────────────────────
 app.post("/api/live-spots", async (req, res) => {

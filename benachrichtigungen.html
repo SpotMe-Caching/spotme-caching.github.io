@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>SpotMe · Benachrichtigungen</title>
+<meta name="theme-color" content="#080b10">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="theme-vars.css" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif}
+.page-header{display:flex;align-items:center;justify-content:space-between;padding:max(0.85rem,env(safe-area-inset-top)) 1rem 0.85rem;background:var(--glass-strong);backdrop-filter:blur(20px);border-bottom:1px solid var(--bord2);position:sticky;top:0;z-index:100}
+.logo{font-family:'Space Mono',monospace;font-size:0.9rem;font-weight:700;color:var(--acc);display:flex;align-items:center;gap:6px}
+.logo-dot{width:7px;height:7px;border-radius:50%;background:var(--acc);box-shadow:0 0 8px var(--acc)}
+.back-link{font-size:0.8rem;background:var(--card);border:1px solid var(--bord2);border-radius:40px;padding:6px 14px;color:var(--muted2);text-decoration:none}
+.theme-toggle-btn{width:34px;height:34px;border-radius:50%;background:var(--card);border:1px solid var(--bord2);color:var(--muted2);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.content{padding:1.1rem;max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:0.85rem;padding-bottom:3rem}
+h1{font-size:1.15rem;font-weight:700}
+.sub{font-size:0.8rem;color:var(--muted2);line-height:1.5}
+.card{background:var(--card);border:1px solid var(--bord2);border-radius:16px;padding:0.95rem 1rem;display:flex;flex-direction:column;gap:0.6rem}
+.card-title{font-family:'Space Mono',monospace;font-size:0.66rem;letter-spacing:0.08em;color:var(--muted);text-transform:uppercase}
+.row{display:flex;align-items:center;gap:0.75rem;justify-content:space-between}
+.btn{border:1px solid var(--bord2);background:var(--card);color:var(--text);border-radius:12px;padding:0.65rem 0.9rem;font-size:0.85rem;font-family:inherit;cursor:pointer}
+.btn.primary{background:var(--acc);border-color:var(--acc);color:#080b10;font-weight:700}
+.btn:disabled{opacity:.5}
+.state{font-size:0.82rem}
+.state b{font-weight:700}
+.ok{color:var(--green)} .bad{color:var(--red)}
+/* Schalter */
+.switch{position:relative;width:52px;height:30px;flex-shrink:0}
+.switch input{opacity:0;width:0;height:0;position:absolute}
+.slider{position:absolute;inset:0;border-radius:30px;background:var(--bord2);transition:.2s;cursor:pointer}
+.slider::before{content:"";position:absolute;width:24px;height:24px;left:3px;top:3px;border-radius:50%;background:#fff;transition:.2s}
+.switch input:checked + .slider{background:var(--acc)}
+.switch input:checked + .slider::before{transform:translateX(22px)}
+.silent-on{border-color:var(--acc-glow);background:var(--acc-dim)}
+/* Stufen */
+.cat{display:flex;flex-direction:column;gap:0.5rem;padding:0.85rem 0;border-top:1px solid var(--bord2)}
+.cat:first-child{border-top:none;padding-top:0.2rem}
+.cat-head{display:flex;gap:0.6rem;align-items:flex-start}
+.cat-ico{font-size:1.25rem;line-height:1.2}
+.cat-name{font-weight:600;font-size:0.95rem}
+.cat-desc{font-size:0.74rem;color:var(--muted2);margin-top:1px;line-height:1.4}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:0.35rem}
+.seg button{padding:0.55rem 0.2rem;font-size:0.76rem;border-radius:10px;border:1px solid var(--bord2);background:transparent;color:var(--muted2);font-family:inherit;cursor:pointer;line-height:1.25}
+.seg button.on{background:var(--acc-dim);border-color:var(--acc);color:var(--acc);font-weight:700}
+.dim{opacity:.4;pointer-events:none}
+.legend{font-size:0.76rem;color:var(--muted2);line-height:1.55}
+.legend b{color:var(--text)}
+.toast{position:fixed;bottom:max(1.5rem,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(10px);background:var(--glass-strong);backdrop-filter:blur(20px);border:1px solid var(--bord2);border-radius:100px;padding:0.5rem 1.2rem;font-size:0.82rem;z-index:999;opacity:0;transition:all 0.25s;pointer-events:none;max-width:92vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="page-header">
+  <div class="logo"><div class="logo-dot"></div>SPOT<span style="font-weight:300">ME</span></div>
+  <div style="display:flex;align-items:center;gap:0.5rem;">
+    <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Hell/Dunkel">🌙</button>
+    <a href="/" class="back-link">← App</a>
+  </div>
+</div>
+
+<div class="content" id="content">
+  <h1>🔔 Benachrichtigungen</h1>
+  <div class="sub">Du entscheidest, was dich wie erreicht. Mit dem Silent-Modus bleibt dein Gerät komplett still.</div>
+  <div id="main"><div class="sub">⏳ Lädt…</div></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+const API  = 'https://spotme-chat-obom.onrender.com/api';
+const CODE = localStorage.getItem('sm_code') || '';
+const TOK  = localStorage.getItem('sm_token') || '';
+
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  try { localStorage.setItem('sm_theme', t); } catch {}
+  const b = document.getElementById('themeToggleBtn'); if (b) b.textContent = t === 'light' ? '🌙' : '☀️';
+}
+function toggleTheme() { applyTheme(document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light'); }
+applyTheme((function () { try { return localStorage.getItem('sm_theme') || 'dark'; } catch { return 'dark'; } })());
+
+function esc(s) { const d = document.createElement('div'); d.textContent = String(s == null ? '' : s); return d.innerHTML; }
+let toastT;
+function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600); }
+
+const LEVEL_LABEL = { push: '🔔<br>Push', browser: '🌐<br>Nur Browser', off: '🔕<br>Aus' };
+let state = null; // { silent, prefs, categories, levels }
+
+function cacheState() {
+  try { localStorage.setItem('sm_notif_prefs', JSON.stringify({ silent: state.silent, prefs: state.prefs })); } catch {}
+}
+
+async function api(method, path, body) {
+  const q = method === 'GET' ? `?code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(TOK)}` : '';
+  const r = await fetch(API + path + q, {
+    method, headers: { 'Content-Type': 'application/json' },
+    body: method === 'GET' ? undefined : JSON.stringify({ code: CODE, token: TOK, ...(body || {}) })
+  });
+  let j = {}; try { j = await r.json(); } catch {}
+  if (!r.ok) throw new Error(j.error || ('Fehler ' + r.status));
+  return j;
+}
+
+// ── Gerät: Push-Status ───────────────────────────────────────────────────────
+function urlB64(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const raw = atob((base64String + padding).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+async function pushInfo() {
+  if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return { supported: false };
+  const perm = Notification.permission;
+  let sub = null;
+  try {
+    // „ready“ hängt für immer, wenn noch kein Service Worker registriert ist → Zeitlimit
+    const reg = await Promise.race([navigator.serviceWorker.ready, new Promise(r => setTimeout(() => r(null), 1500))]);
+    if (reg) sub = await reg.pushManager.getSubscription();
+  } catch {}
+  return { supported: true, perm, sub: !!sub };
+}
+async function togglePush() {
+  const info = await pushInfo();
+  if (!info.supported) return toast('⚠️ Dieses Gerät/Browser unterstützt kein Push');
+  if (info.perm === 'denied') return toast('🔕 Blockiert – bitte in den Browser-/App-Einstellungen erlauben');
+  const btn = document.getElementById('pushToggle'); if (btn) btn.disabled = true;
+  try {
+    const reg = await Promise.race([navigator.serviceWorker.ready, new Promise(r => setTimeout(() => r(null), 4000))]);
+    if (!reg) throw new Error('Service Worker nicht bereit – öffne zuerst die App-Startseite');
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) {
+      await existing.unsubscribe();
+      await fetch(`${API}/push/unsubscribe`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: CODE, token: TOK, endpoint: existing.endpoint }) }).catch(() => {});
+      toast('🔕 Push auf diesem Gerät aus');
+    } else {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { toast('❌ Berechtigung verweigert'); refreshDevice(); return; }
+      const key = (await (await fetch(`${API}/push/vapid-public-key`)).json()).publicKey;
+      if (!key) throw new Error('Push ist serverseitig nicht eingerichtet');
+      const subscription = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64(key) });
+      const r = await fetch(`${API}/push/subscribe`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: CODE, token: TOK, subscription }) });
+      if (!r.ok) throw new Error('Abo konnte nicht gespeichert werden');
+      toast('🔔 Push auf diesem Gerät an');
+    }
+  } catch (e) { toast('⚠️ ' + e.message); }
+  refreshDevice();
+}
+async function sendTest() {
+  try {
+    const j = await api('POST', '/notifications/test');
+    toast(j.skipped === 'silent' ? '🤫 Silent ist an – es wird nichts gesendet'
+      : j.delivered ? '✅ Test gesendet – schau auf dein Gerät' : '⚠️ Kein Push-Gerät registriert');
+  } catch (e) { toast('⚠️ ' + e.message); }
+}
+
+// ── Einstellungen ────────────────────────────────────────────────────────────
+async function setSilent(on) {
+  const before = state.silent; state.silent = on; render(); // optimistisch
+  try { await api('PUT', '/notifications/prefs', { silent: on }); cacheState(); toast(on ? '🤫 Silent-Modus an' : '🔔 Silent-Modus aus'); }
+  catch (e) { state.silent = before; render(); toast('⚠️ ' + e.message); }
+}
+async function setLevel(key, level) {
+  const before = state.prefs[key]; if (before === level) return;
+  state.prefs[key] = level; render();
+  try { await api('PUT', '/notifications/prefs', { prefs: { [key]: level } }); cacheState(); }
+  catch (e) { state.prefs[key] = before; render(); toast('⚠️ ' + e.message); }
+}
+
+let devHTML = '<div class="state">⏳ Prüfe Gerät…</div>';
+async function refreshDevice() {
+  const info = await pushInfo();
+  if (!info.supported) devHTML = `<div class="state bad">Dieses Gerät/dieser Browser unterstützt kein Push. „Nur Browser“-Hinweise funktionieren trotzdem.</div>`;
+  else if (info.perm === 'denied') devHTML = `<div class="state bad"><b>Blockiert.</b> Erlaube Benachrichtigungen in den Browser- bzw. App-Einstellungen.</div>`;
+  else devHTML = `<div class="row"><div class="state">${info.sub ? '<b class="ok">● Push aktiv</b> auf diesem Gerät' : '<b>○ Push aus</b> auf diesem Gerät'}</div>
+      <button class="btn ${info.sub ? '' : 'primary'}" id="pushToggle" onclick="togglePush()">${info.sub ? 'Ausschalten' : 'Einschalten'}</button></div>
+      ${info.sub ? '<button class="btn" onclick="sendTest()">🔔 Test-Benachrichtigung senden</button>' : ''}`;
+  const el = document.getElementById('devCard'); if (el) el.innerHTML = devHTML;
+}
+
+function render() {
+  const main = document.getElementById('main');
+  if (!state) return;
+  main.innerHTML = `
+    <div class="card ${state.silent ? 'silent-on' : ''}">
+      <div class="row">
+        <div><div class="cat-name">🤫 Silent-Modus</div>
+          <div class="cat-desc">Alles aus: keine Pushes, keine Hinweise in der App. Niemand in deiner Nähe sieht etwas auf deinem Gerät. Nachrichten und Einladungen findest du weiterhin, wenn du selbst in der App nachsiehst.</div></div>
+        <label class="switch"><input type="checkbox" id="silentSw" ${state.silent ? 'checked' : ''}><span class="slider"></span></label>
+      </div>
+    </div>
+
+    <div class="card"><div class="card-title">Dieses Gerät</div><div id="devCard">${devHTML}</div></div>
+
+    <div class="card ${state.silent ? 'dim' : ''}">
+      <div class="card-title">Was soll dich erreichen?</div>
+      <div class="legend"><b>🔔 Push</b> – aufs Gerät (App/TWA/Browser), auch wenn SpotMe zu ist.<br>
+        <b>🌐 Nur Browser</b> – kein Push. Hinweis erscheint nur, solange du SpotMe offen hast.<br>
+        <b>🔕 Aus</b> – gar nichts.</div>
+      ${state.categories.map(c => `
+        <div class="cat">
+          <div class="cat-head"><div class="cat-ico">${esc(c.icon)}</div>
+            <div><div class="cat-name">${esc(c.label)}</div><div class="cat-desc">${esc(c.desc)}</div></div></div>
+          <div class="seg">${state.levels.map(l => `<button class="${state.prefs[c.key] === l ? 'on' : ''}" data-k="${esc(c.key)}" data-l="${esc(l)}">${LEVEL_LABEL[l]}</button>`).join('')}</div>
+        </div>`).join('')}
+    </div>`;
+  document.getElementById('silentSw').addEventListener('change', e => setSilent(e.target.checked));
+  main.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => setLevel(b.dataset.k, b.dataset.l)));
+}
+
+(async function init() {
+  const main = document.getElementById('main');
+  if (!CODE || !TOK) { main.innerHTML = `<div class="card"><div class="state">Bitte melde dich zuerst in der <a href="/" style="color:var(--acc)">App</a> an.</div></div>`; return; }
+  try {
+    state = await api('GET', '/notifications/prefs');
+    cacheState();
+    render();
+    refreshDevice();
+  } catch (e) {
+    main.innerHTML = `<div class="card"><div class="state bad">⚠️ ${esc(e.message)}</div><button class="btn" onclick="location.reload()">Nochmal versuchen</button></div>`;
+  }
+})();
+</script>
+</body>
+</html>

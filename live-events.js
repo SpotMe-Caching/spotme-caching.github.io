@@ -37,6 +37,8 @@ function haversineM(lat1, lng1, lat2, lng2) {
 
 module.exports = function mountLiveEvents(app, deps) {
   const { pool, authCheck, decrypt, webpush } = deps;
+  // Nutzer-Einstellungen (Push / nur Browser / aus / Silent). Ohne Modul: alle bekommen Push.
+  const notify = deps.notify || { route: async (codes) => new Set(codes.map(String)), ensureSchema: async () => {} };
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // ── Schema ────────────────────────────────────────────────────────────────
@@ -56,6 +58,7 @@ module.exports = function mountLiveEvents(app, deps) {
          CHECK (max_participants IS NULL OR max_participants >= 1)`,
     );
     await pool.query("ALTER TABLE live_spots ADD COLUMN IF NOT EXISTS starts_at TIMESTAMPTZ");
+    await notify.ensureSchema();
     // Datenschutz: genauer Standort nur für Veranstalter + Angemeldete (Standard: an)
     await pool.query("ALTER TABLE live_spots ADD COLUMN IF NOT EXISTS hide_location BOOLEAN NOT NULL DEFAULT true");
     await pool.query(`
@@ -905,22 +908,28 @@ module.exports = function mountLiveEvents(app, deps) {
 
   // Abonnenten eines Spots (Angemeldete + Follower, ohne Veranstalter) – VOR dem Löschen holen
   async function audienceOf(spotId, ownerCode) {
+    // LEFT JOIN: auch wer nur „Hinweis im Browser“ gewählt hat (kein Push-Abo) gehört dazu
     const { rows } = await pool.query(
-      `SELECT DISTINCT ON (ps.endpoint) ps.endpoint, ps.p256dh, ps.auth
+      `SELECT DISTINCT ON (u.code, ps.endpoint) u.code, ps.endpoint, ps.p256dh, ps.auth
        FROM (SELECT follower_code AS code FROM live_followers WHERE live_spot_id = $1
              UNION
              SELECT participant_code FROM live_participants WHERE live_spot_id = $1) u
-       JOIN push_subscriptions ps ON ps.code = u.code
+       LEFT JOIN push_subscriptions ps ON ps.code = u.code
        WHERE u.code <> $2
-       ORDER BY ps.endpoint`,
+       ORDER BY u.code, ps.endpoint`,
       [spotId, ownerCode],
     );
     return rows;
   }
 
-  function pushTo(subs, payload) {
+  // Zustellen nach Nutzer-Einstellungen: Push, Postfach (nur Browser) oder nichts.
+  // Rückgabe: Anzahl Push-Geräte (wie bisher).
+  async function pushTo(subs, payload, category) {
+    const codes = [...new Set(subs.map((f) => f.code))];
+    const allowed = await notify.route(codes, category || "live_change", payload);
+    const targets = subs.filter((f) => f.endpoint && allowed.has(String(f.code)));
     const body = JSON.stringify(payload);
-    for (const f of subs) {
+    for (const f of targets) {
       webpush
         .sendNotification({ endpoint: f.endpoint, keys: { p256dh: f.p256dh, auth: f.auth } }, body)
         .catch(async (err) => {
@@ -928,6 +937,7 @@ module.exports = function mountLiveEvents(app, deps) {
             await pool.query("DELETE FROM push_subscriptions WHERE endpoint=$1", [f.endpoint]).catch(() => {});
         });
     }
+    return targets.length;
   }
 
   // ── Live Spot löschen (Veranstalter): Angemeldete + Follower werden benachrichtigt ──
@@ -946,8 +956,8 @@ module.exports = function mountLiveEvents(app, deps) {
         body: "Der Veranstalter hat diesen Live Spot entfernt.",
         url: "/",
         tag: `live-${own.id}`,
-      });
-      res.json({ success: true, notified: subs.length });
+      }, "live_change").catch((e) => console.error("pushTo:", e.message));
+      res.json({ success: true, notified: subs.filter((f) => f.endpoint).length });
     }),
   );
 
@@ -976,7 +986,7 @@ module.exports = function mountLiveEvents(app, deps) {
           body: "Der Veranstalter hat den Termin abgesagt. Deine Anmeldung wurde gelöscht.",
           url: `/live-spot.html?id=${own.id}`,
           tag: `live-${own.id}`,
-        });
+        }, "live_change").catch((e) => console.error("pushTo:", e.message));
       res.status(out.status).json(out.body);
     }),
   );
@@ -1051,7 +1061,7 @@ module.exports = function mountLiveEvents(app, deps) {
       cur.rows[0].n >= cur.rows[0].max_participants;
 
     const { rows } = await pool.query(
-      `SELECT DISTINCT ON (ps.endpoint)
+      `SELECT DISTINCT ON (u.code, ps.endpoint)
               u.code, p.last_lat, p.last_lng, ps.endpoint, ps.p256dh, ps.auth,
               EXISTS (SELECT 1 FROM live_participants lp
                       WHERE lp.live_spot_id = $1 AND lp.participant_code = u.code) AS is_participant
@@ -1059,8 +1069,8 @@ module.exports = function mountLiveEvents(app, deps) {
              UNION
              SELECT participant_code FROM live_participants WHERE live_spot_id = $1) u
        JOIN profiles p ON p.code = u.code
-       JOIN push_subscriptions ps ON ps.code = u.code
-       ORDER BY ps.endpoint`,
+       LEFT JOIN push_subscriptions ps ON ps.code = u.code
+       ORDER BY u.code, ps.endpoint`,
       [spot.id],
     );
 
@@ -1070,28 +1080,38 @@ module.exports = function mountLiveEvents(app, deps) {
       url: `/live-spot.html?id=${spot.id}`,
       tag: `live-${spot.id}`,
     };
-    const forFollowers = JSON.stringify({
+    const forFollowers = {
       title: `📡 ${spot.name} ist jetzt live!`,
       ...base,
       ...(hidePlace ? { body: "Melde dich an – der genaue Standort wird danach angezeigt." } : {}),
-    });
-    const forParticipants = JSON.stringify({
+    };
+    const forParticipants = {
       title: `🎟️ ${spot.name} ist live – du bist angemeldet`,
       ...base,
-    });
+    };
 
-    for (const f of rows) {
-      if (!f.is_participant) {
-        if (full) continue; // voll: Nicht-Teilnehmer erfahren nichts
-        if (f.last_lat && f.last_lng) {
-          const km = haversineM(+f.last_lat, +f.last_lng, +spot.lat, +spot.lng) / 1000;
-          if (km > FOLLOWER_PUSH_KM) continue;
-        }
+    // Wer kommt überhaupt in Frage (voll / Umkreis wie bisher)
+    const wanted = rows.filter((f) => {
+      if (f.is_participant) return true;
+      if (full) return false; // voll: Nicht-Teilnehmer erfahren nichts
+      if (f.last_lat && f.last_lng) {
+        const km = haversineM(+f.last_lat, +f.last_lng, +spot.lat, +spot.lng) / 1000;
+        if (km > FOLLOWER_PUSH_KM) return false;
       }
+      return true;
+    });
+    // Nutzer-Einstellungen: Push / nur Browser (Postfach) / aus / Silent
+    const isPart = new Map(wanted.map((f) => [String(f.code), !!f.is_participant]));
+    const allowed = await notify.route(
+      [...isPart.keys()], "live_go", (c) => (isPart.get(String(c)) ? forParticipants : forFollowers),
+    );
+
+    for (const f of wanted) {
+      if (!f.endpoint || !allowed.has(String(f.code))) continue;
       webpush
         .sendNotification(
           { endpoint: f.endpoint, keys: { p256dh: f.p256dh, auth: f.auth } },
-          f.is_participant ? forParticipants : forFollowers,
+          JSON.stringify(f.is_participant ? forParticipants : forFollowers),
         )
         .catch(async (err) => {
           if (err && (err.statusCode === 410 || err.statusCode === 404)) {
