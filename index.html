@@ -2594,11 +2594,12 @@ async function openMeetingsModal() {
 async function renderMeetingWeather(invId, lat, lng, timeStart, elId) {
   const el = document.getElementById(elId || `mtgWeather_${invId}`);
   if (!el) return;
-  const w = await fetchWeather(lat, lng);
-  if (!w || !w.hourly) { el.style.display = 'none'; return; }
+  let w = null;
+  try { w = await fetchWeather(lat, lng); } catch {}
+  if (!w || !w.hourly || isNaN(Number(timeStart))) { el.style.display = 'none'; return; }
 
   // open-meteo liefert Ortszeit (timezone=auto) → Treffzeit in Ortszeit umrechnen
-  const meetingISO = new Date(new Date(timeStart).getTime() + (w.off || 0) * 1000).toISOString().slice(0, 13);
+  const meetingISO = new Date(Number(timeStart) + (w.off || 0) * 1000).toISOString().slice(0, 13);
   const centerIdx  = w.hourly.time.findIndex(t => t.startsWith(meetingISO));
   if (centerIdx < 0) { el.innerHTML = '<span style="opacity:0.5;font-size:0.7rem;">Vorhersage nicht verfügbar</span>'; return; }
 
