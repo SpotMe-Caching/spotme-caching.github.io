@@ -1602,6 +1602,7 @@ function loadChatListIntoDrawer(body) {
     if (!partnerCode) continue;
 
     const lastMsg = msgs[msgs.length - 1];
+    const lastTheirs = [...msgs].reverse().find(m => m.from !== CODE);
 
     let unread = {};
     try { unread = JSON.parse(localStorage.getItem('sm_unread_caching') || '{}'); } catch {}
@@ -1611,7 +1612,7 @@ function loadChatListIntoDrawer(body) {
       lastText: lastMsg.text     || '',
       lastTs:   lastMsg.ts       || 0,
       lastFrom: lastMsg.from     || '',
-      fromName: lastMsg.fromName || partnerCode,
+      fromName: (lastTheirs && lastTheirs.fromName) || partnerCode,
       unread:   unread[partnerCode] || 0
     });
   }
@@ -1672,6 +1673,10 @@ function loadChatListIntoDrawer(body) {
           </div>
         </div>
 
+        <button class="chat-del" data-del="${c.partnerCode}" aria-label="Chat löschen" title="Chat löschen"
+                style="background:none;border:none;color:var(--muted);font-size:1.05rem;
+                       padding:0.4rem 0.45rem;margin-left:0.15rem;cursor:pointer;flex-shrink:0;">🗑</button>
+
         ${c.unread > 0
           ? `<div style="min-width:20px;height:20px;border-radius:10px;
                          background:var(--cyan);color:#0a0d12;
@@ -1682,7 +1687,33 @@ function loadChatListIntoDrawer(body) {
              </div>`
           : ''}
       </div>`;
-  }).join('');
+  }).join('') + `
+    <button id="chatDelAll" style="width:100%;margin-top:0.75rem;padding:0.65rem;background:none;
+            border:1px solid var(--bord);border-radius:10px;color:var(--muted);font-size:0.78rem;cursor:pointer;">
+      🗑 Alle Chats löschen</button>`;
+
+  function removeChat(partner) {
+    try { localStorage.removeItem(CHAT_PREFIX + SMChat.room(CODE, partner)); } catch {}
+    try {
+      const u = JSON.parse(localStorage.getItem('sm_unread_caching') || '{}');
+      delete u[partner]; localStorage.setItem('sm_unread_caching', JSON.stringify(u));
+    } catch {}
+  }
+  body.querySelectorAll('[data-del]').forEach(btn =>
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (!confirm('Diesen Chat löschen?\nDer Verlauf wird nur auf diesem Gerät entfernt.')) return;
+      removeChat(btn.dataset.del);
+      updateChatBadgeFromStorage();
+      loadChatListIntoDrawer(body);
+    })
+  );
+  document.getElementById('chatDelAll')?.addEventListener('click', () => {
+    if (!confirm('ALLE Chats löschen?\nDie Verläufe werden nur auf diesem Gerät entfernt.')) return;
+    chats.forEach(c => removeChat(c.partnerCode));
+    updateChatBadgeFromStorage();
+    loadChatListIntoDrawer(body);
+  });
 
   body.querySelectorAll('[data-partner]').forEach(card => {
     card.addEventListener('click', () => {
