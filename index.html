@@ -3582,6 +3582,15 @@ function updateLastLocation() {
   }, null, { enableHighAccuracy: false, timeout: 8000 });
 }
 
+function circlePolyIdx(lat, lng, r) {
+  const pts = [];
+  for (let k = 0; k <= 64; k++) {
+    const a = (k / 64) * 2 * Math.PI;
+    pts.push([lng + (r * Math.sin(a)) / (111320 * Math.cos(lat * Math.PI / 180)), lat + (r * Math.cos(a)) / 111320]);
+  }
+  return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [pts] } };
+}
+
 async function renderLiveSpotMarkers() {
   try {
     const lsTok = localStorage.getItem('sm_token'); const lsAuth = (CODE && lsTok) ? `?code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(lsTok)}` : '';
@@ -3599,6 +3608,19 @@ async function renderLiveSpotMarkers() {
     st.textContent = '.live-spot-marker.planned::after{display:none}.live-spot-marker.planned::before{content:"📅";filter:drop-shadow(0 0 6px rgba(245,158,11,1)) drop-shadow(0 0 3px rgba(0,0,0,.9))}';
     document.head.appendChild(st);
   }
+  // Verborgene Spots: gestrichelter Bereich wie auf der Spot-Seite (kein exakter Punkt)
+  const approx = liveSpots.filter(s => s.location_hidden && s.lat && s.lng).map(s => ({
+    type: 'Feature', properties: { id: s.id }, geometry: circlePolyIdx(+s.lat, +s.lng, s.approx_radius_m || 500).geometry
+  }));
+  const drawApprox = () => {
+    const data = { type: 'FeatureCollection', features: approx };
+    if (map.getSource('live-approx')) { map.getSource('live-approx').setData(data); return; }
+    map.addSource('live-approx', { type: 'geojson', data });
+    map.addLayer({ id: 'live-approx-fill', type: 'fill', source: 'live-approx', paint: { 'fill-color': '#f59e0b', 'fill-opacity': 0.15 } });
+    map.addLayer({ id: 'live-approx-line', type: 'line', source: 'live-approx', paint: { 'line-color': '#f59e0b', 'line-width': 2, 'line-dasharray': [2, 2] } });
+  };
+  try { if (map.isStyleLoaded()) drawApprox(); else map.once('load', drawApprox); } catch {}
+
   liveSpots.forEach(s => {
     if (!s.lat || !s.lng) return;
     const el = document.createElement('div');

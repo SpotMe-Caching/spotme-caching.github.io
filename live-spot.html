@@ -335,7 +335,8 @@ async function loadSpot(id) {
   const hidden = !!spot.location_hidden;
   const ln = document.getElementById('locNotice'); if (ln) ln.style.display = hidden ? 'block' : 'none';
   if (spot.lat && spot.lng) initMap(+spot.lat, +spot.lng, hidden ? (spot.approx_radius_m || 500) : 0);
-  try { if (isFinite(+spot.lat) && isFinite(+spot.lng) && spot.lat != null) sessionStorage.setItem('sm_map_view', JSON.stringify({ lat: +spot.lat, lng: +spot.lng, zoom: hidden ? 14 : 16, ts: Date.now() })); } catch {}
+  // Verborgener Spot: Ansicht NICHT merken, sonst springt die Übersicht beim Zurückkehren genau auf den Bereich
+  try { if (!hidden && isFinite(+spot.lat) && isFinite(+spot.lng) && spot.lat != null) sessionStorage.setItem('sm_map_view', JSON.stringify({ lat: +spot.lat, lng: +spot.lng, zoom: 16, ts: Date.now() })); } catch {}
 
   // Follow-Status prüfen
   let isFollowing = false;
