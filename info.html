@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SpotMe Caching – Finde Orte. Finde Leute. Finde das gute Licht.</title>
+<meta name="description" content="SpotMe ist Geocaching mit Style: Spots entdecken, teilen, Leute treffen und gemeinsam losziehen. Für junge Leute, Fotografen und Models.">
+<meta name="theme-color" content="#0a121a">
+<meta property="og:title" content="SpotMe Caching">
+<meta property="og:description" content="Finde Orte. Finde Leute. Finde das gute Licht.">
+<style>
+:root{--bg:#0a121a;--panel:#111c27;--line:#25384a;--tx:#e8eef4;--mut:#9fb2c3;--amber:#ffb21e;--cyan:#35d6ec}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--tx);font:400 1.0625rem/1.65 "Avenir Next","Segoe UI",system-ui,-apple-system,Roboto,sans-serif}
+a{color:var(--cyan)}
+:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
+.w{max-width:1080px;margin:0 auto;padding:0 1.25rem}
+header .w{display:flex;justify-content:space-between;align-items:center;padding-top:1rem;padding-bottom:1rem}
+.logo{font-weight:800;font-size:1.15rem;letter-spacing:-.02em;color:var(--tx);text-decoration:none}
+.btn{display:inline-block;background:var(--amber);color:#1a1200;font-weight:700;padding:.7rem 1.2rem;border-radius:.4rem;text-decoration:none}
+.btn:hover{background:#ffc654}
+.hero .w{display:grid;grid-template-columns:1.1fr .9fr;gap:2.5rem;align-items:center;padding-top:3rem;padding-bottom:4.5rem}
+h1{font-size:clamp(2.3rem,6vw,4.2rem);line-height:1.03;letter-spacing:-.04em;font-weight:800;margin:0 0 1.2rem}
+h1 span{display:block}
+.lead{color:var(--mut);max-width:34rem;margin:0 0 1.6rem}
+.map{position:relative;aspect-ratio:1;border:1px solid var(--line);border-radius:.6rem;overflow:hidden;background:radial-gradient(circle at 62% 38%,rgba(255,178,30,.2),transparent 45%),linear-gradient(var(--line) 1px,transparent 1px) 0 0/40px 40px,linear-gradient(90deg,var(--line) 1px,transparent 1px) 0 0/40px 40px,var(--panel)}
+.pin{position:absolute;width:14px;height:14px;border-radius:50%;background:var(--cyan);box-shadow:0 0 14px var(--cyan)}
+.pin.live{background:var(--amber);box-shadow:0 0 18px var(--amber)}
+.pin.live::after{content:"";position:absolute;inset:-10px;border:2px solid var(--amber);border-radius:50%;animation:p 2.4s ease-out infinite}
+@keyframes p{from{transform:scale(.4);opacity:1}to{transform:scale(1.8);opacity:0}}
+.tag{position:absolute;font-size:.8rem;background:var(--bg);border:1px solid var(--line);padding:.1rem .5rem;border-radius:.3rem;white-space:nowrap}
+section{padding:3.5rem 0}
+h2{font-size:clamp(1.7rem,4vw,2.4rem);letter-spacing:-.03em;line-height:1.1;margin:0 0 .6rem}
+.intro{color:var(--mut);max-width:36rem;margin:0 0 2.2rem}
+.who{display:grid;grid-template-columns:repeat(3,1fr);gap:2rem}
+.who div,.f{border-top:1px solid var(--line);padding-top:1.1rem}
+.who h3,.f h3{margin:0 0 .4rem;font-size:1.3rem;letter-spacing:-.02em}
+.who p{margin:0;color:var(--mut)}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:2.6rem 3rem}
+.f p{margin:0 0 .6rem}
+.f .hl{color:var(--amber);font-weight:600}
+.f blockquote{margin:.9rem 0;padding-left:1rem;border-left:3px solid var(--cyan)}
+.f .for{color:var(--mut);font-size:.92rem;margin:0}
+.end{text-align:left;border-top:1px solid var(--line)}
+.end h2{max-width:30rem}
+footer{border-top:1px solid var(--line);padding:1.5rem 0 2.5rem;color:var(--mut);font-size:.92rem}
+@media(max-width:760px){.hero .w,.grid,.who{grid-template-columns:1fr}.map{max-width:380px}.hero .w{padding-top:1.5rem}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.pin.live::after{animation:none;opacity:.5}}
+</style>
+</head>
+<body>
+<header><div class="w"><a class="logo" href="#">SpotMe Caching</a><a class="btn" href="https://spotme-caching.github.io/">App öffnen</a></div></header>
+
+<main>
+<div class="hero"><div class="w">
+<div>
+<h1><span>Finde Orte.</span><span>Finde Leute.</span><span>Finde das gute Licht.</span></h1>
+<p class="lead">SpotMe ist Geocaching, nur ohne Wanderschuhe-Pflicht und ohne Tupperdose im Gebüsch. Du entdeckst Spots in deiner Umgebung, teilst eigene, triffst Leute und gehst gemeinsam los. Läuft im Browser, landet auf Wunsch als App auf deinem Homescreen. Kein App-Store, kein Gedöns.</p>
+<a class="btn" href="https://spotme-caching.github.io/">Jetzt losziehen</a>
+</div>
+<div class="map" aria-hidden="true">
+<span class="pin" style="left:22%;top:30%"></span><span class="tag" style="left:12%;top:38%">Rostige Treppe</span>
+<span class="pin live" style="left:62%;top:38%"></span><span class="tag" style="left:50%;top:46%">Live: Hafen, Golden Hour</span>
+<span class="pin" style="left:38%;top:68%"></span><span class="tag" style="left:30%;top:76%">Café-Ecke</span>
+<span class="pin" style="left:80%;top:72%"></span><span class="tag" style="left:66%;top:80%">Alte Fabrik</span>
+</div>
+</div></div>
+
+<section><div class="w">
+<h2>Für wen ist das?</h2>
+<p class="intro">Für alle, die lieber losgehen als scrollen.</p>
+<div class="who">
+<div><h3>Junge Leute</h3><p>Wochenende planen, ohne in drei Chats gleichzeitig zu hängen.</p></div>
+<div><h3>Fotografen</h3><p>Den perfekten Ort finden, merken und anderen zeigen. Ohne Zettel, ohne „war das links oder rechts vom Kiosk?“</p></div>
+<div><h3>Models</h3><p>Locations scouten, Shootings verabreden und wissen, wann es regnet, bevor die Frisur es merkt.</p></div>
+</div>
+</div></section>
+
+<section><div class="w">
+<h2>Was SpotMe kann</h2>
+<p class="intro">Jede Funktion kurz erklärt, mit einem Beispiel aus dem echten Leben.</p>
+<div class="grid">
+
+<article class="f"><h3>Spots erstellen</h3><p class="hl">Du hast ihn gefunden. Jetzt gehört er allen.</p>
+<p>Ort markieren, Foto dazu, Kategorie wählen, speichern. Fotos werden direkt im Browser verkleinert, damit nichts ewig lädt.</p>
+<blockquote>Mia entdeckt hinter dem alten Bahnhof eine rostige Treppe mit perfektem Abendlicht. Sie hält drauf, wählt eine Kategorie, tippt auf Speichern. Dreißig Sekunden später ist der Spot für alle da. Die Treppe hat jetzt mehr Fans als ihr Hund.</blockquote>
+<p class="for">Passt zu: Fotografen, Models</p></article>
+
+<article class="f"><h3>Karte, Kategorien und Umkreissuche</h3><p class="hl">Was ist in der Nähe? Alles, was cool ist.</p>
+<p>Dunkle Karte im Cyber-Noir-Look, Kategorie-Leiste zum Filtern und Suche nach Radius.</p>
+<blockquote>Jonas steht um 22 Uhr in einer fremden Stadt und hat Hunger auf etwas, das nicht nach Bahnhofsimbiss aussieht. Filter an, Radius auf 2 Kilometer, fertig. Die Karte sieht dabei aus wie aus einem Sci-Fi-Film.</blockquote>
+<p class="for">Passt zu: junge Leute</p></article>
+
+<article class="f"><h3>WayPoint Caching</h3><p class="hl">Schnitzeljagd für Erwachsene. Mit besserem Handyempfang.</p>
+<p>Spots zu einer Entdeckungstour verknüpfen.</p>
+<blockquote>Lea gibt einen Foto-Workshop und baut eine Schnitzeljagd durch die Altstadt: vier WayPoints, an jedem eine Aufgabe. „Finde das Fenster mit dem blauen Rahmen und mach es besser als die Touristen.“</blockquote>
+<p class="for">Passt zu: Fotografen, junge Leute</p></article>
+
+<article class="f"><h3>Live Spots</h3><p class="hl">Golden Hour dauert 40 Minuten. Sag Bescheid.</p>
+<p>Spots, die genau jetzt passieren.</p>
+<blockquote>Noah ist spontan am Hafen, die Sonne steht tief, das Licht ist absurd gut. Er setzt einen Live Spot. Wer in der Nähe ist, sieht es sofort und kann dazukommen. Das Licht wartet nicht, SpotMe auch nicht.</blockquote>
+<p class="for">Passt zu: Models, Fotografen, junge Leute</p></article>
+
+<article class="f"><h3>Routen und GPX-Export</h3><p class="hl">Von A nach B nach C. Ohne Umwege, außer du willst welche.</p>
+<p>Route zwischen Spots planen und als GPX-Datei exportieren, zum Beispiel fürs Navi oder die Sportuhr.</p>
+<blockquote>Drei Spots, ein Nachmittag, null Bock auf Zickzack. Sarah legt die Route an, die App rechnet den Weg aus, der GPX-Export wandert aufs Handy ihres Fotografen. Nie wieder „Wir sind gleich da“, während einer noch am Bahnhof steht.</blockquote>
+<p class="for">Passt zu: allen</p></article>
+
+<article class="f"><h3>Einladungen mit Countdown</h3><p class="hl">Verabreden ohne Dauerchat.</p>
+<p>Leute zu einem Spot einladen. Die Einladung hat einen Status, ein Countdown zeigt, wie lange es noch dauert.</p>
+<blockquote>Ben lädt Model Lina zum Sonnenaufgangs-Shooting ein. Lina sieht die Einladung, sagt zu, und der Countdown tickt. Ben muss nicht nachfragen, und Lina kann sich nicht mit „Hab ich nie gesehen“ rausreden.</blockquote>
+<p class="for">Passt zu: Fotografen, Models</p></article>
+
+<article class="f"><h3>Chat</h3><p class="hl">Schreib, wann du willst. Es kommt an, wenn es ankommt.</p>
+<p>Chatten wie im Messenger, mit Benachrichtigungs-Badge. Nachrichten werden auch zugestellt, wenn du gerade offline warst.</p>
+<blockquote>Funkloch im Wald. Tim schickt trotzdem schnell „Bin gleich da, bring den Reflektor mit“. Sobald sein Handy wieder Netz hat, geht die Nachricht raus. Keine „Wo bist du?“-Marathons mehr.</blockquote>
+<p class="for">Passt zu: allen</p></article>
+
+<article class="f"><h3>Wetter</h3><p class="hl">Der Himmel hat Plot Twists. Du siehst sie vorher.</p>
+<p>Wettervorhersage direkt bei den Spots.</p>
+<blockquote>Shooting um 17 Uhr, Regen um 16:45. Statt nasser Frisur und rutschiger Treppe verschieben Fotograf und Model auf 19 Uhr. Das Equipment sagt danke.</blockquote>
+<p class="for">Passt zu: Fotografen, Models</p></article>
+
+<article class="f"><h3>Favoriten und Check-ins</h3><p class="hl">Ich war hier. Und du solltest auch.</p>
+<p>Lieblingsspots speichern und öffentlich einchecken.</p>
+<blockquote>Emma sammelt ihre Lieblingsorte wie andere ihre Sticker. Beim Check-in sieht jeder: „War hier, und es war gut.“ Beweisfoto vom Gipfel, nur eben für Cafés, Brücken und kaputte Fabriken.</blockquote>
+<p class="for">Passt zu: junge Leute</p></article>
+
+<article class="f"><h3>Papierkorb und Backup</h3><p class="hl">Oops passiert. SpotMe hat dich.</p>
+<p>Gelöschte Spots sind nicht sofort für immer weg. Außerdem kannst du alles als Datei exportieren und wiederherstellen.</p>
+<blockquote>Kai löscht aus Versehen seinen besten Spot, weil der Daumen schneller war als das Hirn. Kein Drama, der Spot ist wiederherstellbar. Und wer auf Nummer sicher geht, exportiert ein Backup.</blockquote>
+<p class="for">Passt zu: allen</p></article>
+
+<article class="f"><h3>Hilfe, die mitwächst</h3><p class="hl">Kein Handbuch. Versprochen.</p>
+<p>Tipps erscheinen genau dann, wenn du sie brauchst.</p>
+<blockquote>Erste Benutzung, null Plan. Statt 20 Seiten Anleitung tauchen kleine Hinweise genau da auf, wo du sie brauchst. Nach zehn Minuten fühlst du dich, als hättest du die App erfunden.</blockquote>
+<p class="for">Passt zu: allen</p></article>
+
+<article class="f"><h3>Drei Sprachen</h3><p class="hl">Hola, Hello, Hallo. Alles dabei.</p>
+<p>SpotMe gibt es auf Deutsch, Englisch und Spanisch.</p>
+<blockquote>Fotograf aus Köln, Model aus Barcelona, Treffpunkt in Berlin. Beide nutzen dieselbe App, jeder in seiner Sprache. Nur der Kaffee bleibt international.</blockquote>
+<p class="for">Passt zu: Fotografen, Models, junge Leute</p></article>
+
+<article class="f"><h3>Als App installieren</h3><p class="hl">App ohne Store. Ja, das geht.</p>
+<p>SpotMe ist eine Progressive Web App. Du installierst sie direkt aus dem Browser auf den Homescreen.</p>
+<blockquote>Lara schickt ihrem Team den Link, alle tippen auf „Zum Homescreen“, fertig. Keine Store-Suche, kein Warten auf Updates, kein „Speicher voll“.</blockquote>
+<p class="for">Passt zu: allen</p></article>
+
+</div>
+</div></section>
+
+<section class="end"><div class="w">
+<h2>Dein nächster Lieblingsort wartet schon. Er hat nur kein WLAN-Passwort.</h2>
+<p class="intro">Kostenlos, im Browser, in drei Sprachen.</p>
+<a class="btn" href="https://spotme-caching.github.io/">App öffnen</a>
+</div></section>
+</main>
+
+<footer><div class="w">SpotMe Caching ist Open Source (MIT-Lizenz). Den Code findest du auf <a href="https://github.com/SpotMe-Caching/spotme-caching.github.io">GitHub</a>.</div></footer>
+</body>
+</html>
