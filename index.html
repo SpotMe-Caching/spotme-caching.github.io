@@ -3783,6 +3783,8 @@ document.getElementById('rc5').addEventListener('click', ()=>selectRadius(5));
 document.getElementById('rc10').addEventListener('click', ()=>selectRadius(10));
 
 initMap();
+// Browser bittet, den Karten-Cache nicht von selbst zu räumen (offline Karte bleibt erhalten)
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch {}
 startGlobalChatPolling();
 loadFavoritesCache();
 loadWeeklyBadge();

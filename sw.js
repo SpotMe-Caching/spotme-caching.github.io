@@ -5,14 +5,15 @@
 // Der Browser erkennt den neuen SW, löscht den alten Cache
 // und installiert die neuen Dateien automatisch.
 // ════════════════════════════════════════════════════════════
-const CACHE_VERSION = "v397.4"; // Erhöht für SW-Update
+const CACHE_VERSION = "v397.5"; // Erhöht für SW-Update
 const CACHE_STATIC = `spotme-caching-${CACHE_VERSION}`;
 const CACHE_API = `spotme-api-${CACHE_VERSION}`;
-const CACHE_TILES = `spotme-map-tiles-${CACHE_VERSION}`;
-
-// Max. Anzahl der zu speichernden Kartenkacheln
-// Schützt vor Speicherüberlauf. Pro Kachel ca. 10-50 KB.
-const MAX_TILE_CACHE_ITEMS = 1500;
+// Karten-Cache: FESTER Name – überlebt Updates (kein Versions-Suffix!).
+// Enthält Kacheln, Kartenstil, Symbole und Schriften von OpenFreeMap.
+const CACHE_MAP = "spotme-map-persist";
+const MAX_MAP_ENTRIES = 5000;            // Kacheln ca. 10–50 KB → grob 100–250 MB
+const TILE_TTL_MS  = 30 * 24 * 3600e3;   // Kacheln/Symbole/Schriften: 30 Tage ohne Netz-Anfrage
+const META_TTL_MS  = 24 * 3600e3;        // Kartenstil + TileJSON: täglich prüfen (enthält die Kachel-Version)
 
 // Alle Dateien die offline verfügbar sein müssen.
 // Schlägt eine Datei fehl, wird sie übersprungen (kein Totalausfall).
@@ -84,8 +85,9 @@ self.addEventListener("install", (event) => {
 // ── AKTIVIERUNG ──────────────────────────────────────────────────
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches
-      .keys()
+    migrateOldTileCaches()
+      .catch((e) => console.warn("[SW] Karten-Migration:", e))
+      .then(() => caches.keys())
       .then((keys) =>
         Promise.all(
           keys
@@ -93,7 +95,7 @@ self.addEventListener("activate", (event) => {
               (key) =>
                 key !== CACHE_STATIC &&
                 key !== CACHE_API &&
-                key !== CACHE_TILES,
+                key !== CACHE_MAP,
             )
             .map((key) => {
               console.log(`[SW] Alter Cache gelöscht: ${key}`);
@@ -105,16 +107,95 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// ── HILFSFUNKTION FÜR KACHEL-CACHE-GRÖSSE ────────────────────────
-async function limitTileCacheSize() {
-  const cache = await caches.open(CACHE_TILES);
+// ── KARTEN-CACHE (dauerhaft) ─────────────────────────────────────
+// Eintrag mit Zeitstempel versehen (für die Frische-Prüfung).
+// content-encoding/-length entfernen: der Body ist schon dekodiert.
+async function stampResponse(resp) {
+  const h = new Headers(resp.headers);
+  h.delete("content-encoding");
+  h.delete("content-length");
+  h.set("x-sw-cached-at", String(Date.now()));
+  const body = await resp.blob();
+  return new Response(body, { status: resp.status, statusText: resp.statusText, headers: h });
+}
+
+// Alte, versionierte Kachel-Caches (spotme-map-tiles-vXXX) einmalig in den festen Cache übernehmen
+async function migrateOldTileCaches() {
+  const old = (await caches.keys()).filter((k) => k.startsWith("spotme-map-tiles-"));
+  if (!old.length) return;
+  const dest = await caches.open(CACHE_MAP);
+  for (const k of old) {
+    const c = await caches.open(k);
+    for (const req of await c.keys()) {
+      if (await dest.match(req)) continue;
+      const r = await c.match(req);
+      if (r && r.ok) await dest.put(req, await stampResponse(r));
+    }
+    await caches.delete(k);
+  }
+  console.log("[SW] Alte Kartenkacheln übernommen");
+}
+
+// Älteste Einträge entfernen – nicht bei jedem Schreibzugriff, sondern gesammelt
+let mapPutsSinceTrim = 0;
+function scheduleMapTrim() {
+  if (++mapPutsSinceTrim < 40) return;
+  mapPutsSinceTrim = 0;
+  trimMapCache().catch(() => {});
+}
+async function trimMapCache() {
+  const cache = await caches.open(CACHE_MAP);
   const keys = await cache.keys();
-  if (keys.length > MAX_TILE_CACHE_ITEMS) {
-    const toDelete = keys.slice(0, keys.length - MAX_TILE_CACHE_ITEMS);
-    await Promise.all(toDelete.map((request) => cache.delete(request)));
-    console.log(
-      `[SW] Alte Kacheln gelöscht, Cache-Größe auf ${MAX_TILE_CACHE_ITEMS} begrenzt.`,
-    );
+  if (keys.length <= MAX_MAP_ENTRIES) return;
+  const drop = keys.length - Math.floor(MAX_MAP_ENTRIES * 0.9); // 10 % Luft
+  await Promise.all(keys.slice(0, drop).map((r) => cache.delete(r)));
+  console.log(`[SW] Karten-Cache auf ${MAX_MAP_ENTRIES} Einträge begrenzt`);
+}
+
+function mapKind(url) {
+  const p = url.pathname;
+  if (p.startsWith("/fonts/") || p.startsWith("/sprites/")) return "asset"; // Schriften, Symbole
+  if (p.startsWith("/styles/") || p === "/planet") return "meta";           // Stil, TileJSON
+  return "tile";
+}
+
+// Cache zuerst. Nur wenn der Eintrag zu alt ist, wird nachgeladen
+// (Kartenstil: kurz warten, sonst Cache; Kacheln: im Hintergrund).
+async function handleMapRequest(event, request, kind) {
+  const cache = await caches.open(CACHE_MAP);
+  const cached = await cache.match(request);
+  const age = cached ? Date.now() - Number(cached.headers.get("x-sw-cached-at") || 0) : Infinity;
+  const ttl = kind === "meta" ? META_TTL_MS : TILE_TTL_MS;
+
+  const refresh = async () => {
+    const net = await fetch(request);
+    if (net && net.ok) {
+      event.waitUntil(
+        stampResponse(net.clone()).then((r) => cache.put(request, r)).then(scheduleMapTrim).catch(() => {}),
+      );
+    }
+    return net;
+  };
+
+  if (cached && age < ttl) return cached;
+
+  if (cached) {
+    if (kind === "meta") {
+      try {
+        return await Promise.race([
+          refresh(),
+          new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 4000)),
+        ]);
+      } catch { return cached; }
+    }
+    event.waitUntil(refresh().catch(() => {}));
+    return cached;
+  }
+
+  try {
+    return await refresh();
+  } catch {
+    return new Response("Offline – Karte nicht verfügbar", { status: kind === "tile" ? 404 : 503 });
   }
 }
 
@@ -221,32 +302,9 @@ if (url.pathname.endsWith("/news.md")) {
     return;
   }
 
-  // ── KARTEN-KACHELN (openfreemap): Stale-While-Revalidate ───────
+  // ── KARTE (openfreemap): dauerhaft zwischengespeichert, Cache zuerst ──
   if (url.hostname.includes("openfreemap.org")) {
-    event.respondWith(
-      caches.open(CACHE_TILES).then(async (cache) => {
-        const cachedResponse = await cache.match(request);
-        const fetchPromise = fetch(request)
-          .then(async (networkResponse) => {
-            if (networkResponse.ok) {
-              await cache.put(request, networkResponse.clone());
-              // Begrenze die Cache-Größe im Hintergrund
-              limitTileCacheSize().catch(console.warn);
-            }
-            return networkResponse;
-          })
-          .catch(() => undefined);
-        if (cachedResponse) {
-          event.waitUntil(fetchPromise);
-          return cachedResponse;
-        }
-        const fresh = await fetchPromise;
-        if (fresh) return fresh;
-        return new Response("Offline – Kachel nicht verfügbar", {
-          status: 404,
-        });
-      }),
-    );
+    event.respondWith(handleMapRequest(event, request, mapKind(url)));
     return;
   }
 });
