@@ -114,6 +114,16 @@ app.use((req, res, next) => {
   next();
 });
 
+// Langsame Aufrufe im Log sichtbar machen (z. B. wenn die externe Datenbank hakt)
+app.use((req, res, next) => {
+  const t0 = Date.now();
+  res.on("finish", () => {
+    const ms = Date.now() - t0;
+    if (ms > 1500) console.warn(`🐢 langsam: ${req.method} ${req.path} → ${res.statusCode} in ${ms} ms`);
+  });
+  next();
+});
+
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
@@ -200,7 +210,12 @@ const pool = new Pool({
   ssl: process.env.DATABASE_URL?.includes("render.com")
     ? { rejectUnauthorized: false }
     : false,
+  keepAlive: true,               // Verbindungen zur externen DB offen halten
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000, // nicht ewig auf eine tote Verbindung warten
 });
+pool.on("error", (e) => console.error("pg pool:", e.message));
 
 // ---------- Web Push / VAPID ----------
 // Beim ersten Start ohne Env-Vars: Schlüssel einmalig generieren + loggen.
@@ -432,7 +447,7 @@ async function initDB() {
         `ALTER TABLE user_spots ADD COLUMN IF NOT EXISTS image_status TEXT DEFAULT 'pending'`,
       )
       .catch(() => {});
-    console.log("✅ v21.0 – Alle Spalten bereit (inkl. SpotCache)");
+    console.log("✅ v15.0 – Alle Spalten bereit (inkl. SpotCache)");
   } catch (e) {
     console.log(
       "ℹ️ Spalten existieren bereits oder konnten nicht angelegt werden",
@@ -4047,18 +4062,35 @@ function liveHaversineKm(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Positive Treffer kurz zwischenspeichern: spart bei jedem Aufruf eine Datenbank-Runde.
+// (Ein geändertes/gelöschtes Token gilt dadurch höchstens 30 s weiter.)
+const AUTH_TTL_MS = 30000;
+const authCache = new Map();
 async function authCheck(code, token) {
+  if (!code || !token) return false;
+  const key = String(code) + "\u0000" + String(token);
+  const hit = authCache.get(key);
+  if (hit && hit > Date.now()) return true;
   const r = await pool.query(
     "SELECT token FROM profiles WHERE code=$1 AND token IS NOT NULL",
     [code],
   );
-  return r.rows.length && r.rows.some((row) => row.token === token);
+  const ok = !!(r.rows.length && r.rows.some((row) => row.token === token));
+  if (ok) {
+    if (authCache.size > 5000) {
+      const now = Date.now();
+      for (const [k, v] of authCache) if (v <= now) authCache.delete(k);
+      if (authCache.size > 5000) authCache.clear();
+    }
+    authCache.set(key, Date.now() + AUTH_TTL_MS);
+  }
+  return ok;
 }
 
 // ── Live-Events (Tickets / Teilnehmerlimit) – überschreibt die Live-Routen darunter ──
 const notify = require("./notify-prefs")(pool);
 notify.ensureSchema().catch((e) => console.error("notify Schema:", e.message));
-notify.mount(app, { authCheck, sendPush: (c, t, b, u) => sendPushToCode(c, t, b, u) });
+notify.mount(app, { authCheck, decrypt, sendPush: (c, t, b, u) => sendPushToCode(c, t, b, u) });
 const liveEvents = require("./live-events")(app, { pool, authCheck, decrypt, webpush, notify });
 
 // ── Live Spot erstellen ──────────────────────────────────────────────────────

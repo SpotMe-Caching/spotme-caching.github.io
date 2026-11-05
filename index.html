@@ -1811,9 +1811,13 @@ async function checkIn(inviteId) {
 
 function startInvitePolling() {
   if (invitePollInterval) clearInterval(invitePollInterval);
+  let invBusy = false;
   invitePollInterval = setInterval(async () => {
+    if (document.hidden || invBusy) return;   // nicht im Hintergrund, nie überlappend
+    invBusy = true;
     try {
-      const r = await fetch(`${API}/spotcache/invites/${CODE}`);
+      const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 10000);
+      let r; try { r = await fetch(`${API}/spotcache/invites/${CODE}`, { signal: ctl.signal }); } finally { clearTimeout(tm); }
       if (!r.ok) return;
       const invites = await r.json();
       const count   = invites.length;
@@ -1832,7 +1836,7 @@ function startInvitePolling() {
       knownInviteCount = count;
       checkUpcomingMeetings(invites);
 
-    } catch {}
+    } catch {} finally { invBusy = false; }
   }, 8000);
 }
 
@@ -1880,13 +1884,53 @@ function handlePullResult(res) {
   if (currentDrawer === 'chat' && chatPartnerCode && res.added[chatPartnerCode]) renderChatMessages();
 }
 
+// Hinweise aus dem Postfach anzeigen (Toasts) und bestätigen
+function showInboxItems(items, token) {
+  if (!Array.isArray(items) || !items.length) return;
+  items.slice(0, 3).forEach((n, k) => setTimeout(() => toast(`${n.title}${n.body ? ' – ' + n.body : ''}`), k * 3200));
+  if (items.length > 3) setTimeout(() => toast(`🔔 +${items.length - 3} weitere Hinweise`), 3 * 3200);
+  fetch(`${API}/notifications/inbox/ack`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: CODE, token, ids: items.map(n => n.id) })
+  }).catch(() => {});
+}
+
+function setFavBadge(n) {
+  const badge = document.getElementById('favBadge');
+  if (!badge) return;
+  if (n > 0 && currentDrawer !== 'favorites') {
+    badge.textContent = n > 9 ? '9+' : n;
+    badge.style.display = 'inline-block';
+  }
+}
+
+// Ein Abruf für alles; bei Fehlern seltener nachfragen (Backoff), nie mehrere gleichzeitig
+let tickBusy = false, tickFails = 0, tickNextAt = 0, usePollApi = true;
 async function globalChatTick() {
   if (!CODE || CODE === '000000') return;
+  if (tickBusy || Date.now() < tickNextAt) return;
+  tickBusy = true;
   try {
-    await pullNotificationInbox();   // zuerst: aktuelle Einstellungen (Silent!) laden
+    const tok = localStorage.getItem('sm_token');
+    if (usePollApi) {
+      const d = await SMChat.pollAll();
+      if (d.ok) {
+        tickFails = 0;
+        try { localStorage.setItem('sm_notif_prefs', JSON.stringify({ silent: d.silent, prefs: d.prefs || {} })); } catch {}
+        if (!d.silent) showInboxItems(d.inbox, tok);
+        handlePullResult(d);
+        setFavBadge(d.favorites);
+        return;
+      }
+      if (d.status === 404) usePollApi = false; // älterer Server: Einzelabrufe
+      else { tickFails++; tickNextAt = Date.now() + Math.min(60000, 10000 * 2 ** Math.min(tickFails, 3)); return; }
+    }
+    await pullNotificationInbox();
     handlePullResult(await SMChat.pull());
     checkFavoriteNotifications();
-  } catch {}
+  } catch {
+    tickFails++; tickNextAt = Date.now() + Math.min(60000, 10000 * 2 ** Math.min(tickFails, 3));
+  } finally { tickBusy = false; }
 }
 
 function startGlobalChatPolling() {

@@ -129,6 +129,32 @@
     } catch (e) { /* nächster Abruf liefert sie erneut, Dedupe über sid */ }
   }
 
+  // Zeilen vom Server lokal speichern (dedupe über sid) und erst danach bestätigen.
+  async function ingest(c, rows) {
+    var out = {};
+    var ackIds = [];
+    var byRoom = {};
+    rows.forEach(function (m) {
+      ackIds.push(m.id);
+      var r = room(c.code, m.sender_code);
+      if (!byRoom[r]) byRoom[r] = { msgs: load(r), partner: m.sender_code };
+      var list = byRoom[r].msgs;
+      if (list.some(function (e) { return e.sid === m.id && e.from === m.sender_code; })) return;
+      list.push({ from: m.sender_code, fromName: m.sender_name, text: m.message,
+                  ts: new Date(m.created_at).getTime(), sid: m.id });
+      out[m.sender_code] = (out[m.sender_code] || 0) + 1;
+    });
+    var allSaved = true;
+    Object.keys(byRoom).forEach(function (r) {
+      byRoom[r].msgs.sort(function (a, b) { return a.ts - b.ts; });
+      if (!save(r, byRoom[r].msgs)) allSaved = false;
+    });
+    // Nur bestätigen, wenn lokal wirklich gespeichert → sonst bleibt sie beim Server
+    if (allSaved) await ack(c.code, c.token, ackIds);
+    else out = {};
+    return out;
+  }
+
   // Alle neuen Chat-Nachrichten holen, lokal speichern, bestätigen.
   // Rückgabe: { added: { partnerCode: anzahlNeu }, ok: bool }
   async function pull() {
@@ -142,26 +168,31 @@
       if (!res.ok) return out;
       var rows = await res.json();
       if (!Array.isArray(rows)) return out;
-      var ackIds = [];
-      var byRoom = {};
-      rows.forEach(function (m) {
-        ackIds.push(m.id);
-        var r = room(c.code, m.sender_code);
-        if (!byRoom[r]) byRoom[r] = { msgs: load(r), partner: m.sender_code };
-        var list = byRoom[r].msgs;
-        if (list.some(function (e) { return e.sid === m.id && e.from === m.sender_code; })) return;
-        list.push({ from: m.sender_code, fromName: m.sender_name, text: m.message,
-                    ts: new Date(m.created_at).getTime(), sid: m.id });
-        out.added[m.sender_code] = (out.added[m.sender_code] || 0) + 1;
-      });
-      var allSaved = true;
-      Object.keys(byRoom).forEach(function (r) {
-        byRoom[r].msgs.sort(function (a, b) { return a.ts - b.ts; });
-        if (!save(r, byRoom[r].msgs)) allSaved = false;
-      });
-      // Nur bestätigen, wenn lokal wirklich gespeichert → sonst bleibt sie beim Server
-      if (allSaved) await ack(c.code, c.token, ackIds);
-      else out.added = {};
+      out.added = await ingest(c, rows);
+      out.ok = true;
+      return out;
+    } catch (e) { return out; }
+    finally { pulling = false; }
+  }
+
+  // Ein Abruf für alles (Chat + Favoriten-Zähler + Hinweis-Postfach + Einstellungen).
+  // status 404 = Server kennt /poll noch nicht → Aufrufer nimmt den alten Weg.
+  async function pollAll() {
+    var c = cfg();
+    var out = { ok: false, added: {}, inbox: [], favorites: 0, silent: false, prefs: null, status: 0 };
+    if (pulling || !c.code || c.code === '000000' || !c.token) return out;
+    pulling = true;
+    try {
+      var res = await timeoutFetch(c.api + '/poll?code=' + encodeURIComponent(c.code) +
+        '&token=' + encodeURIComponent(c.token), {}, 12000);
+      out.status = res.status;
+      if (!res.ok) return out;
+      var d = await res.json();
+      out.added = await ingest(c, Array.isArray(d.messages) ? d.messages : []);
+      out.inbox = Array.isArray(d.inbox) ? d.inbox : [];
+      out.favorites = d.favorites | 0;
+      out.silent = !!d.silent;
+      out.prefs = d.prefs || null;
       out.ok = true;
       return out;
     } catch (e) { return out; }
@@ -189,6 +220,6 @@
   window.SMChat = {
     PREFIX: PREFIX, room: room, load: load, save: save,
     send: send, transmit: transmitNow, retry: retry, retryOne: retryOne,
-    pull: pull, peekType: peekType, ackType: ackType
+    pull: pull, pollAll: pollAll, ack: ack, peekType: peekType, ackType: ackType
   };
 })();

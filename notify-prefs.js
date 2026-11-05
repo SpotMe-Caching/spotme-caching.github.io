@@ -103,7 +103,7 @@ module.exports = function makeNotify(pool) {
   }
 
   // ── HTTP ───────────────────────────────────────────────────────────────────
-  function mount(app, { authCheck, sendPush }) {
+  function mount(app, { authCheck, sendPush, decrypt }) {
     const auth = async (req, res, src) => {
       const code = String(src.code || "");
       const token = String(src.token || req.headers["x-spotme-token"] || "");
@@ -174,6 +174,35 @@ module.exports = function makeNotify(pool) {
         ? req.body.ids.map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 200) : [];
       if (ids.length) await pool.query("DELETE FROM notification_inbox WHERE code = $1 AND id = ANY($2::int[])", [code, ids]);
       res.json({ success: true, acked: ids.length });
+    }));
+
+    // Alles auf einmal für die App (statt 3 Einzelabrufe alle 10 s): Chat + Favoriten-Hinweise + Postfach + Einstellungen.
+    // Eine Auth-Prüfung, die 4 Abfragen laufen parallel.
+    app.get("/api/poll", wrap(async (req, res) => {
+      const code = await auth(req, res, req.query); if (!code) return;
+      await ready();
+      const [pr, msgs, fav, inb] = await Promise.all([
+        getPrefs(code),
+        pool.query(
+          `SELECT id, sender_code, sender_name, message, spot_type, created_at FROM offline_messages
+           WHERE recipient = $1 AND spot_type = 'caching_chat' AND read = FALSE
+             AND created_at > NOW() - INTERVAL '48 hours' ORDER BY id ASC LIMIT 200`, [code]),
+        pool.query(
+          `SELECT COUNT(*)::int AS n FROM offline_messages
+           WHERE recipient = $1 AND spot_type = 'favorite_checkin' AND read = FALSE
+             AND created_at > NOW() - INTERVAL '48 hours'`, [code]),
+        pool.query(
+          `SELECT id, category, title, body, url, created_at FROM notification_inbox
+           WHERE code = $1 AND created_at > NOW() - INTERVAL '48 hours' ORDER BY id ASC LIMIT 50`, [code]),
+      ]);
+      const dec = typeof decrypt === "function" ? decrypt : (x) => x;
+      res.json({
+        messages: msgs.rows.map((r) => ({ ...r, sender_name: dec(r.sender_name), message: dec(r.message) })),
+        favorites: fav.rows[0].n,
+        inbox: pr.silent ? [] : inb.rows,
+        silent: pr.silent,
+        prefs: pr.prefs,
+      });
     }));
 
     // Test-Push an die Geräte dieses Nutzers (respektiert Silent)
