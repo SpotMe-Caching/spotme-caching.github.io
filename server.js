@@ -447,7 +447,15 @@ async function initDB() {
         `ALTER TABLE user_spots ADD COLUMN IF NOT EXISTS image_status TEXT DEFAULT 'pending'`,
       )
       .catch(() => {});
-    console.log("✅ v25.0 – Alle Spalten bereit (inkl. SpotCache)");
+    await pool
+      .query(`ALTER TABLE user_spots ADD COLUMN IF NOT EXISTS client_id TEXT`)
+      .catch(() => {});
+    await pool
+      .query(
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_spots_client ON user_spots(code, client_id) WHERE client_id IS NOT NULL`,
+      )
+      .catch((e) => console.error("idx_user_spots_client:", e.message));
+    console.log("✅ v15.0 – Alle Spalten bereit (inkl. SpotCache)");
   } catch (e) {
     console.log(
       "ℹ️ Spalten existieren bereits oder konnten nicht angelegt werden",
@@ -2380,25 +2388,35 @@ app.post("/api/userspots", async (req, res) => {
     time_pref,
     crowd_level,
     intimacy_level,
+    client_id,
   } = req.body;
   if (!code || lat == null || lng == null || !name || !wishTag) {
     return res
       .status(400)
       .json({ error: "Pflichtfelder: code, lat, lng, name, wishTag" });
   }
+  const token = String(req.body.token || req.headers["x-spotme-token"] || "");
+  if (!token) return res.status(401).json({ error: "Token erforderlich" });
+  const la = Number(lat), ln = Number(lng);
+  if (!Number.isFinite(la) || !Number.isFinite(ln) || Math.abs(la) > 90 || Math.abs(ln) > 180)
+    return res.status(400).json({ error: "Ungültiger Standort" });
+  const cid = client_id ? String(client_id).slice(0, 64) : null;
   try {
-    await pool.query(
-      // active=true ist der Standard – jeder neue Spot ist sofort sichtbar
-      // Die neuen Felder area_type, time_pref, crowd_level, intimacy_level
-      // sind optional – ältere Spots ohne diese Felder funktionieren weiterhin.
+    if (!(await authCheck(String(code), token)))
+      return res.status(403).json({ error: "Ungültiger Token" });
+    // active=true ist der Standard – jeder neue Spot ist sofort sichtbar.
+    // client_id = Doppel-Schutz (Offline-Postausgang sendet ggf. mehrfach).
+    const ins = await pool.query(
       `INSERT INTO user_spots
          (code, lat, lng, name, description, wish_tag, image, active,
-          area_type, time_pref, crowd_level, intimacy_level, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10, $11, $12)`,
+          area_type, time_pref, crowd_level, intimacy_level, created_at, client_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10, $11, $12, $13)
+       ON CONFLICT (code, client_id) WHERE client_id IS NOT NULL DO NOTHING
+       RETURNING id`,
       [
         code,
-        lat,
-        lng,
+        la,
+        ln,
         name,
         description || null,
         wishTag,
@@ -2408,9 +2426,15 @@ app.post("/api/userspots", async (req, res) => {
         crowd_level || null,
         intimacy_level || null,
         Date.now(),
+        cid,
       ],
     );
-    res.json({ success: true });
+    if (ins.rows.length) return res.json({ success: true, id: ins.rows[0].id });
+    const ex = await pool.query(
+      "SELECT id FROM user_spots WHERE code = $1 AND client_id = $2",
+      [code, cid],
+    );
+    res.json({ success: true, id: ex.rows[0] && ex.rows[0].id, duplicate: true });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "Fehler beim Speichern" });

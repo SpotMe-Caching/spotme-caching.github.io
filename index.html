@@ -36,6 +36,15 @@
   <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
   <script src="nav.js"></script>
   <script src="chat-core.js"></script>
+  <script src="spot-outbox.js"></script>
+  <style>
+    .my-spot-marker.pending{opacity:.6;outline:2px dashed var(--orange,#f90);outline-offset:3px;border-radius:50%}
+    .my-spot-marker.pending.failed{outline-color:#e55}
+    #spotSyncBar{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 58px);z-index:900;
+      background:var(--card,#1b1b1b);color:var(--text,#eee);border:1px solid var(--bord,#444);border-radius:20px;padding:5px 14px;
+      font-size:.72rem;font-family:'Space Mono',monospace;display:none;max-width:92vw;text-align:center}
+    #spotSyncBar.show{display:block}
+  </style>
   
 </head>
 <body>
@@ -574,9 +583,14 @@ applyTheme(localStorage.getItem('sm_theme') || 'dark');
   
 async function saveSpotsOffline(spots) {
   const db = await openDB();
-  const tx = db.transaction('spots', 'readwrite');
-  spots.forEach(spot => tx.objectStore('spots').put(spot));
-  await tx.done;
+  await new Promise((resolve) => {
+    const tx = db.transaction('spots', 'readwrite');
+    const st = tx.objectStore('spots');
+    st.clear();
+    spots.filter(sp => !sp.pending).forEach(spot => st.put(spot));
+    tx.oncomplete = tx.onerror = tx.onabort = () => resolve();
+  });
+  try { localStorage.setItem('sm_spots_sync', String(Date.now())); } catch {}
 }
 
 async function loadSpotsOffline() {
@@ -978,10 +992,30 @@ document.getElementById('bskyCustomMessage')?.addEventListener('input', function
 });
 
 // ── SPOTS ────────────────────────────────────────────────────────────────────
+async function withPending(list) {
+  let p = [];
+  try { p = window.SpotOutbox ? await SpotOutbox.asSpots() : []; } catch {}
+  return p.length ? list.filter(x => !x.pending).concat(p) : list;
+}
+
+function updateSyncBar(pendingN, failedN) {
+  let bar = document.getElementById('spotSyncBar');
+  if (!bar) { bar = document.createElement('div'); bar.id = 'spotSyncBar'; document.body.appendChild(bar); }
+  const off = navigator.onLine === false;
+  const t = +localStorage.getItem('sm_spots_sync') || 0;
+  const ago = t ? Math.max(1, Math.round((Date.now() - t) / 60000)) : null;
+  const parts = [];
+  if (off) parts.push('📴 Offline' + (ago ? ` – Spots-Stand vor ${ago >= 60 ? Math.round(ago / 60) + ' Std' : ago + ' Min'}` : ''));
+  if (pendingN) parts.push(`⏳ ${pendingN} Spot${pendingN > 1 ? 's' : ''} wartet auf Senden`);
+  if (failedN) parts.push(`⚠️ ${failedN} nicht gesendet (Marker antippen)`);
+  bar.textContent = parts.join(' · ');
+  bar.classList.toggle('show', parts.length > 0);
+}
+
 async function loadAllSpots() {
   const offlineSpots = await loadSpotsOffline();
   if (offlineSpots.length) {
-    allSpots = offlineSpots;
+    allSpots = await withPending(offlineSpots);
     mySpots = allSpots.filter(s => s.code === CODE);
     document.getElementById('statSpots').textContent = mySpots.length;
     await renderMarkers();
@@ -992,26 +1026,40 @@ async function loadAllSpots() {
     const r = await fetch(`${API}/userspots/all?noimage=1`);
     if (r.ok) {
       const freshSpots = await r.json();
-      allSpots = freshSpots;
+      await saveSpotsOffline(freshSpots);
+      allSpots = await withPending(freshSpots);
       document.getElementById('statSpots').textContent =
         allSpots.filter(s => s.code === CODE).length;
       await renderMarkers();
-      await saveSpotsOffline(allSpots);
       checkUrlForSpot(); // Deep-Link prüfen (Live-Daten)
+    } else if (!offlineSpots.length) {
+      allSpots = await withPending([]);
+      await renderMarkers();
     }
 
     const r2 = await fetch(`${API}/userspots/${CODE}`);
     if (r2.ok) {
-      mySpots = await r2.json();
+      mySpots = (await withPending(await r2.json())).filter(s => s.code === CODE);
       document.getElementById('statSpots').textContent = mySpots.length;
     } else {
       mySpots = allSpots.filter(s => s.code === CODE);
     }
   } catch (err) {
+    allSpots = await withPending(allSpots.length ? allSpots : offlineSpots);
     mySpots = allSpots.filter(s => s.code === CODE);
+    if (!offlineSpots.length) { try { await renderMarkers(); } catch {} }
     console.warn('Kein Netzwerk, verwende Cache-Daten');
   }
+  updateSyncBar(allSpots.filter(s => s.pending && !s.failed).length, allSpots.filter(s => s.pending && s.failed).length);
 }
+
+window.addEventListener('spotoutbox', async (e) => {
+  const d = e.detail || {};
+  if (d.sent) toast(`✅ ${d.sent} Spot${d.sent > 1 ? 's' : ''} synchronisiert`);
+  await loadAllSpots();
+});
+window.addEventListener('online', () => updateSyncBar(allSpots.filter(s => s.pending && !s.failed).length, allSpots.filter(s => s.pending && s.failed).length));
+window.addEventListener('offline', () => updateSyncBar(allSpots.filter(s => s.pending && !s.failed).length, allSpots.filter(s => s.pending && s.failed).length));
 
 // ── KATEGORIE-FILTER ─────────────────────────────────────────────────────────
 const CATEGORY_EMOJI = {
@@ -1117,7 +1165,7 @@ async function renderMarkers() {
   allSpots.forEach(s => {
     const isMine=s.code===CODE, isOnline=!isMine&&onlineSet.has(s.code);
     const el=document.createElement('div');
-    el.className=isMine?'my-spot-marker':`other-spot-marker${isOnline?' is-online':''}`;
+    el.className=isMine?('my-spot-marker'+(s.pending?' pending'+(s.failed?' failed':''):'')):`other-spot-marker${isOnline?' is-online':''}`;
     const marker=new maplibregl.Marker({element:el}).setLngLat([s.lng,s.lat]).addTo(map);
     markers.push(marker);
     el.addEventListener('click', e => { e.stopPropagation(); openMarkerDrawer(s,isMine,isOnline); });
@@ -1151,7 +1199,13 @@ function openMarkerDrawer(s, isMine, isOnline) {
         ${s.image ? `<img src="${s.image}" alt="" onclick="openImg('${s.image}')" style="width:100%;max-height:120px;object-fit:cover;border-radius:9px;margin-top:8px;border:1px solid var(--bord);cursor:zoom-in;">` : ''}
       </div>
     </div>
-    ${isMine
+    ${isMine && s.pending
+      ? `<div style="font-size:.78rem;color:var(--muted2);margin-bottom:.6rem;">${s.failed ? '⚠️ Nicht gesendet: ' + esc(s.err || 'abgelehnt') : '⏳ Wartet auf Verbindung – wird automatisch gesendet.'}</div>
+         <div style="display:flex;gap:0.5rem;">
+           <button id="md-retry" class="sc-btn navigate" style="flex:1;padding:0.8rem;font-size:0.9rem;border-radius:12px;">🔄 Jetzt senden</button>
+           <button id="md-discard" class="sc-btn danger" style="flex:1;padding:0.8rem;font-size:0.9rem;border-radius:12px;">🗑️ Verwerfen</button>
+         </div>`
+      : isMine
       ? `<div style="display:flex;gap:0.5rem;">
            <button id="md-edit" class="sc-btn navigate" style="flex:1;padding:0.8rem;font-size:0.9rem;border-radius:12px;">✏️ Bearbeiten</button>
            <button id="md-del"  class="sc-btn danger"   style="flex:1;padding:0.8rem;font-size:0.9rem;border-radius:12px;">🗑️ Löschen</button>
@@ -1164,7 +1218,10 @@ function openMarkerDrawer(s, isMine, isOnline) {
     }
   `;
 
-  if (isMine) {
+  if (isMine && s.pending) {
+    document.getElementById('md-retry').addEventListener('click', async () => { closeDrawer(); toast('🔄 Sende…'); const r = await SpotOutbox.retryNow(); if (!r.sent) toast(navigator.onLine === false ? '📴 Noch offline' : '⚠️ Senden nicht möglich'); });
+    document.getElementById('md-discard').addEventListener('click', async () => { await SpotOutbox.discard(s.cid); closeDrawer(); toast('🗑️ Verworfen'); });
+  } else if (isMine) {
     document.getElementById('md-edit').addEventListener('click', () => { closeDrawer(); setTimeout(() => openSpotEdit(s), 300); });
     document.getElementById('md-del').addEventListener('click', () => { deleteSpot(s.id); closeDrawer(); });
   } else {
@@ -1183,35 +1240,39 @@ async function saveSpot() {
 
   if (editSpotId) {
     closeModals();
+    let ok = false;
     try {
-      await fetch(`${API}/userspots/${editSpotId}`, {
+      const r = await fetch(`${API}/userspots/${editSpotId}`, {
         method:'PUT', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ code:CODE, name, description:desc, wishTag:wish, area_type:category||null, image:spotPhotoData||null })
       });
+      ok = r.ok;
     } catch {}
-    toast('✅ Platz Spot aktualisiert');
+    toast(ok ? '✅ Platz Spot aktualisiert' : (navigator.onLine === false ? '📴 Bearbeiten geht nur online' : '⚠️ Änderung nicht gespeichert'));
     editSpotId=null; spotPhotoData=null;
     loadAllSpots();
   } else {
     if (!tempLatLng) { toast('⚠️ Kein Standort'); return; }
     closeModals();
-    try {
-      await fetch(`${API}/userspots`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ code:CODE, lat:tempLatLng.lat, lng:tempLatLng.lng, name, description:desc, wishTag:wish, image:spotPhotoData||null })
-      });
-    } catch {}
-    toast('✅ Platz Spot gespeichert');
+    const r = await SpotOutbox.submit({
+      code:CODE, lat:tempLatLng.lat, lng:tempLatLng.lng, name, description:desc, wishTag:wish,
+      image:spotPhotoData||null
+    });
+    toast(r.sent ? '✅ Platz Spot gespeichert'
+        : r.queued ? '📴 Offline gespeichert – wird gesendet, sobald du online bist'
+        : '⚠️ ' + (r.error || 'Nicht gespeichert'));
     spotPhotoData=null;
     loadAllSpots();
   }
 }
 
 async function deleteSpot(id) {
+  let ok = false;
   try {
-    await fetch(`${API}/userspots/${id}`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:CODE})});
+    const r = await fetch(`${API}/userspots/${id}`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:CODE})});
+    ok = r.ok;
   } catch {}
-  toast('🗑️ Platz Spot gelöscht');
+  toast(ok ? '🗑️ Platz Spot gelöscht' : (navigator.onLine === false ? '📴 Löschen geht nur online' : '⚠️ Nicht gelöscht'));
   loadAllSpots();
 }
 

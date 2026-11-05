@@ -466,6 +466,7 @@
 <div id="toast"></div>
 
 <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
+<script src="spot-outbox.js"></script>
 <script>
 'use strict';
 
@@ -672,35 +673,26 @@ async function saveSpot() {
   document.getElementById('loadingOverlay').classList.add('show');
 
   try {
-    const res = await fetch(`${API}/userspots`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({
-        code:           CODE,
-        lat:            currentCoords.lat,
-        lng:            currentCoords.lng,
-        name,
-        description:    desc || null,
-        wishTag,
-        image:          photoData || null,
-        area_type:      areaType,
-        time_pref:      timePref,
-        crowd_level:    crowd,
-        intimacy_level: intimacy,
-      })
+    const out = await SpotOutbox.submit({
+      code:           CODE,
+      lat:            currentCoords.lat,
+      lng:            currentCoords.lng,
+      name,
+      description:    desc || null,
+      wishTag,
+      image:          photoData || null,
+      area_type:      areaType,
+      time_pref:      timePref,
+      crowd_level:    crowd,
+      intimacy_level: intimacy,
     });
 
-    const data = await res.json();
-
-    if (res.ok && data.success) {
+    if (out.sent || out.queued) {
       document.getElementById('loadingOverlay').classList.remove('show');
-      showToast('✅ Platz Spot gespeichert!');
-      // Kurz warten damit der Nutzer den Toast sieht, dann zurück zur Karte
-      setTimeout(() => {
-        window.location.href = 'index.html';
-      }, 1400);
+      showToast(out.sent ? '✅ Platz Spot gespeichert!' : '📴 Offline gespeichert – wird gesendet, sobald du online bist');
+      setTimeout(() => { window.location.href = 'index.html'; }, out.sent ? 1400 : 2200);
     } else {
-      throw new Error(data.error || 'Unbekannter Fehler');
+      throw new Error(out.error || 'Unbekannter Fehler');
     }
   } catch (e) {
     document.getElementById('loadingOverlay').classList.remove('show');

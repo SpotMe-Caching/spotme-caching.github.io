@@ -5,7 +5,7 @@
 // Der Browser erkennt den neuen SW, löscht den alten Cache
 // und installiert die neuen Dateien automatisch.
 // ════════════════════════════════════════════════════════════
-const CACHE_VERSION = "v397.5"; // Erhöht für SW-Update
+const CACHE_VERSION = "v397.6"; // Erhöht für SW-Update
 const CACHE_STATIC = `spotme-caching-${CACHE_VERSION}`;
 const CACHE_API = `spotme-api-${CACHE_VERSION}`;
 // Karten-Cache: FESTER Name – überlebt Updates (kein Versions-Suffix!).
@@ -26,6 +26,7 @@ const STATIC_ASSETS = [
   "/spot.html",
   "/live-events-client.js",
   "/chat-core.js",
+  "/spot-outbox.js",
   "/benachrichtigungen.html",
   "/spotme.css",
   "/theme-vars.css",
