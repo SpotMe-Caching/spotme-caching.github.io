@@ -1919,13 +1919,30 @@ function startInvitePolling() {
 
       document.getElementById('statInvites').textContent = count;
 
-      if (count > knownInviteCount && knownInviteCount >= 0) {
-        updateInviteBadge(count - knownInviteCount);
-        document.getElementById('inviteHeaderBtn').classList.add('active');
-        if (Notification.permission === 'granted') {
-          new Notification('🧭 Neue Einladung!', {
-            body: 'Jemand möchte sich an deinem Platz Spot treffen.'
-          });
+      // Nur wirklich NEUE Einladungen melden: gemerkte IDs pro Gerät.
+      // Erster Abruf (kein Merker) → alles Vorhandene still als „bekannt“ eintragen.
+      const seenKey = 'sm_seen_inv_' + CODE;
+      let seen = null; try { seen = JSON.parse(localStorage.getItem(seenKey) || 'null'); } catch {}
+      const ids = invites.map(i => i.id).filter(x => x != null);
+      if (!Array.isArray(seen)) {
+        try { localStorage.setItem(seenKey, JSON.stringify(ids.slice(-300))); } catch {}
+      } else {
+        const fresh = invites.filter(i => i.id != null && !seen.includes(i.id) && (i.status || 'pending') === 'pending');
+        if (ids.length) { try { localStorage.setItem(seenKey, JSON.stringify(seen.concat(ids.filter(x => !seen.includes(x))).slice(-300))); } catch {} }
+        if (fresh.length) {
+          updateInviteBadge(fresh.length);
+          document.getElementById('inviteHeaderBtn').classList.add('active');
+          const np = notifPrefs(); const lvl = np.prefs && np.prefs.invite;
+          if (!np.silent && lvl !== 'off') {
+            // OS-Hinweis nur, wenn dieses Gerät KEIN Push-Abo hat (sonst kommt er doppelt per Push)
+            let hasPush = false;
+            try { const reg = await navigator.serviceWorker.getRegistration(); hasPush = !!(reg && reg.pushManager && await reg.pushManager.getSubscription()); } catch {}
+            if (!hasPush && 'Notification' in window && Notification.permission === 'granted') {
+              new Notification('🧭 Neue Einladung!', { body: 'Jemand möchte sich an deinem Platz Spot treffen.' });
+            } else if (!hasPush) {
+              toast('🧭 Neue Einladung!');
+            }
+          }
         }
       }
       knownInviteCount = count;
