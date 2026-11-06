@@ -5,7 +5,7 @@
 // Der Browser erkennt den neuen SW, löscht den alten Cache
 // und installiert die neuen Dateien automatisch.
 // ════════════════════════════════════════════════════════════
-const CACHE_VERSION = "v397.7"; // Erhöht für SW-Update
+const CACHE_VERSION = "v397.8"; // Erhöht für SW-Update
 const CACHE_STATIC = `spotme-caching-${CACHE_VERSION}`;
 const CACHE_API = `spotme-api-${CACHE_VERSION}`;
 // Karten-Cache: FESTER Name – überlebt Updates (kein Versions-Suffix!).
@@ -32,6 +32,7 @@ const STATIC_ASSETS = [
   "/theme-vars.css",
   "/help/help.css",
   "/spot-woche.html",
+  "/spot-erstellen.html",
   "/help/treffen.html",
   "/help/chat.html",
   "/help/alle-spots.html",
@@ -208,6 +209,24 @@ self.addEventListener("fetch", (event) => {
   // Nur GET-Requests cachen — POST/PUT/DELETE immer ans Netz.
   if (request.method !== "GET") return;
 
+  // Google Fonts: einmal geladen, danach offline verfügbar (Cache zuerst, im Hintergrund auffrischen)
+  if (url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com") {
+    event.respondWith(
+      caches.open(CACHE_STATIC).then(async (cache) => {
+        const cached = await cache.match(request);
+        const net = fetch(request)
+          .then((res) => {
+            if (res && (res.ok || res.type === "opaque")) cache.put(request, res.clone());
+            return res;
+          })
+          .catch(() => null);
+        if (cached) { net.catch(() => {}); return cached; }
+        return (await net) || Response.error();
+      }),
+    );
+    return;
+  }
+
   // Externe Domains, die wir nicht cachen wollen.
   if (
     url.origin !== self.location.origin &&
@@ -286,7 +305,9 @@ if (url.pathname.endsWith("/news.md")) {
     url.hostname.includes("unpkg.com")
   ) {
     event.respondWith(
-      caches.match(request).then((cached) => {
+      // Seiten mit Parametern (spot-erstellen.html?lat=…, live-spot.html?id=…) offline
+      // aus dem Cache bedienen: bei HTML die Query ignorieren.
+      caches.match(request, { ignoreSearch: url.pathname.endsWith(".html") || url.pathname === "/" }).then((cached) => {
         if (cached) return cached;
         return fetch(request)
           .then((response) => {

@@ -411,6 +411,10 @@
 'use strict';
 
 const API  = 'https://spotme-chat-obom.onrender.com/api';
+// Letzten Stand kleiner Listen merken (Live Spots) → offline sichtbar
+function cacheSave(key, data) { try { localStorage.setItem('sm_cache_' + key + '_' + CODE, JSON.stringify({ t: Date.now(), d: data })); } catch {} }
+function cacheLoad(key) { try { const v = JSON.parse(localStorage.getItem('sm_cache_' + key + '_' + CODE) || 'null'); return v && Array.isArray(v.d) ? v : null; } catch { return null; } }
+function agoText(t) { const m = Math.max(1, Math.round((Date.now() - t) / 60000)); return m >= 1440 ? Math.round(m / 1440) + ' Tg' : m >= 60 ? Math.round(m / 60) + ' Std' : m + ' Min'; }
 // fetch mit Zeitlimit: bei schlechter/halb toter Verbindung hängt nichts ewig
 function tfetch(url, opts, ms) {
   if (navigator.onLine === false) return Promise.reject(new Error('offline'));
@@ -3729,10 +3733,15 @@ function circlePolyIdx(lat, lng, r) {
 async function renderLiveSpotMarkers() {
   try {
     const lsTok = localStorage.getItem('sm_token'); const lsAuth = (CODE && lsTok) ? `?code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(lsTok)}` : '';
-    const r = await fetch(`${API}/live-spots${lsAuth}`);
-    if (!r.ok) return;
+    const r = await tfetch(`${API}/live-spots${lsAuth}`, {}, 10000);
+    if (!r.ok) throw new Error('http');
     liveSpots = await r.json();
-  } catch { return; }
+    cacheSave('live_all', liveSpots);
+  } catch {
+    const c = cacheLoad('live_all');   // offline: letzter Stand
+    if (!c) return;
+    liveSpots = c.d;
+  }
 
   const badge = document.getElementById('liveBadge');
   const nLive = liveSpots.filter(s => s.status === 'online').length;
@@ -3756,6 +3765,7 @@ async function renderLiveSpotMarkers() {
   };
   try { if (map.isStyleLoaded()) drawApprox(); else map.once('load', drawApprox); } catch {}
 
+  liveMarkers.forEach(m => m.remove()); liveMarkers = [];
   liveSpots.forEach(s => {
     if (!s.lat || !s.lng) return;
     const el = document.createElement('div');
@@ -3763,9 +3773,10 @@ async function renderLiveSpotMarkers() {
     el.title = s.name + (s.location_hidden ? ' (ungefährer Bereich)' : '');
     if (s.location_hidden) el.style.opacity = '0.7';
     el.addEventListener('click', () => window.location.href = `live-spot.html?id=${s.id}`);
-    new maplibregl.Marker({ element: el }).setLngLat([s.lng, s.lat]).addTo(map);
+    liveMarkers.push(new maplibregl.Marker({ element: el }).setLngLat([s.lng, s.lat]).addTo(map));
   });
 }
+let liveMarkers = [];
 
 async function loadLiveDrawer(body) {
   body.innerHTML = `<div class="empty-state"><div class="es-icon">⏳</div>Lädt…</div>`;
@@ -3773,12 +3784,15 @@ async function loadLiveDrawer(body) {
   const qs = `code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(token)}`;
 
   const [followingRes, mineRes] = await Promise.allSettled([
-    fetch(`${API}/live-spots/following?${qs}`).then(r => r.ok ? r.json() : []),
-    fetch(`${API}/live-spots/mine?${qs}`).then(r => r.ok ? r.json() : [])
+    tfetch(`${API}/live-spots/following?${qs}`, {}, 10000).then(r => { if (!r.ok) throw new Error('http'); return r.json(); }),
+    tfetch(`${API}/live-spots/mine?${qs}`, {}, 10000).then(r => { if (!r.ok) throw new Error('http'); return r.json(); })
   ]);
 
-  const following = followingRes.status === 'fulfilled' ? followingRes.value : [];
-  const mine      = mineRes.status     === 'fulfilled' ? mineRes.value     : [];
+  let following = [], mine = [], staleT = 0;
+  if (followingRes.status === 'fulfilled') { following = followingRes.value; cacheSave('live_following', following); }
+  else { const c = cacheLoad('live_following'); if (c) { following = c.d; staleT = c.t; } }
+  if (mineRes.status === 'fulfilled') { mine = mineRes.value; cacheSave('live_mine', mine); }
+  else { const c = cacheLoad('live_mine'); if (c) { mine = c.d; staleT = staleT || c.t; } }
 
   const badge = document.getElementById('liveBadge');
   const onlineCount = following.filter(s => s.status === 'online').length;
@@ -3803,7 +3817,8 @@ async function loadLiveDrawer(body) {
     </div>`;
   };
 
-  let html = `<button class="btn-primary" style="margin-bottom:0.75rem;"
+  let html = (staleT ? `<div style="font-size:.72rem;color:var(--muted2);margin-bottom:.6rem;font-family:'Space Mono',monospace;">📴 Offline – letzter Stand vor ${agoText(staleT)}</div>` : '') +
+    `<button class="btn-primary" style="margin-bottom:0.75rem;"
     onclick="location.href='live-spot-manage.html'">📡 Live Spot erstellen / verwalten</button>`;
 
   if (mine.length) html += `<div class="section-title" style="margin-bottom:0.4rem;">MEINE LIVE SPOTS</div>` + mine.map(s=>card(s,true)).join('');
