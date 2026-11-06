@@ -411,6 +411,13 @@
 'use strict';
 
 const API  = 'https://spotme-chat-obom.onrender.com/api';
+// fetch mit Zeitlimit: bei schlechter/halb toter Verbindung hängt nichts ewig
+function tfetch(url, opts, ms) {
+  if (navigator.onLine === false) return Promise.reject(new Error('offline'));
+  const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const t = ctl ? setTimeout(() => ctl.abort(), ms || 8000) : null;
+  return fetch(url, Object.assign({}, opts || {}, ctl ? { signal: ctl.signal } : {})).finally(() => { if (t) clearTimeout(t); });
+}
 const CODE = localStorage.getItem('sm_code') || '000000';
 
 // ── OpenRouteService API-Key ──────────────────────────────────────────────────
@@ -732,6 +739,19 @@ function initMap() {
     if (e && e.originalEvent) { const c = map.getCenter(); saveMapView(c.lat, c.lng, map.getZoom()); }
   });
 
+  // Gecachte Spots sofort zeigen – unabhängig davon, ob/wann die Karte fertig lädt (Offline!)
+  (async () => {
+    try {
+      const cached = await loadSpotsOffline();
+      if (cached.length && !allSpots.length) {
+        allSpots = await withPending(cached);
+        mySpots = allSpots.filter(s => s.code === CODE);
+        document.getElementById('statSpots').textContent = mySpots.length;
+        await renderMarkers();
+      }
+    } catch (e) { console.warn('Cache-Spots:', e); }
+  })();
+
   map.on('load', () => {
     loadAllSpots();
     startInvitePolling();
@@ -1023,7 +1043,7 @@ async function loadAllSpots() {
   }
 
   try {
-    const r = await fetch(`${API}/userspots/all?noimage=1`);
+    const r = await tfetch(`${API}/userspots/all?noimage=1`, {}, 12000);
     if (r.ok) {
       const freshSpots = await r.json();
       await saveSpotsOffline(freshSpots);
@@ -1037,7 +1057,7 @@ async function loadAllSpots() {
       await renderMarkers();
     }
 
-    const r2 = await fetch(`${API}/userspots/${CODE}`);
+    const r2 = await tfetch(`${API}/userspots/${CODE}`, {}, 12000);
     if (r2.ok) {
       mySpots = (await withPending(await r2.json())).filter(s => s.code === CODE);
       document.getElementById('statSpots').textContent = mySpots.length;
@@ -1153,27 +1173,37 @@ function applyFilter() {
 async function renderMarkers() {
   markers.forEach(m => m.remove());
   markers = [];
-  onlineSet = new Set();
 
-  await Promise.all(allSpots.filter(s=>s.code!==CODE).map(async s => {
-    try {
-      const r=await fetch(`${API}/online/${s.code}?spot=caching`);
-      if (r.ok) { const d=await r.json(); if(d.online) onlineSet.add(s.code); }
-    } catch {}
-  }));
-
+  // Marker SOFORT zeichnen (nie auf Netzwerk warten), Online-Status kommt danach
+  const byCode = new Map();
   allSpots.forEach(s => {
-    const isMine=s.code===CODE, isOnline=!isMine&&onlineSet.has(s.code);
+    const isMine=s.code===CODE;
     const el=document.createElement('div');
-    el.className=isMine?('my-spot-marker'+(s.pending?' pending'+(s.failed?' failed':''):'')):`other-spot-marker${isOnline?' is-online':''}`;
+    el.className=isMine?('my-spot-marker'+(s.pending?' pending'+(s.failed?' failed':''):'')):`other-spot-marker${onlineSet.has(s.code)?' is-online':''}`;
     const marker=new maplibregl.Marker({element:el}).setLngLat([s.lng,s.lat]).addTo(map);
     markers.push(marker);
-    el.addEventListener('click', e => { e.stopPropagation(); openMarkerDrawer(s,isMine,isOnline); });
+    el.addEventListener('click', e => { e.stopPropagation(); openMarkerDrawer(s,isMine,!isMine&&onlineSet.has(s.code)); });
+    if (!isMine) { if (!byCode.has(s.code)) byCode.set(s.code, []); byCode.get(s.code).push(el); }
   });
 
   buildFilterStrip();
   applyFilter();
+
+  // Online-Status im Hintergrund (ein Abruf je Besitzer, mit Zeitlimit)
+  const gen = ++renderGen;
+  if (navigator.onLine !== false) {
+    byCode.forEach(async (els, code) => {
+      try {
+        const r = await tfetch(`${API}/online/${code}?spot=caching`, {}, 6000);
+        if (!r.ok || gen !== renderGen) return;
+        const d = await r.json();
+        if (d.online) { onlineSet.add(code); els.forEach(el => el.classList.add('is-online')); }
+        else { onlineSet.delete(code); els.forEach(el => el.classList.remove('is-online')); }
+      } catch {}
+    });
+  }
 }
+let renderGen = 0;
 
 function openMarkerDrawer(s, isMine, isOnline) {
   document.getElementById('drawerOverlay').classList.add('show');
@@ -2483,7 +2513,7 @@ async function fetchWeather(lat, lng) {
       `&timezone=auto` +
       `&forecast_days=7`;
 
-    const res  = await fetch(url);
+    const res  = await tfetch(url, {}, 7000);
     if (!res.ok) return null;
     const json = await res.json();
 
@@ -2819,11 +2849,11 @@ async function openSpotDetail(spotId) {
   let profile = null, avatarData = null, spotImage = spot.image || null;
 
   const fetches = [
-    fetch(`${API}/profile/${spot.code}?spot=caching`),
-    fetch(`${API}/avatar/${spot.code}?spot=caching`)
+    tfetch(`${API}/profile/${spot.code}?spot=caching`, {}, 8000),
+    tfetch(`${API}/avatar/${spot.code}?spot=caching`, {}, 8000)
   ];
   if (!spotImage) {
-    fetches.push(fetch(`${API}/userspots/${spot.code}`).then(r => r.ok ? r.json() : null));
+    fetches.push(tfetch(`${API}/userspots/${spot.code}`, {}, 8000).then(r => r.ok ? r.json() : null));
   }
   try {
     const results = await Promise.all(fetches);
