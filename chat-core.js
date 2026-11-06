@@ -18,7 +18,7 @@
   function cfg() {
     var c = window.SM_CHAT_CFG || {};
     return {
-      api:   c.api   || window.API,
+      api:   c.api   || window.API || 'https://spotme-chat-obom.onrender.com/api',
       code:  c.code  || localStorage.getItem('sm_code') || '',
       token: c.token || localStorage.getItem('sm_token') || ''
     };
