@@ -455,7 +455,7 @@ async function initDB() {
         `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_spots_client ON user_spots(code, client_id) WHERE client_id IS NOT NULL`,
       )
       .catch((e) => console.error("idx_user_spots_client:", e.message));
-    console.log("✅ v30.0 – Alle Spalten bereit (inkl. SpotCache)");
+    console.log("✅ v15.0 – Alle Spalten bereit (inkl. SpotCache)");
   } catch (e) {
     console.log(
       "ℹ️ Spalten existieren bereits oder konnten nicht angelegt werden",
@@ -3568,6 +3568,22 @@ app.post("/api/push/subscribe", async (req, res) => {
       .status(400)
       .json({ error: "code, token, subscription erforderlich" });
   }
+  // Endpoint prüfen: nur https, keine internen Adressen (kein Missbrauch als Server-Anfrage-Ziel)
+  let ep;
+  try { ep = new URL(String(subscription.endpoint)); } catch { ep = null; }
+  const host = ep ? ep.hostname.toLowerCase() : "";
+  const internal =
+    !ep || host === "localhost" || host.endsWith(".local") || host.endsWith(".internal") ||
+    /^(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|0\.)/.test(host) ||
+    host === "::1" || host.startsWith("[");
+  if (!ep || ep.protocol !== "https:" || internal || String(subscription.endpoint).length > 1000) {
+    return res.status(400).json({ error: "Ungültiger Push-Endpunkt (nur https, öffentlich)" });
+  }
+  const p256dh = subscription.keys && subscription.keys.p256dh;
+  const authKey = subscription.keys && subscription.keys.auth;
+  if (!p256dh || !authKey) {
+    return res.status(400).json({ error: "Abo ohne Schlüssel (keys.p256dh/auth fehlen) – dieser Browser liefert keine vollständige Push-Subscription" });
+  }
   try {
     const authRes = await pool.query(
       "SELECT token FROM profiles WHERE code = $1 AND token IS NOT NULL",
@@ -3581,14 +3597,9 @@ app.post("/api/push/subscribe", async (req, res) => {
        VALUES ($1,$2,$3,$4)
        ON CONFLICT (code, endpoint) DO UPDATE
          SET p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth`,
-      [
-        code,
-        subscription.endpoint,
-        subscription.keys.p256dh,
-        subscription.keys.auth,
-      ],
+      [code, String(subscription.endpoint), String(p256dh), String(authKey)],
     );
-    console.log(`🔔 Push registriert: ${code}`);
+    console.log(`🔔 Push registriert: ${code} (${host})`);
     res.json({ success: true });
   } catch (e) {
     console.error("POST /api/push/subscribe:", e.message);

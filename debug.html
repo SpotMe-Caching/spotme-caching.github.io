@@ -219,7 +219,7 @@ async function run() {
     ['Benachrichtigungen (Browser)', ('Notification' in window) ? Notification.permission : 'nicht unterstützt'],
     ['Silent-Modus', np ? (np.silent ? 'AN' : 'aus') : 'unbekannt']
   ] };
-  try { const sub = reg && reg.pushManager ? await reg.pushManager.getSubscription() : null; pr.rows.push(['Push-Abo auf diesem Gerät', sub ? pill('ja', 'ok') : 'nein']); } catch (e) {}
+  try { const sub = reg && reg.pushManager ? await reg.pushManager.getSubscription() : null; pr.rows.push(['Push-Abo auf diesem Gerät', sub ? pill('ja', 'ok') : 'nein']); if (sub) { let h = ''; try { h = new URL(sub.endpoint).hostname; } catch (e) {} pr.rows.push(['  Push-Dienst', h || '?']); const j = sub.toJSON ? sub.toJSON() : {}; pr.rows.push(['  Schlüssel', j.keys && j.keys.p256dh && j.keys.auth ? pill('vollständig', 'ok') : pill('fehlen', 'bad')]); } else pr.rows.push(['  Push-Unterstützung', ('PushManager' in window) ? 'ja' : pill('PushManager fehlt', 'bad')]); } catch (e) { pr.rows.push(['Push-Abo', 'Fehler: ' + e.message]); }
   if (np && np.prefs) Object.keys(np.prefs).forEach(k => pr.rows.push(['  ' + k, np.prefs[k]]));
   let mv = null; try { mv = JSON.parse(sessionStorage.getItem('sm_map_view') || 'null'); } catch (e) {}
   pr.rows.push(['Gemerkte Kartenansicht', mv ? mv.lat.toFixed(3) + ', ' + mv.lng.toFixed(3) + ' z' + Math.round(mv.zoom) : '–']);

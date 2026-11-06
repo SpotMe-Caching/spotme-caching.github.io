@@ -141,9 +141,23 @@ async function togglePush() {
       const key = (await (await fetch(`${API}/push/vapid-public-key`)).json()).publicKey;
       if (!key) throw new Error('Push ist serverseitig nicht eingerichtet');
       const subscription = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64(key) });
+      // Manche Browser liefern toJSON() ohne Schlüssel → selbst aus getKey() bauen
+      let subJson = subscription.toJSON ? subscription.toJSON() : {};
+      if (!subJson.keys || !subJson.keys.p256dh || !subJson.keys.auth) {
+        const b64u = (buf) => btoa(String.fromCharCode.apply(null, new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        const p = subscription.getKey && subscription.getKey('p256dh'), a = subscription.getKey && subscription.getKey('auth');
+        if (p && a) subJson = { endpoint: subscription.endpoint, keys: { p256dh: b64u(p), auth: b64u(a) } };
+      }
+      subJson.endpoint = subJson.endpoint || subscription.endpoint;
+      let host = ''; try { host = new URL(subJson.endpoint).hostname; } catch {}
       const r = await fetch(`${API}/push/subscribe`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: CODE, token: TOK, subscription }) });
-      if (!r.ok) throw new Error('Abo konnte nicht gespeichert werden');
+        body: JSON.stringify({ code: CODE, token: TOK, subscription: subJson }) });
+      if (!r.ok) {
+        let m = ''; try { m = (await r.json()).error || ''; } catch {}
+        // Abo wieder lösen, damit es keinen halben Zustand gibt
+        try { await subscription.unsubscribe(); } catch {}
+        throw new Error('Abo nicht gespeichert – Server ' + r.status + (m ? ': ' + m : '') + (host ? ' · Push-Dienst: ' + host : ''));
+      }
       toast('🔔 Push auf diesem Gerät an');
     }
   } catch (e) { toast('⚠️ ' + e.message); }
