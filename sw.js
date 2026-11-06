@@ -5,7 +5,7 @@
 // Der Browser erkennt den neuen SW, löscht den alten Cache
 // und installiert die neuen Dateien automatisch.
 // ════════════════════════════════════════════════════════════
-const CACHE_VERSION = "v397.9"; // Erhöht für SW-Update
+const CACHE_VERSION = "v398.0"; // Erhöht für SW-Update
 const CACHE_STATIC = `spotme-caching-${CACHE_VERSION}`;
 const CACHE_API = `spotme-api-${CACHE_VERSION}`;
 // Karten-Cache: FESTER Name – überlebt Updates (kein Versions-Suffix!).
@@ -33,6 +33,7 @@ const STATIC_ASSETS = [
   "/help/help.css",
   "/spot-woche.html",
   "/spot-erstellen.html",
+  "/debug.html",
   "/help/treffen.html",
   "/help/chat.html",
   "/help/alle-spots.html",
@@ -376,4 +377,19 @@ self.addEventListener("notificationclick", (event) => {
         if (clients.openWindow) return clients.openWindow(url);
       }),
   );
+});
+
+// ── DEBUG-DASHBOARD: Version + Dateiliste abfragen (debug.html) ─────
+self.addEventListener("message", (event) => {
+  const d = event.data || {};
+  if (d.type === "GET_INFO" && event.ports && event.ports[0]) {
+    event.ports[0].postMessage({
+      version: CACHE_VERSION,
+      cacheStatic: CACHE_STATIC,
+      cacheApi: CACHE_API,
+      cacheMap: CACHE_MAP,
+      maxMapEntries: MAX_MAP_ENTRIES,
+      assets: STATIC_ASSETS,
+    });
+  }
 });

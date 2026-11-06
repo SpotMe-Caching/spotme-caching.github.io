@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard · SpotMe</title>
+<style>
+:root{--bg:#0e0e10;--card:#18181c;--bord:#2b2b33;--text:#ececf1;--muted:#8d8d99;--acc:#ff9f00;--ok:#3ecf6e;--bad:#ff5d5d;--warn:#ffb84d}
+:root[data-theme=light]{--bg:#f3f3f6;--card:#fff;--bord:#d9d9e0;--text:#18181c;--muted:#6b6b78;--ok:#168a41;--bad:#c92f2f;--warn:#b86e00}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 Outfit,system-ui,sans-serif;padding:0 16px 40px}
+header{position:sticky;top:0;background:var(--bg);padding:14px 0 10px;z-index:5;border-bottom:1px solid var(--bord);margin-bottom:14px}
+h1{margin:0;font-size:1.05rem;font-family:'Space Mono',monospace;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+h1 .ver{color:var(--acc)}
+.back{color:var(--muted);text-decoration:none;font-size:.8rem;display:inline-block;margin-bottom:6px}
+.pill{font-size:.7rem;padding:2px 9px;border-radius:99px;border:1px solid var(--bord);font-family:'Space Mono',monospace}
+.ok{color:var(--ok);border-color:var(--ok)}.bad{color:var(--bad);border-color:var(--bad)}.warn{color:var(--warn);border-color:var(--warn)}
+section{background:var(--card);border:1px solid var(--bord);border-radius:14px;padding:12px 14px;margin-bottom:12px}
+h2{margin:0 0 8px;font-size:.72rem;letter-spacing:.08em;color:var(--muted);font-family:'Space Mono',monospace;text-transform:uppercase}
+.row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-top:1px solid var(--bord);align-items:baseline}
+.row:first-of-type{border-top:0}
+.row .k{color:var(--muted)}.row .v{text-align:right;font-family:'Space Mono',monospace;font-size:.8rem;word-break:break-all}
+.list{font-family:'Space Mono',monospace;font-size:.74rem;max-height:240px;overflow:auto;margin-top:6px}
+.list div{padding:2px 0}
+button{background:var(--acc);color:#111;border:0;border-radius:10px;padding:9px 14px;font-weight:600;font-size:.82rem;margin:4px 6px 0 0}
+button.sec{background:transparent;color:var(--text);border:1px solid var(--bord)}
+.note{color:var(--muted);font-size:.74rem;margin-top:6px}
+</style>
+</head>
+<body>
+<header>
+  <a class="back" href="index.html">← Zur Karte</a>
+  <h1>Dashboard <span class="ver" id="ver">…</span> <span class="pill" id="net">…</span></h1>
+</header>
+<div id="out"></div>
+<div id="actions" style="margin-top:6px">
+  <button onclick="run()">🔄 Neu prüfen</button>
+  <button class="sec" onclick="checkUpdate()">⬆️ Nach Update suchen</button>
+  <button class="sec" onclick="flushOutbox()">📤 Spot-Postausgang senden</button>
+  <button class="sec" onclick="location.reload()">↻ Seite neu laden</button>
+</div>
+<div class="note" id="stamp"></div>
+
+<script>
+window.SM_CHAT_CFG = { api: 'https://spotme-chat-obom.onrender.com/api' };
+try { document.documentElement.setAttribute('data-theme', localStorage.getItem('sm_theme') === 'light' ? 'light' : 'dark'); } catch (e) {}
+</script>
+<script src="spot-outbox.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const out = $('out');
+let sections = [];
+
+function ls(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function ago(t) {
+  if (!t) return '–';
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (s < 90) return 'vor ' + s + ' s';
+  const m = Math.round(s / 60); if (m < 90) return 'vor ' + m + ' Min';
+  const h = Math.round(m / 60); if (h < 48) return 'vor ' + h + ' Std';
+  return 'vor ' + Math.round(h / 24) + ' Tg';
+}
+function mb(n) { return n == null ? '–' : n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.round(n / 1024) + ' KB'; }
+function pill(t, cls) { return { pill: t, cls }; }
+
+function render() {
+  out.innerHTML = '';
+  sections.forEach(sec => {
+    const el = document.createElement('section');
+    const h = document.createElement('h2'); h.textContent = sec.title; el.appendChild(h);
+    (sec.rows || []).forEach(r => {
+      const row = document.createElement('div'); row.className = 'row';
+      const k = document.createElement('span'); k.className = 'k'; k.textContent = r[0];
+      const v = document.createElement('span'); v.className = 'v';
+      if (r[1] && typeof r[1] === 'object') { v.className += ' pill ' + (r[1].cls || ''); v.textContent = r[1].pill; v.style.border = '0'; v.style.padding = '0'; v.classList.add(r[1].cls || ''); }
+      else v.textContent = r[1] == null ? '–' : String(r[1]);
+      row.append(k, v); el.appendChild(row);
+    });
+    if (sec.list && sec.list.length) {
+      const l = document.createElement('div'); l.className = 'list';
+      sec.list.forEach(t => { const d = document.createElement('div'); d.textContent = t; l.appendChild(d); });
+      el.appendChild(l);
+    }
+    if (sec.note) { const n = document.createElement('div'); n.className = 'note'; n.textContent = sec.note; el.appendChild(n); }
+    out.appendChild(el);
+  });
+}
+
+function swInfo(ctrl) {
+  return new Promise((resolve) => {
+    if (!ctrl) return resolve(null);
+    const ch = new MessageChannel();
+    const t = setTimeout(() => resolve(null), 2500);
+    ch.port1.onmessage = (e) => { clearTimeout(t); resolve(e.data); };
+    try { ctrl.postMessage({ type: 'GET_INFO' }, [ch.port2]); } catch (e) { clearTimeout(t); resolve(null); }
+  });
+}
+function idbAll(db, store) {
+  return new Promise((resolve) => {
+    const q = indexedDB.open(db);
+    q.onerror = () => resolve(null);
+    q.onupgradeneeded = () => { q.transaction.abort(); resolve(null); };
+    q.onsuccess = () => {
+      const d = q.result;
+      if (!d.objectStoreNames.contains(store)) { d.close(); return resolve([]); }
+      const g = d.transaction(store).objectStore(store).getAll();
+      g.onsuccess = () => { d.close(); resolve(g.result || []); };
+      g.onerror = () => { d.close(); resolve(null); };
+    };
+  });
+}
+
+async function run() {
+  sections = [];
+  $('net').textContent = navigator.onLine ? '● online' : '○ offline';
+  $('net').className = 'pill ' + (navigator.onLine ? 'ok' : 'bad');
+  const CODE = ls('sm_code') || '';
+
+  // ── Service Worker ─────────────────────────────────────────
+  const sw = { title: 'Service Worker / Version', rows: [] };
+  let info = null, reg = null;
+  if ('serviceWorker' in navigator) {
+    try { reg = await navigator.serviceWorker.getRegistration(); } catch (e) {}
+    info = await swInfo(navigator.serviceWorker.controller);
+  }
+  const running = info && info.version;
+  $('ver').textContent = running || '(kein SW)';
+  document.title = 'Dashboard ' + (running || '') + ' · SpotMe';
+  sw.rows.push(['Läuft gerade', running ? pill(running, 'ok') : pill('kein Service Worker aktiv', 'bad')]);
+  let serverVer = null;
+  if (navigator.onLine) {
+    try {
+      const r = await fetch('sw.js', { cache: 'no-store' });
+      const m = (await r.text()).match(/CACHE_VERSION\s*=\s*"([^"]+)"/);
+      serverVer = m && m[1];
+    } catch (e) {}
+  }
+  sw.rows.push(['Auf dem Server', serverVer ? (running && serverVer !== running ? pill(serverVer + ' – Update bereit', 'warn') : pill(serverVer, 'ok')) : (navigator.onLine ? 'nicht ermittelbar' : 'offline – nicht prüfbar')]);
+  sw.rows.push(['Status', reg ? (reg.installing ? 'installiert gerade' : reg.waiting ? 'wartet auf Aktivierung' : reg.active ? 'aktiv (' + reg.active.state + ')' : '–') : 'nicht registriert']);
+  sw.rows.push(['Seite wird kontrolliert', navigator.serviceWorker && navigator.serviceWorker.controller ? 'ja' : 'nein (Seite neu laden)']);
+  sw.rows.push(['Scope', reg ? reg.scope : '–']);
+  sections.push(sw);
+
+  // ── Offline-Seiten (Vorab-Liste) ────────────────────────────
+  const cacheNames = ('caches' in window) ? await caches.keys() : [];
+  if (info && info.assets) {
+    const present = new Set();
+    for (const n of cacheNames) {
+      if (n === info.cacheMap) continue;
+      try { (await (await caches.open(n)).keys()).forEach(r => { const u = new URL(r.url); present.add(u.origin === location.origin ? u.pathname : r.url); }); } catch (e) {}
+    }
+    const list = info.assets.map(a => {
+      const key = a.startsWith('http') ? a : (a.startsWith('/') ? a : '/' + a);
+      return (present.has(key) ? '✓ ' : '✗ ') + a;
+    });
+    const miss = list.filter(x => x[0] === '✗').length;
+    sections.push({ title: 'Offline-Dateien (Vorab-Liste)', rows: [['Im Cache', pill((list.length - miss) + ' / ' + list.length, miss ? 'warn' : 'ok')]], list: list.sort((a, b) => (a[0] === '✗' ? -1 : 1) - (b[0] === '✗' ? -1 : 1)), note: miss ? '✗ = fehlt im Cache (Datei existiert evtl. nicht auf dem Server).' : null });
+  }
+
+  // ── Caches & Speicher ───────────────────────────────────────
+  const cs = { title: 'Caches & Speicher', rows: [] };
+  for (const n of cacheNames) {
+    try { const c = await caches.open(n); const k = await c.keys(); cs.rows.push([n, k.length + ' Einträge' + (info && n === info.cacheMap ? ' (max ' + info.maxMapEntries + ')' : '')]); } catch (e) {}
+  }
+  if (!cacheNames.length) cs.rows.push(['Caches', 'keine']);
+  try {
+    const est = await navigator.storage.estimate();
+    cs.rows.push(['Speicher belegt', mb(est.usage) + ' von ' + mb(est.quota)]);
+    cs.rows.push(['Dauerhaft (geschützt)', navigator.storage.persisted ? ((await navigator.storage.persisted()) ? pill('ja', 'ok') : pill('nein', 'warn')) : '–']);
+  } catch (e) {}
+  sections.push(cs);
+
+  // ── Spots ───────────────────────────────────────────────────
+  const spots = await idbAll('SpotMeDB', 'spots');
+  const invites = await idbAll('SpotMeDB', 'invites');
+  const sp = { title: 'Spots (offline gespeichert)', rows: [] };
+  sp.rows.push(['Spots lokal', spots ? spots.length : 'noch keine Daten']);
+  sp.rows.push(['davon meine', spots ? spots.filter(s => s.code === CODE).length : '–']);
+  sp.rows.push(['Letzter Abgleich', ls('sm_spots_sync') ? ago(+ls('sm_spots_sync')) + ' (' + new Date(+ls('sm_spots_sync')).toLocaleString('de-DE') + ')' : 'noch nie']);
+  sp.rows.push(['Einladungen lokal', invites ? invites.length : '–']);
+  sections.push(sp);
+
+  // ── Postausgang ─────────────────────────────────────────────
+  let ob = [];
+  try { ob = window.SpotOutbox ? await SpotOutbox.all() : []; } catch (e) {}
+  sections.push({
+    title: 'Spot-Postausgang (wartet auf Senden)',
+    rows: [['Wartend', ob.length ? pill(ob.filter(o => o.st !== 'failed').length + ' wartet · ' + ob.filter(o => o.st === 'failed').length + ' abgelehnt', ob.some(o => o.st === 'failed') ? 'bad' : 'warn') : pill('leer', 'ok')]],
+    list: ob.map(o => (o.st === 'failed' ? '⚠️ ' : '⏳ ') + (o.payload && o.payload.name) + ' · ' + ago(o.ts) + (o.err ? ' · ' + o.err : ''))
+  });
+
+  // ── Live Spots Cache ────────────────────────────────────────
+  const live = { title: 'Live Spots (letzter Stand)', rows: [] };
+  ['live_all', 'live_following', 'live_mine'].forEach(k => {
+    let v = null; try { v = JSON.parse(ls('sm_cache_' + k + '_' + CODE) || 'null'); } catch (e) {}
+    live.rows.push([k.replace('live_', ''), v ? v.d.length + ' · ' + ago(v.t) : 'nichts gespeichert']);
+  });
+  sections.push(live);
+
+  // ── Chat ────────────────────────────────────────────────────
+  let rooms = 0, msgs = 0, failed = 0, sending = 0;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.indexOf('sm_local_msg_') === 0) {
+        rooms++; let a = []; try { a = JSON.parse(localStorage.getItem(k)) || []; } catch (e) {}
+        msgs += a.length; failed += a.filter(m => m.st === 'failed').length; sending += a.filter(m => m.st === 'sending').length;
+      }
+    }
+  } catch (e) {}
+  sections.push({ title: 'Chat (lokal)', rows: [['Chats', rooms], ['Nachrichten', msgs], ['Nicht gesendet', failed ? pill(String(failed), 'bad') : pill('0', 'ok')], ['Wird gesendet', sending]] });
+
+  // ── Profil / Einstellungen ──────────────────────────────────
+  let np = null; try { np = JSON.parse(ls('sm_notif_prefs') || 'null'); } catch (e) {}
+  const pr = { title: 'Profil & Einstellungen', rows: [
+    ['Code', CODE || '–'],
+    ['Anmeldung (Token)', ls('sm_token') ? pill('vorhanden', 'ok') : pill('fehlt', 'bad')],
+    ['Design', ls('sm_theme') || 'dark'],
+    ['Benachrichtigungen (Browser)', ('Notification' in window) ? Notification.permission : 'nicht unterstützt'],
+    ['Silent-Modus', np ? (np.silent ? 'AN' : 'aus') : 'unbekannt']
+  ] };
+  try { const sub = reg && reg.pushManager ? await reg.pushManager.getSubscription() : null; pr.rows.push(['Push-Abo auf diesem Gerät', sub ? pill('ja', 'ok') : 'nein']); } catch (e) {}
+  if (np && np.prefs) Object.keys(np.prefs).forEach(k => pr.rows.push(['  ' + k, np.prefs[k]]));
+  let mv = null; try { mv = JSON.parse(sessionStorage.getItem('sm_map_view') || 'null'); } catch (e) {}
+  pr.rows.push(['Gemerkte Kartenansicht', mv ? mv.lat.toFixed(3) + ', ' + mv.lng.toFixed(3) + ' z' + Math.round(mv.zoom) : '–']);
+  sections.push(pr);
+
+  render();
+  $('stamp').textContent = 'Geprüft: ' + new Date().toLocaleTimeString('de-DE');
+}
+
+async function checkUpdate() {
+  try { const reg = await navigator.serviceWorker.getRegistration(); if (reg) await reg.update(); } catch (e) {}
+  setTimeout(run, 1200);
+}
+async function flushOutbox() {
+  try { await SpotOutbox.retryNow(); } catch (e) {}
+  run();
+}
+window.addEventListener('online', run); window.addEventListener('offline', run);
+run();
+</script>
+</body>
+</html>
