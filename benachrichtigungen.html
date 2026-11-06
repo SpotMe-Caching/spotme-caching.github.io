@@ -141,6 +141,8 @@ async function togglePush() {
       const key = (await (await fetch(`${API}/push/vapid-public-key`)).json()).publicKey;
       if (!key) throw new Error('Push ist serverseitig nicht eingerichtet');
       const subscription = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64(key) });
+      // Manche Browser (ohne Push-Dienst) geben null zurück statt eines Abos
+      if (!subscription) throw new Error('Dieser Browser hat keinen Push-Dienst (liefert kein Abo). Nutze die SpotMe-App oder wähle „Nur Browser“.');
       // Manche Browser liefern toJSON() ohne Schlüssel → selbst aus getKey() bauen
       let subJson = subscription.toJSON ? subscription.toJSON() : {};
       if (!subJson.keys || !subJson.keys.p256dh || !subJson.keys.auth) {
