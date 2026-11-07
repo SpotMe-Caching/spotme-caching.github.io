@@ -57,7 +57,7 @@ h1{font-size:1.15rem;font-weight:700}
   <div class="logo"><div class="logo-dot"></div>SPOT<span style="font-weight:300">ME</span></div>
   <div style="display:flex;align-items:center;gap:0.5rem;">
     <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Hell/Dunkel">🌙</button>
-    <a href="/" class="back-link">← App</a>
+    <a href="/" class="back-link" onclick="if(window.SMFlow){event.preventDefault();SMFlow.back('index.html')}">← Zurück</a>
   </div>
 </div>
 
@@ -68,6 +68,7 @@ h1{font-size:1.15rem;font-weight:700}
 </div>
 <div class="toast" id="toast"></div>
 
+<script src="sm-flow.js"></script>
 <script>
 'use strict';
 const API  = 'https://spotme-chat-obom.onrender.com/api';

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>SpotMe · Chat</title>
+<meta name="theme-color" content="#080b10">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="theme-vars.css" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif}
+body{display:flex;flex-direction:column;height:100vh;height:100dvh}
+.bar{display:flex;align-items:center;gap:.7rem;padding:max(.7rem,env(safe-area-inset-top)) 1rem .7rem;background:var(--glass-strong);backdrop-filter:blur(20px);border-bottom:1px solid var(--bord2);flex-shrink:0}
+.avatar{width:38px;height:38px;border-radius:50%;background:rgba(34,211,238,.15);border:1px solid rgba(34,211,238,.4);color:var(--cyan);font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.who{flex:1;min-width:0}
+.who .n{font-weight:600;font-size:1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.who .c{font-family:'Space Mono',monospace;font-size:.66rem;color:var(--muted)}
+.x{width:38px;height:38px;border-radius:50%;background:var(--card);border:1px solid var(--bord2);color:var(--text);font-size:1.15rem;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.net{font-size:.68rem;font-family:'Space Mono',monospace;text-align:center;padding:.25rem;color:var(--muted2);background:var(--card);display:none;flex-shrink:0}
+.net.show{display:block}
+#msgs{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:.5rem;-webkit-overflow-scrolling:touch}
+.empty{margin:auto;text-align:center;color:var(--muted2);font-size:.85rem;line-height:1.6}
+.empty .i{font-size:2rem}
+.b{max-width:78%;padding:.55rem .8rem;border-radius:14px;font-size:.92rem;line-height:1.4;word-wrap:break-word;white-space:pre-wrap}
+.b.mine{align-self:flex-end;background:var(--acc);color:#080b10;border-bottom-right-radius:4px}
+.b.theirs{align-self:flex-start;background:var(--card);border:1px solid var(--bord2);color:var(--text);border-bottom-left-radius:4px}
+.t{font-size:.62rem;opacity:.65;margin-top:3px;font-family:'Space Mono',monospace}
+.fail{color:#f87171;font-size:.7rem;margin-top:3px;cursor:pointer}
+.day{align-self:center;font-size:.66rem;color:var(--muted);font-family:'Space Mono',monospace;margin:.4rem 0}
+.row{display:flex;gap:.5rem;padding:.6rem .8rem max(.6rem,env(safe-area-inset-bottom));border-top:1px solid var(--bord2);background:var(--glass-strong);flex-shrink:0}
+.row input{flex:1;min-width:0;background:var(--card);border:1px solid var(--bord2);border-radius:22px;padding:.7rem 1rem;color:var(--text);font-size:16px;font-family:inherit;outline:none}
+.row input:focus{border-color:var(--acc)}
+.send{width:46px;height:46px;border-radius:50%;border:0;background:var(--acc);color:#080b10;font-size:1.1rem;font-weight:700;cursor:pointer;flex-shrink:0}
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="avatar" id="av">?</div>
+  <div class="who"><div class="n" id="pname">Chat</div><div class="c" id="pcode"></div></div>
+  <button class="x" id="closeBtn" aria-label="Schließen" title="Zurück">✕</button>
+</div>
+<div class="net" id="net">📴 Offline – Nachrichten werden gesendet, sobald du online bist</div>
+<div id="msgs"></div>
+<div class="row">
+  <input id="inp" placeholder="Nachricht…" maxlength="280" autocomplete="off" enterkeyhint="send">
+  <button class="send" id="sendBtn" aria-label="Senden">➤</button>
+</div>
+
+<script>
+window.SM_CHAT_CFG = { api: 'https://spotme-chat-obom.onrender.com/api' };
+try { document.documentElement.setAttribute('data-theme', localStorage.getItem('sm_theme') === 'light' ? 'light' : 'dark'); } catch (e) {}
+</script>
+<script src="sm-flow.js"></script>
+<script src="chat-core.js"></script>
+<script>
+'use strict';
+const CODE = localStorage.getItem('sm_code') || '';
+const q = new URLSearchParams(location.search);
+const PARTNER = (q.get('with') || '').trim();
+const ROOM = SMChat.room(CODE, PARTNER);
+const $ = (id) => document.getElementById(id);
+let partnerName = q.get('name') || PARTNER;
+
+function esc(s) { const d = document.createElement('div'); d.textContent = String(s == null ? '' : s); return d.innerHTML; }
+function myName() { try { return JSON.parse(localStorage.getItem('sm_profile_caching') || '{}').name || CODE; } catch (e) { return CODE; } }
+
+function clearUnread() {
+  try { const u = JSON.parse(localStorage.getItem('sm_unread_caching') || '{}'); if (u[PARTNER]) { delete u[PARTNER]; localStorage.setItem('sm_unread_caching', JSON.stringify(u)); } } catch (e) {}
+}
+// Neue Nachrichten anderer Chats → Zähler erhöhen (Badge auf Karte/Hub)
+function bumpOthers(added) {
+  try {
+    const u = JSON.parse(localStorage.getItem('sm_unread_caching') || '{}');
+    Object.keys(added || {}).forEach(p => { if (p !== PARTNER) u[p] = (u[p] || 0) + added[p]; });
+    localStorage.setItem('sm_unread_caching', JSON.stringify(u));
+  } catch (e) {}
+}
+
+function render(forceBottom) {
+  const box = $('msgs');
+  const msgs = SMChat.load(ROOM);
+  if (!msgs.length) {
+    box.innerHTML = '<div class="empty"><div class="i">💬</div>Noch keine Nachrichten.<br>Schreib die erste.</div>';
+    return;
+  }
+  const near = box.scrollHeight - box.scrollTop - box.clientHeight < 90;
+  let lastDay = '', html = '';
+  msgs.forEach(m => {
+    const d = new Date(m.ts), day = d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+    if (day !== lastDay) { html += `<div class="day">${esc(day)}</div>`; lastDay = day; }
+    const mine = m.from === CODE;
+    const time = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    let st = '';
+    if (mine && m.st === 'sending') st = ' · ⏳'; else if (mine && m.st === 'delivered') st = ' · ✓✓'; else if (mine && m.st === 'sent') st = ' · ✓';
+    const fail = (mine && m.st === 'failed')
+      ? `<div class="fail" data-retry="${esc(m.cid)}">⚠️ ${esc(m.err || 'Nicht gesendet')}${m.perm ? '' : ' – tippen zum erneut Senden'}</div>` : '';
+    html += `<div class="b ${mine ? 'mine' : 'theirs'}">${esc(m.text)}<div class="t">${time}${st}</div>${fail}</div>`;
+    if (!mine && m.fromName && partnerName === PARTNER) { partnerName = m.fromName; head(); }
+  });
+  box.innerHTML = html;
+  box.querySelectorAll('[data-retry]').forEach(el => el.addEventListener('click', async () => {
+    el.textContent = '⏳ …'; await SMChat.retryOne(PARTNER, el.dataset.retry, myName()); render();
+  }));
+  if (near || forceBottom || !box.dataset.init) { box.scrollTop = box.scrollHeight; box.dataset.init = '1'; }
+}
+
+function head() {
+  $('pname').textContent = partnerName;
+  $('pcode').textContent = PARTNER;
+  $('av').textContent = (String(partnerName)[0] || '?').toUpperCase();
+  document.title = 'SpotMe · ' + partnerName;
+}
+
+async function send() {
+  const inp = $('inp'), text = inp.value.trim();
+  if (!text || !PARTNER) return;
+  const m = await SMChat.send(PARTNER, text, myName());
+  if (!m) return;
+  inp.value = ''; inp.focus();
+  render(true);
+  await SMChat.transmit(PARTNER, m, myName());
+  render(true);
+}
+
+async function tick() {
+  if (document.hidden || !CODE) return;
+  const r = await SMChat.pull();
+  if (r.ok) { bumpOthers(r.added); if (r.added[PARTNER]) { clearUnread(); render(); } }
+  SMChat.retry(PARTNER, myName()).then(n => { if (n) render(); });
+}
+
+function netBar() { $('net').classList.toggle('show', navigator.onLine === false); }
+
+if (!PARTNER || !CODE) {
+  $('msgs').innerHTML = '<div class="empty"><div class="i">⚠️</div>Kein Chat-Partner angegeben.</div>';
+  $('closeBtn').onclick = () => SMFlow.back('hub.html#chats');
+} else {
+  head(); clearUnread(); render(true); netBar();
+  $('closeBtn').onclick = () => SMFlow.back('index.html');
+  $('sendBtn').onclick = send;
+  $('inp').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
+  window.addEventListener('online', () => { netBar(); tick(); });
+  window.addEventListener('offline', netBar);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { clearUnread(); tick(); } });
+  setInterval(tick, 4000);
+  tick();
+  SMChat.retry(PARTNER, myName()).then(n => { if (n) render(); });
+}
+</script>
+</body>
+</html>

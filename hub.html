@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>SpotMe · Mein SpotMe</title>
+<meta name="theme-color" content="#080b10">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="theme-vars.css" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif}
+.page-header{display:flex;align-items:center;justify-content:space-between;padding:max(.85rem,env(safe-area-inset-top)) 1rem .85rem;background:var(--glass-strong);backdrop-filter:blur(20px);border-bottom:1px solid var(--bord2);position:sticky;top:0;z-index:100}
+.logo{font-family:'Space Mono',monospace;font-size:.9rem;font-weight:700;color:var(--acc);display:flex;align-items:center;gap:6px}
+.logo-dot{width:7px;height:7px;border-radius:50%;background:var(--acc);box-shadow:0 0 8px var(--acc)}
+.hbtn{width:36px;height:36px;border-radius:50%;background:var(--card);border:1px solid var(--bord2);color:var(--text);font-size:1.05rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.tabs{position:sticky;top:calc(max(.85rem,env(safe-area-inset-top)) + 36px + .85rem);z-index:90;display:flex;gap:.4rem;overflow-x:auto;padding:.6rem 1rem;background:var(--bg);border-bottom:1px solid var(--bord2);scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{position:relative;flex-shrink:0;display:flex;align-items:center;gap:.35rem;padding:.5rem .85rem;border-radius:40px;border:1px solid var(--bord2);background:var(--card);color:var(--muted2);font-size:.8rem;font-family:inherit;cursor:pointer;white-space:nowrap}
+.tab.on{background:var(--acc-dim);border-color:var(--acc);color:var(--acc);font-weight:700}
+.bd{min-width:18px;height:18px;border-radius:9px;background:var(--acc);color:#080b10;font-size:.62rem;font-weight:700;display:none;align-items:center;justify-content:center;padding:0 5px}
+.bd.show{display:inline-flex}
+#panel{display:flex;flex-direction:column;gap:.75rem}
+.content{padding:1rem;max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:.75rem;padding-bottom:4rem}
+h1{font-size:1.15rem;font-weight:700}
+.sub{font-size:.8rem;color:var(--muted2);line-height:1.5}
+.stale{font-size:.72rem;color:var(--muted2);font-family:'Space Mono',monospace;background:var(--card);border:1px solid var(--bord2);border-radius:10px;padding:.4rem .7rem}
+.card{background:var(--card);border:1px solid var(--bord2);border-radius:16px;padding:.9rem 1rem;display:flex;flex-direction:column;gap:.55rem}
+.head{display:flex;align-items:center;gap:.7rem}
+.ico{width:40px;height:40px;border-radius:12px;background:var(--acc-dim);display:flex;align-items:center;justify-content:center;font-size:1.15rem;flex-shrink:0}
+.info{flex:1;min-width:0}
+.nm{font-weight:600;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dt{font-size:.74rem;color:var(--muted2);line-height:1.45;margin-top:2px}
+.mono{font-family:'Space Mono',monospace}
+.pill{display:inline-block;font-size:.66rem;padding:2px 8px;border-radius:99px;border:1px solid var(--bord2);font-family:'Space Mono',monospace}
+.pill.pending{color:var(--warn,#f5a623);border-color:currentColor}
+.pill.ok{color:var(--green);border-color:currentColor}
+.pill.bad{color:var(--red);border-color:currentColor}
+.acts{display:flex;gap:.45rem;flex-wrap:wrap}
+.btn{flex:1;min-width:90px;border:1px solid var(--bord2);background:var(--card);color:var(--text);border-radius:12px;padding:.6rem .7rem;font-size:.8rem;font-family:inherit;cursor:pointer;text-align:center;text-decoration:none}
+.btn.primary{background:var(--acc);border-color:var(--acc);color:#080b10;font-weight:700}
+.btn.danger{color:var(--red)}
+.btn.ghost{flex:0 0 auto;min-width:0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+.tile{background:var(--card);border:1px solid var(--bord2);border-radius:16px;padding:.85rem;display:flex;flex-direction:column;gap:.15rem;cursor:pointer;text-align:left;color:var(--text);font-family:inherit}
+.tile.wide{grid-column:1/-1}
+.tile .big{font-size:1.6rem;font-weight:700;line-height:1.1}
+.tile .lbl{font-size:.74rem;color:var(--muted2)}
+.tile.hot{border-color:var(--acc);background:var(--acc-dim)}
+.chips{display:flex;gap:.4rem;overflow-x:auto;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex-shrink:0;padding:.4rem .8rem;border-radius:40px;border:1px solid var(--bord2);background:transparent;color:var(--muted2);font-size:.76rem;font-family:inherit;cursor:pointer}
+.chip.on{background:var(--acc-dim);border-color:var(--acc);color:var(--acc);font-weight:700}
+.empty{text-align:center;color:var(--muted2);font-size:.85rem;line-height:1.6;padding:1.5rem 0}
+.empty .i{font-size:2rem}
+.unread{min-width:20px;height:20px;border-radius:10px;background:var(--cyan);color:#0a0d12;font-size:.64rem;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 5px;flex-shrink:0}
+details summary{cursor:pointer;font-size:.76rem;color:var(--muted2);font-family:'Space Mono',monospace;padding:.4rem 0}
+.sec{font-family:'Space Mono',monospace;font-size:.66rem;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;margin-top:.3rem}
+.toast{position:fixed;bottom:max(1.5rem,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(10px);background:var(--glass-strong);backdrop-filter:blur(20px);border:1px solid var(--bord2);border-radius:100px;padding:.5rem 1.2rem;font-size:.82rem;z-index:999;opacity:0;transition:all .25s;pointer-events:none;max-width:92vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="page-header">
+  <div class="logo"><div class="logo-dot"></div>SPOT<span style="font-weight:300">ME</span></div>
+  <div style="display:flex;align-items:center;gap:.5rem">
+    <button class="hbtn" id="themeBtn" title="Hell/Dunkel">🌙</button>
+    <button class="hbtn" id="closeBtn" aria-label="Schließen" title="Zurück">✕</button>
+  </div>
+</div>
+<div class="tabs" id="tabs"></div>
+<div class="content">
+  <div id="stale" class="stale" style="display:none"></div>
+  <div id="panel"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+window.SM_CHAT_CFG = { api: 'https://spotme-chat-obom.onrender.com/api' };
+</script>
+<script src="sm-flow.js"></script>
+<script src="chat-core.js"></script>
+<script src="spot-outbox.js"></script>
+<script>
+'use strict';
+const API = 'https://spotme-chat-obom.onrender.com/api';
+const CODE = localStorage.getItem('sm_code') || '';
+const TOK = localStorage.getItem('sm_token') || '';
+const $ = (id) => document.getElementById(id);
+const esc = (s) => { const d = document.createElement('div'); d.textContent = String(s == null ? '' : s); return d.innerHTML; };
+
+/* ── Theme ─────────────────────────────────────────────── */
+function applyTheme(t) { document.documentElement.setAttribute('data-theme', t); try { localStorage.setItem('sm_theme', t); } catch (e) {} $('themeBtn').textContent = t === 'light' ? '🌙' : '☀️'; }
+applyTheme((function () { try { return localStorage.getItem('sm_theme') || 'dark'; } catch (e) { return 'dark'; } })());
+$('themeBtn').onclick = () => applyTheme(document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
+$('closeBtn').onclick = () => SMFlow.back('index.html');
+
+/* ── Helfer ────────────────────────────────────────────── */
+let toastT;
+function toast(m) { const e = $('toast'); e.textContent = m; e.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('show'), 3000); }
+function tfetch(url, opts, ms) {
+  if (navigator.onLine === false) return Promise.reject(new Error('offline'));
+  const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const t = ctl ? setTimeout(() => ctl.abort(), ms || 10000) : null;
+  return fetch(url, Object.assign({}, opts || {}, ctl ? { signal: ctl.signal } : {})).finally(() => { if (t) clearTimeout(t); });
+}
+function cset(k, d) { try { localStorage.setItem('sm_cache_hub_' + k + '_' + CODE, JSON.stringify({ t: Date.now(), d })); } catch (e) {} }
+function cget(k) { try { const v = JSON.parse(localStorage.getItem('sm_cache_hub_' + k + '_' + CODE) || 'null'); return v && Array.isArray(v.d) ? v : null; } catch (e) { return null; } }
+function ago(t) { const m = Math.max(1, Math.round((Date.now() - t) / 60000)); return m >= 1440 ? Math.round(m / 1440) + ' Tg' : m >= 60 ? Math.round(m / 60) + ' Std' : m + ' Min'; }
+function fmt(ts) { const d = new Date(Number(ts)); if (isNaN(d)) return '–'; return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); }
+function countdown(ts) { const diff = Number(ts) - Date.now(); if (diff <= 0) return 'jetzt'; const h = Math.floor(diff / 3600000), m = Math.floor((diff % 3600000) / 60000); return h >= 24 ? 'in ' + Math.floor(h / 24) + 'd' : h > 0 ? 'in ' + h + 'h ' + m + 'min' : 'in ' + m + 'min'; }
+function leftText(exp) { const d = Number(exp) - Date.now(); if (d <= 0) return 'abgelaufen'; const h = Math.floor(d / 3600000); return h >= 24 ? 'noch ' + Math.floor(h / 24) + ' Tg' : 'noch ' + h + ' Std'; }
+const go = (u) => SMFlow.go(u);
+function unreadMap() { try { return JSON.parse(localStorage.getItem('sm_unread_caching') || '{}'); } catch (e) { return {}; } }
+
+/* ── Zustand ───────────────────────────────────────────── */
+const S = { invites: [], favs: [], checkins: {}, mine: [], weekly: [], pending: [], pollFav: 0, stale: {} };
+const TABS = [
+  ['uebersicht', '🏠', 'Übersicht'], ['einladungen', '📨', 'Einladungen'], ['chats', '💬', 'Chats'],
+  ['favoriten', '⭐', 'Favoriten'], ['meine', '📍', 'Meine Spots']
+];
+let tab = (location.hash || '#uebersicht').slice(1);
+if (!TABS.some(t => t[0] === tab)) tab = 'uebersicht';
+let spotFilter = 'alle';
+try { spotFilter = localStorage.getItem('sm_hub_filter') || 'alle'; } catch (e) {}
+
+function activeInvites() { const now = Date.now(); return S.invites.filter(i => i.status !== 'expired' && Number(i.time_end || 0) >= now && i.status !== 'cancelled' && i.status !== 'declined'); }
+function pastInvites() { const now = Date.now(); return S.invites.filter(i => i.status === 'expired' || Number(i.time_end || 0) < now || i.status === 'cancelled' || i.status === 'declined'); }
+function newInvites() { return activeInvites().filter(i => i.status === 'pending' && i.from_code !== CODE); }
+function nextMeeting() { const now = Date.now(); return S.invites.filter(i => i.status === 'accepted' && Number(i.time_end || 0) > now).sort((a, b) => Number(a.time_start) - Number(b.time_start))[0] || null; }
+function chatList() {
+  const out = [], un = unreadMap();
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!k || k.indexOf(SMChat.PREFIX) !== 0) continue;
+    let msgs = []; try { msgs = JSON.parse(localStorage.getItem(k) || '[]'); } catch (e) {}
+    if (!msgs.length) continue;
+    const partner = k.slice(SMChat.PREFIX.length).split('-').find(c => c !== CODE);
+    if (!partner) continue;
+    const last = msgs[msgs.length - 1], theirs = msgs.slice().reverse().find(m => m.from !== CODE);
+    out.push({ partner, text: last.text || '', ts: last.ts || 0, mine: last.from === CODE, name: (theirs && theirs.fromName) || partner, unread: un[partner] || 0 });
+  }
+  return out.sort((a, b) => b.ts - a.ts);
+}
+function unreadTotal() { return Object.values(unreadMap()).reduce((a, n) => a + (n > 0 ? n : 0), 0); }
+
+/* ── Tabs & Badges ─────────────────────────────────────── */
+function badgeFor(key) {
+  if (key === 'einladungen') return newInvites().length;
+  if (key === 'chats') return unreadTotal();
+  if (key === 'favoriten') return S.pollFav;
+  if (key === 'meine') return S.pending.length;
+  return 0;
+}
+function renderTabs() {
+  $('tabs').innerHTML = TABS.map(t => {
+    const n = badgeFor(t[0]);
+    return `<button class="tab ${t[0] === tab ? 'on' : ''}" data-tab="${t[0]}">${t[1]} ${t[2]}<span class="bd ${n ? 'show' : ''}">${n > 9 ? '9+' : n}</span></button>`;
+  }).join('');
+  $('tabs').querySelectorAll('[data-tab]').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+  const on = $('tabs').querySelector('.on'); if (on && on.scrollIntoView) { try { on.scrollIntoView({ inline: 'center', block: 'nearest' }); } catch (e) {} }
+}
+function setTab(t) {
+  tab = t;
+  try { history.replaceState(null, '', '#' + t); } catch (e) {}
+  render();
+  if (t === 'favoriten') loadCheckins();
+  window.scrollTo(0, 0);
+}
+function staleBar() {
+  const ts = Object.values(S.stale).filter(Boolean);
+  const bar = $('stale');
+  if (!ts.length && navigator.onLine !== false) { bar.style.display = 'none'; return; }
+  const oldest = ts.length ? Math.min.apply(null, ts) : 0;
+  bar.textContent = (navigator.onLine === false ? '📴 Offline' : '⚠️ Server nicht erreichbar') + (oldest ? ' – letzter Stand vor ' + ago(oldest) : '');
+  bar.style.display = 'block';
+}
+
+/* ── Panels ────────────────────────────────────────────── */
+function panelOverview() {
+  const nm = nextMeeting(), ni = newInvites().length, un = unreadTotal();
+  const pl = S.mine.length, wk = S.weekly.length, pend = S.pending.length;
+  let h = '<h1>🧭 Mein SpotMe</h1><div class="sub">Alles an einem Ort – Einladungen, Chats, Favoriten und deine Spots.</div><div class="grid">';
+  if (nm) {
+    const other = nm.from_code === CODE ? (nm.to_name || nm.to_code) : (nm.from_name || nm.from_code);
+    h += `<button class="tile wide hot" data-go="einladungen"><div class="lbl">📅 Nächstes Treffen</div><div class="big" style="font-size:1.1rem">${esc(nm.spot_name || 'Platz Spot')}</div><div class="lbl">${esc(other)} · ${fmt(nm.time_start)} · ${Number(nm.time_start) <= Date.now() ? '🟢 jetzt' : countdown(nm.time_start)}</div></button>`;
+  }
+  h += `<button class="tile ${ni ? 'hot' : ''}" data-go="einladungen"><div class="big">${ni}</div><div class="lbl">📨 neue Einladungen</div></button>`;
+  h += `<button class="tile ${un ? 'hot' : ''}" data-go="chats"><div class="big">${un}</div><div class="lbl">💬 ungelesen</div></button>`;
+  h += `<button class="tile ${S.pollFav ? 'hot' : ''}" data-go="favoriten"><div class="big">${S.favs.length}</div><div class="lbl">⭐ Favoriten${S.pollFav ? ' · ' + S.pollFav + ' neu' : ''}</div></button>`;
+  h += `<button class="tile" data-go="meine"><div class="big">${pl + wk}</div><div class="lbl">📍 Spots (${pl} Platz · ${wk} Woche)</div></button>`;
+  if (pend) h += `<button class="tile wide hot" data-go="meine" data-filter="wartet"><div class="lbl">⏳ Wartet auf Senden</div><div class="big">${pend}</div><div class="lbl">Wird gesendet, sobald du online bist</div></button>`;
+  h += '</div><div class="sec">Schnellzugriff</div><div class="acts">' +
+    '<button class="btn" data-url="index.html">🗺️ Karte</button>' +
+    '<button class="btn" data-url="spot-erstellen.html">➕ Platz Spot</button>' +
+    '<button class="btn" data-url="live-spot-manage.html">📡 Live Spots</button>' +
+    '<button class="btn" data-url="benachrichtigungen.html">🔔 Hinweise</button></div>';
+  return h;
+}
+
+function inviteCard(inv, past) {
+  const now = Date.now(), isSender = inv.from_code === CODE, ts = Number(inv.time_start || 0), te = Number(inv.time_end || 0);
+  const other = isSender ? (inv.to_name || inv.to_code) : (inv.from_name || inv.from_code);
+  const otherCode = isSender ? inv.to_code : inv.from_code;
+  let st = '';
+  if (inv.status === 'pending') st = '<span class="pill pending">⏳ Ausstehend</span>';
+  else if (inv.status === 'accepted') st = (ts <= now && te >= now) ? '<span class="pill ok">🟢 JETZT</span>' : '<span class="pill ok">✅ Akzeptiert</span>';
+  else if (inv.status === 'declined') st = '<span class="pill bad">❌ Abgelehnt</span>';
+  else if (inv.status === 'cancelled') st = '<span class="pill bad">🚫 Storniert</span>';
+  else st = '<span class="pill">📁 Abgelaufen</span>';
+  let acts = '';
+  if (!past && inv.status === 'pending' && !isSender)
+    acts = `<div class="acts"><button class="btn primary" data-acc="${inv.id}">✅ Akzeptieren</button><button class="btn danger" data-dec="${inv.id}">Ablehnen</button></div>`;
+  if (!past && inv.status === 'accepted')
+    acts = `<div class="acts"><button class="btn" data-spot="${inv.spot_id || ''}">🧭 Zum Spot</button><button class="btn primary" data-ci="${inv.id}">📍 Check-in</button><button class="btn ghost" data-chat="${esc(otherCode)}" data-name="${esc(other)}">💬</button><button class="btn ghost danger" data-cancel="${inv.id}">🚫</button></div>`;
+  return `<div class="card" style="${past ? 'opacity:.55' : ''}"><div class="head"><div class="ico">${isSender ? '📤' : '📨'}</div><div class="info"><div class="nm">${esc(inv.spot_name || 'Platz Spot')}</div><div class="dt">${st} ${ts > now && !past ? '<span class="mono">⏰ ' + countdown(ts) + '</span>' : ''}</div><div class="dt mono">${fmt(ts)} – ${fmt(te)}</div><div class="dt">${isSender ? '📤 An' : '📨 Von'}: <b>${esc(other)}</b></div></div></div>${acts}</div>`;
+}
+function panelInvites() {
+  const act = activeInvites(), past = pastInvites();
+  let h = '<h1>📨 Einladungen & Treffen</h1>';
+  h += act.length ? act.sort((a, b) => Number(a.time_start) - Number(b.time_start)).map(i => inviteCard(i, false)).join('') : '<div class="empty"><div class="i">📭</div>Keine aktiven Einladungen.</div>';
+  if (past.length) h += `<details><summary>📁 Vergangene Treffen (${past.length})</summary><div style="display:flex;flex-direction:column;gap:.6rem;margin-top:.4rem">${past.sort((a, b) => Number(b.time_end) - Number(a.time_end)).map(i => inviteCard(i, true)).join('')}</div></details>`;
+  return h;
+}
+
+function panelChats() {
+  const list = chatList();
+  let h = '<h1>💬 Chats</h1>';
+  if (!list.length) return h + '<div class="empty"><div class="i">💬</div>Noch keine Chats.<br>Tippe auf der Karte auf einen Platz Spot und starte ein Gespräch.</div>';
+  h += list.map(c => {
+    const prev = c.text.length > 44 ? c.text.slice(0, 44) + '…' : c.text;
+    return `<div class="card" data-chat="${esc(c.partner)}" data-name="${esc(c.name)}" style="cursor:pointer"><div class="head"><div class="ico" style="background:rgba(34,211,238,.15);color:var(--cyan);font-weight:700">${esc((c.name[0] || '?').toUpperCase())}</div><div class="info"><div style="display:flex;justify-content:space-between;gap:.5rem"><div class="nm">${esc(c.name)}</div><div class="dt mono" style="flex-shrink:0">${new Date(c.ts).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</div></div><div class="dt" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.mine ? 'Du: ' : ''}${esc(prev)}</div></div>${c.unread ? `<div class="unread">${c.unread > 9 ? '9+' : c.unread}</div>` : ''}<button class="btn ghost" data-del="${esc(c.partner)}" aria-label="Chat löschen" style="padding:.4rem .6rem">🗑</button></div></div>`;
+  }).join('');
+  h += '<button class="btn" id="delAll" style="color:var(--muted2)">🗑 Alle Chats löschen</button>';
+  return h;
+}
+
+function panelFavs() {
+  let h = '<h1>⭐ Favoriten</h1>';
+  if (!S.favs.length) return h + '<div class="empty"><div class="i">⭐</div>Noch keine Favoriten.<br>Öffne einen Platz Spot auf der Karte und tippe auf ⭐.</div>';
+  return h + S.favs.map(f => {
+    const last = f.last_checkin ? `Letzter Check-in: ${esc(f.last_checkin_name || f.last_checkin_code || '?')} · ${fmt(f.last_checkin)}` : 'Noch kein Check-in';
+    const ups = (S.checkins[f.spot_id] || []).map(c => `<div class="dt" style="display:flex;align-items:center;gap:.5rem;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:.35rem .6rem"><span style="flex:1"><b style="color:#10b981">${esc(c.profile_name || c.code)}</b><br><span class="mono">${fmt(c.checkin_at)}${c.note ? ' · ' + esc(c.note) : ''}</span></span><button class="btn ghost" data-chat="${esc(c.code)}" data-name="${esc(c.profile_name || c.code)}">💬</button></div>`).join('');
+    return `<div class="card"><div class="head"><div class="ico">📍</div><div class="info"><div class="nm">${esc(f.spot_name || 'Platz Spot')}</div><div class="dt">${esc(f.wishTag || '')}</div><div class="dt">${last}</div></div></div>${ups}<div class="acts"><button class="btn primary" data-spot="${f.spot_id}">🗺️ Zur Karte</button><button class="btn danger" data-unfav="${f.spot_id}">⭐ Entfernen</button></div></div>`;
+  }).join('');
+}
+
+function mineItems() {
+  const items = [];
+  S.pending.forEach(p => items.push({ kind: 'wartet', p }));
+  S.mine.forEach(s => items.push({ kind: 'platz', s }));
+  S.weekly.forEach(w => items.push({ kind: 'woche', w }));
+  return items;
+}
+function panelMine() {
+  const all = mineItems();
+  const cnt = { alle: all.length, platz: S.mine.length, woche: S.weekly.length, wartet: S.pending.length };
+  if (spotFilter === 'wartet' && !cnt.wartet) spotFilter = 'alle';
+  const chips = [['alle', 'Alle'], ['platz', '📍 Platz Spots'], ['woche', '🗓️ Wochen-Spots']].concat(cnt.wartet ? [['wartet', '⏳ Wartet']] : [])
+    .map(c => `<button class="chip ${spotFilter === c[0] ? 'on' : ''}" data-filter="${c[0]}">${c[1]} (${cnt[c[0]]})</button>`).join('');
+  let h = `<h1>📍 Meine Spots</h1><div class="chips">${chips}</div><button class="btn primary" data-url="spot-erstellen.html">➕ Neuen Platz Spot erstellen</button>`;
+  const shown = all.filter(i => spotFilter === 'alle' || i.kind === spotFilter);
+  if (!shown.length) return h + '<div class="empty"><div class="i">📍</div>Hier ist noch nichts.</div>';
+  return h + shown.map(i => {
+    if (i.kind === 'wartet') {
+      const p = i.p;
+      return `<div class="card"><div class="head"><div class="ico">⏳</div><div class="info"><div class="nm">${esc(p.name)}</div><div class="dt">${p.failed ? '<span class="pill bad">⚠️ Nicht gesendet</span> ' + esc(p.err || '') : '<span class="pill pending">⏳ Wartet auf Verbindung</span>'}</div></div></div><div class="acts"><button class="btn primary" data-retry="1">🔄 Jetzt senden</button><button class="btn danger" data-discard="${esc(p.cid)}">🗑️ Verwerfen</button></div></div>`;
+    }
+    if (i.kind === 'platz') {
+      const s = i.s;
+      return `<div class="card"><div class="head"><div class="ico">📍</div><div class="info"><div class="nm">${esc(s.name)}</div><div class="dt">${esc(s.wishTag || '')}${s.area_type ? ' · ' + esc(s.area_type) : ''}</div></div></div><div class="acts"><button class="btn primary" data-pg="${s.id}">📄 Öffnen</button><button class="btn" data-spot="${s.id}">🗺️ Karte</button></div></div>`;
+    }
+    const w = i.w;
+    return `<div class="card"><div class="head"><div class="ico">🗓️</div><div class="info"><div class="nm">${esc(w.name)}</div><div class="dt">${w.category ? esc(w.category) + ' · ' : ''}<span class="mono">${leftText(w.expires_at)}</span> · 👥 ${w.checkin_count || 0} Check-in${w.checkin_count == 1 ? '' : 's'}</div></div></div><div class="acts"><button class="btn primary" data-share="${esc(w.token)}" data-sname="${esc(w.name)}">🔗 Teilen</button><button class="btn danger" data-delw="${esc(w.token)}">🗑️</button></div></div>`;
+  }).join('');
+}
+
+function render() {
+  renderTabs(); staleBar();
+  const p = $('panel');
+  p.innerHTML = tab === 'einladungen' ? panelInvites() : tab === 'chats' ? panelChats() : tab === 'favoriten' ? panelFavs() : tab === 'meine' ? panelMine() : panelOverview();
+  bind(p);
+}
+
+/* ── Aktionen ──────────────────────────────────────────── */
+function bind(p) {
+  p.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { if (b.dataset.filter) { spotFilter = b.dataset.filter; } setTab(b.dataset.go); });
+  p.querySelectorAll('[data-url]').forEach(b => b.onclick = () => go(b.dataset.url));
+  p.querySelectorAll('[data-filter]').forEach(b => { if (!b.dataset.go) b.onclick = () => { spotFilter = b.dataset.filter; try { localStorage.setItem('sm_hub_filter', spotFilter); } catch (e) {} render(); }; });
+  p.querySelectorAll('[data-chat]').forEach(b => b.onclick = (e) => { if (e.target.closest('[data-del]')) return; e.stopPropagation(); go('chat.html?with=' + encodeURIComponent(b.dataset.chat) + '&name=' + encodeURIComponent(b.dataset.name || b.dataset.chat)); });
+  p.querySelectorAll('[data-del]').forEach(b => b.onclick = (e) => { e.stopPropagation(); if (!confirm('Diesen Chat löschen?\nDer Verlauf wird nur auf diesem Gerät entfernt.')) return; removeChat(b.dataset.del); render(); });
+  const da = $('delAll'); if (da) da.onclick = () => { if (!confirm('ALLE Chats löschen?\nDie Verläufe werden nur auf diesem Gerät entfernt.')) return; chatList().forEach(c => removeChat(c.partner)); render(); };
+  p.querySelectorAll('[data-spot]').forEach(b => b.onclick = () => { if (b.dataset.spot) go('index.html?spot=' + encodeURIComponent(b.dataset.spot)); });
+  p.querySelectorAll('[data-pg]').forEach(b => b.onclick = () => go('spot.html?id=' + encodeURIComponent(b.dataset.pg)));
+  p.querySelectorAll('[data-acc]').forEach(b => b.onclick = () => respond(+b.dataset.acc, 'accept'));
+  p.querySelectorAll('[data-dec]').forEach(b => b.onclick = () => { if (confirm('Einladung ablehnen?')) respond(+b.dataset.dec, 'decline'); });
+  p.querySelectorAll('[data-ci]').forEach(b => b.onclick = () => checkIn(+b.dataset.ci));
+  p.querySelectorAll('[data-cancel]').forEach(b => b.onclick = () => cancelInvite(+b.dataset.cancel));
+  p.querySelectorAll('[data-unfav]').forEach(b => b.onclick = () => unfav(b.dataset.unfav));
+  p.querySelectorAll('[data-retry]').forEach(b => b.onclick = async () => { toast('🔄 Sende…'); const r = await SpotOutbox.retryNow(); if (!r.sent) toast(navigator.onLine === false ? '📴 Noch offline' : '⚠️ Senden nicht möglich'); });
+  p.querySelectorAll('[data-discard]').forEach(b => b.onclick = async () => { await SpotOutbox.discard(b.dataset.discard); toast('🗑️ Verworfen'); await loadPending(); render(); });
+  p.querySelectorAll('[data-share]').forEach(b => b.onclick = () => shareWeekly(b.dataset.share, b.dataset.sname));
+  p.querySelectorAll('[data-delw]').forEach(b => b.onclick = () => delWeekly(b.dataset.delw));
+}
+function removeChat(partner) {
+  try { localStorage.removeItem(SMChat.PREFIX + SMChat.room(CODE, partner)); } catch (e) {}
+  try { const u = unreadMap(); delete u[partner]; localStorage.setItem('sm_unread_caching', JSON.stringify(u)); } catch (e) {}
+}
+async function post(url, method, body) {
+  const r = await tfetch(API + url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, 12000);
+  let d = {}; try { d = await r.json(); } catch (e) {}
+  return { ok: r.ok, d };
+}
+async function respond(id, action) {
+  try { const r = await post('/spotcache/invite/respond', 'POST', { id, code: CODE, action }); toast(r.ok ? (action === 'accept' ? '✅ Akzeptiert' : 'Abgelehnt') : '⚠️ ' + (r.d.error || 'Fehler')); }
+  catch (e) { toast(navigator.onLine === false ? '📴 Nur online möglich' : '⚠️ Server nicht erreichbar'); }
+  await loadInvites(); render();
+}
+async function cancelInvite(id) {
+  if (!confirm('Treffen wirklich stornieren?\nDer andere wird automatisch benachrichtigt.')) return;
+  try { const r = await post('/spotcache/invite/' + id + '/cancel', 'PATCH', { code: CODE, token: TOK }); toast(r.d.success ? '✅ Treffen storniert – Partner informiert' : '⚠️ ' + (r.d.error || 'Fehler beim Stornieren')); }
+  catch (e) { toast(navigator.onLine === false ? '📴 Nur online möglich' : '⚠️ Server nicht erreichbar'); }
+  await loadInvites(); render();
+}
+function checkIn(id) {
+  if (!navigator.geolocation) { toast('❌ Kein GPS'); return; }
+  navigator.geolocation.getCurrentPosition(async pos => {
+    try {
+      const r = await post('/spotcache/checkin', 'POST', { id, code: CODE, lat: pos.coords.latitude, lng: pos.coords.longitude });
+      if (r.d.error) toast('⚠️ ' + r.d.error); else toast(r.d.bothCheckedIn ? '🎉 Match! Du hast jemanden getroffen' : '✅ Eingecheckt – warte auf Partner…');
+    } catch (e) { toast(navigator.onLine === false ? '📴 Check-in nur online' : '⚠️ Server nicht erreichbar'); }
+    await loadInvites(); render();
+  }, () => toast('❌ Standort nicht verfügbar'), { enableHighAccuracy: true });
+}
+async function unfav(id) {
+  try { await tfetch(API + '/favorites/' + id, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: CODE }) }, 10000); toast('✕ Favorit entfernt'); }
+  catch (e) { toast(navigator.onLine === false ? '📴 Nur online möglich' : '⚠️ Fehler'); return; }
+  await loadFavs(); render();
+}
+async function shareWeekly(token, name) {
+  const url = new URL('spot-woche.html?token=' + token, location.href).href;
+  try { if (navigator.share) { await navigator.share({ title: name, url }); return; } } catch (e) { return; }
+  try { await navigator.clipboard.writeText(url); toast('🔗 Link kopiert'); } catch (e) { prompt('Link:', url); }
+}
+async function delWeekly(token) {
+  if (!confirm('Wochen-Spot wirklich löschen?')) return;
+  try { const r = await post('/weekly-spots/' + token, 'DELETE', { code: CODE, token: TOK }); toast(r.ok ? '🗑️ Wochen-Spot gelöscht' : '⚠️ Nicht gelöscht'); }
+  catch (e) { toast(navigator.onLine === false ? '📴 Nur online möglich' : '⚠️ Fehler'); }
+  await loadWeekly(); render();
+}
+
+/* ── Daten laden (Cache zuerst, dann Netz) ─────────────── */
+const LAST = {};
+// Rückgabe: true, wenn sich die Daten gegenüber dem letzten Stand geändert haben
+async function fetchList(key, url, assign) {
+  const c = cget(key); if (c && LAST[key] === undefined) { assign(c.d); S.stale[key] = c.t; LAST[key] = JSON.stringify(c.d); }
+  try {
+    const r = await tfetch(API + url, {}, 10000);
+    if (!r.ok) throw new Error('http');
+    const d = await r.json(); if (!Array.isArray(d)) throw new Error('bad');
+    const sig = JSON.stringify(d), changed = sig !== LAST[key];
+    LAST[key] = sig; assign(d); cset(key, d); S.stale[key] = 0;
+    return changed;
+  } catch (e) { return false; /* Cache bleibt, Stand-Hinweis zeigt Alter */ }
+}
+const loadInvites = () => fetchList('invites', '/spotcache/invites/' + CODE, d => { S.invites = d; });
+const loadFavs = () => fetchList('favs', '/favorites/' + CODE, d => { S.favs = d; });
+const loadWeekly = () => fetchList('weekly', '/weekly-spots/mine?code=' + encodeURIComponent(CODE) + '&token=' + encodeURIComponent(TOK), d => { S.weekly = d; });
+async function loadMine() {
+  await fetchList('mine', '/userspots/' + CODE, d => { S.mine = d; });
+  if (!S.mine.length) { // Offline ohne Hub-Cache: Karten-Cache (IndexedDB) nutzen
+    try {
+      const all = await new Promise(res => { const q = indexedDB.open('SpotMeDB'); q.onerror = () => res([]); q.onupgradeneeded = () => { q.transaction.abort(); res([]); }; q.onsuccess = () => { const d = q.result; if (!d.objectStoreNames.contains('spots')) { d.close(); return res([]); } const g = d.transaction('spots').objectStore('spots').getAll(); g.onsuccess = () => { d.close(); res(g.result || []); }; g.onerror = () => { d.close(); res([]); }; }; });
+      S.mine = all.filter(s => s.code === CODE);
+    } catch (e) {}
+  }
+}
+async function loadPending() { try { S.pending = await SpotOutbox.asSpots(); } catch (e) { S.pending = []; } }
+async function loadCheckins() {
+  await Promise.all(S.favs.map(async f => { try { const r = await tfetch(API + '/checkins/public/' + f.spot_id, {}, 8000); if (r.ok) S.checkins[f.spot_id] = await r.json(); } catch (e) {} }));
+  if (tab === 'favoriten') render();
+}
+
+let polling = false;
+async function poll() {
+  if (polling || document.hidden || !CODE || !TOK) return;
+  polling = true;
+  try {
+    const d = await SMChat.pollAll();
+    if (d.ok) {
+      try { const u = unreadMap(); Object.keys(d.added || {}).forEach(p => { u[p] = (u[p] || 0) + d.added[p]; }); localStorage.setItem('sm_unread_caching', JSON.stringify(u)); } catch (e) {}
+      const before = S.pollFav, got = Object.keys(d.added || {}).length;
+      S.pollFav = d.favorites || 0;
+      if (got || before !== S.pollFav) render(); else renderTabs();
+    }
+  } finally { polling = false; }
+}
+
+async function init() {
+  if (!CODE) { $('panel').innerHTML = '<div class="empty"><div class="i">👤</div>Bitte zuerst auf der Karte anmelden.</div>'; return; }
+  S.invites = (cget('invites') || { d: [] }).d; S.favs = (cget('favs') || { d: [] }).d; S.mine = (cget('mine') || { d: [] }).d; S.weekly = (cget('weekly') || { d: [] }).d;
+  await loadPending(); render();
+  await Promise.all([loadInvites(), loadFavs(), loadMine(), loadWeekly(), loadPending()]);
+  render();
+  if (tab === 'favoriten') loadCheckins();
+  poll();
+}
+window.addEventListener('spotoutbox', async () => { await loadPending(); await loadMine(); render(); });
+window.addEventListener('online', () => { init(); });
+window.addEventListener('offline', () => { staleBar(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { poll(); render(); } });
+setInterval(poll, 10000);
+setInterval(() => { if (!document.hidden) { loadInvites().then(ch => { if (ch) render(); else staleBar(); }); } }, 30000);
+window.addEventListener('hashchange', () => { const t = (location.hash || '#uebersicht').slice(1); if (TABS.some(x => x[0] === t) && t !== tab) setTab(t); });
+init();
+</script>
+</body>
+</html>
