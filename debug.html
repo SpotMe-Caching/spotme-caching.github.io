@@ -29,7 +29,7 @@ button.sec{background:transparent;color:var(--text);border:1px solid var(--bord)
 </head>
 <body>
 <header>
-  <a class="back" href="index.html">← Zur Karte</a>
+  <a class="back" href="index.html" onclick="if(window.SMFlow){event.preventDefault();SMFlow.back('index.html')}">← Zurück</a>
   <h1>Dashboard <span class="ver" id="ver">…</span> <span class="pill" id="net">…</span></h1>
 </header>
 <div id="out"></div>
@@ -45,6 +45,7 @@ button.sec{background:transparent;color:var(--text);border:1px solid var(--bord)
 window.SM_CHAT_CFG = { api: 'https://spotme-chat-obom.onrender.com/api' };
 try { document.documentElement.setAttribute('data-theme', localStorage.getItem('sm_theme') === 'light' ? 'light' : 'dark'); } catch (e) {}
 </script>
+<script src="sm-flow.js"></script>
 <script src="spot-outbox.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);

@@ -195,6 +195,7 @@ html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Ou
 .chat-input { flex: 1; background: var(--ov-stat); border: 1px solid rgba(255,255,255,0.1); border-radius: 100px; padding: 0.65rem 1rem; color: var(--text); font-size: 0.88rem; }
 .chat-send-btn { width: 42px; height: 42px; border-radius: 50%; background: var(--acc); border: none; color: #080b10; font-size: 1.1rem; cursor: pointer; flex-shrink: 0; }
 </style>
+<script src="sm-flow.js"></script>
 </head>
 <body>
 
@@ -245,7 +246,7 @@ html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Ou
   <div class="logo"><div class="logo-dot"></div>SPOT<span style="font-weight:300">ME</span></div>
   <div style="display:flex;align-items:center;gap:0.5rem;">
     <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Hell/Dunkel">🌙</button>
-    <a href="/" class="back-link">← App</a>
+    <a href="/" class="back-link" onclick="if(window.SMFlow){event.preventDefault();SMFlow.back('index.html')}">← Zurück</a>
   </div>
 </div>
 

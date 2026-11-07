@@ -328,6 +328,7 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
+<script src="sm-flow.js"></script>
 </head>
 <body>
 <div class="container">
@@ -493,10 +494,7 @@ if (!isNaN(paramLat) && !isNaN(paramLng)) {
 
 // ── Zurück-Navigation ─────────────────────────────────────────────────────────
 // Wenn history vorhanden → zurück, sonst direkt zur index.html
-function goBack() {
-  if (history.length > 1) { history.back(); }
-  else { window.location.href = 'index.html'; }
-}
+function goBack() { SMFlow.back('index.html'); }
 
 // ── Profil-Wünsche als Chips laden ───────────────────────────────────────────
 // Der Nutzer soll seinen eigenen Wunsch-Tag wählen – so ist der Spot
@@ -690,7 +688,7 @@ async function saveSpot() {
     if (out.sent || out.queued) {
       document.getElementById('loadingOverlay').classList.remove('show');
       showToast(out.sent ? '✅ Platz Spot gespeichert!' : '📴 Offline gespeichert – wird gesendet, sobald du online bist');
-      setTimeout(() => { window.location.href = 'index.html'; }, out.sent ? 1400 : 2200);
+      setTimeout(() => { SMFlow.back('index.html'); }, out.sent ? 1400 : 2200);
     } else {
       throw new Error(out.error || 'Unbekannter Fehler');
     }

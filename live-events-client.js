@@ -121,7 +121,7 @@
     if (!CODE) {
       action = '<div class="le-hint"><a href="/">App öffnen</a>, um dich anzumelden.</div>';
     } else if (me && me.is_owner) {
-      action = '<div class="le-hint">Du bist der Veranstalter. <a href="live-spot-manage.html">Teilnehmer verwalten</a></div>';
+      action = '<div class="le-hint">Du bist der Veranstalter. <a href="live-spot-manage.html" onclick="if(window.SMFlow){event.preventDefault();SMFlow.go(this.getAttribute(\'href\'))}">Teilnehmer verwalten</a></div>';
     } else if (me && me.registered && me.checked_in) {
       action = '<div class="le-ok">✅ Eingecheckt um ' + esc(time(me.checked_in_at)) + '</div>' +
         '<button class="le-btn ghost" onclick="LiveEvents.unregister(' + spot.id + ')">Abmelden</button>';

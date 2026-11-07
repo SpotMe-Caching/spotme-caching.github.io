@@ -121,6 +121,7 @@
     .code-val { font-family:'Space Mono',monospace; font-size:1.8rem; font-weight:700; color:var(--acc); letter-spacing:0.15em; }
     .code-hint { font-size:0.72rem; color:var(--muted); margin-top:0.3rem; }
   </style>
+<script src="sm-flow.js"></script>
 </head>
 <body>
 
@@ -367,7 +368,7 @@ let saveTimer  = null;
 let toastTimer;
 
 // ── NAVIGATION ───────────────────────────────────────────────────────────────
-function goBack() { window.location.href = 'index.html'; }
+function goBack() { SMFlow.back('index.html'); }
 
 function showTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));

@@ -61,7 +61,7 @@
   
   <!-- Header- Bar (rechts neben Rail) -->
   <div class="topbar">
-    <div class="logo" onclick="location.href='debug.html'" style="cursor:pointer;" title="Dashboard">
+    <div class="logo" onclick="SMFlow.go('debug.html')" style="cursor:pointer;" title="Dashboard">
       <div class="logo-dot"></div>
       SPOT<span style="color:var(--text);font-weight:300;">ME</span>
       <span class="logo-sub">· CACHING</span>
@@ -93,7 +93,7 @@
     <button class="nav-btn" id="hubBtn" onclick="SMFlow.go('hub.html')" title="Mein SpotMe">
       <i data-lucide="layout-dashboard" class="nav-icon"></i>
     </button>
-    <button class="nav-btn" onclick="location.href='profil-caching.html'" title="Profil">
+    <button class="nav-btn" onclick="SMFlow.go('profil-caching.html')" title="Profil">
       <i data-lucide="user" class="nav-icon"></i>
     </button>
     <button class="nav-btn" id="inviteHeaderBtn" onclick="openDrawer('invites')" title="Einladungen">
@@ -119,10 +119,10 @@
 
     <div class="rail-sep"></div>
 
-    <button class="nav-btn" id="pushBtn" onclick="location.href='benachrichtigungen.html'" title="Benachrichtigungen">
+    <button class="nav-btn" id="pushBtn" onclick="SMFlow.go('benachrichtigungen.html')" title="Benachrichtigungen">
       <i data-lucide="bell" class="nav-icon"></i>
     </button>
-    <button class="nav-btn" onclick="location.href='waypoints.html'" title="WayPoint Caching">
+    <button class="nav-btn" onclick="SMFlow.go('waypoints.html')" title="WayPoint Caching">
       <i data-lucide="map" class="nav-icon"></i>
     </button>
     <button class="nav-btn" id="liveBtn" onclick="callWithHelp('livespots', () => openDrawer('live'))" title="Live Spots">
@@ -801,7 +801,7 @@ function initMap() {
       el.style.cssText='width:14px;height:14px;border-radius:50%;background:var(--acc);border:2.5px solid rgba(255,255,255,0.85);box-shadow:0 0 0 4px rgba(255,159,0,0.2),0 0 18px rgba(255,159,0,0.7);';
       new maplibregl.Marker({element:el}).setLngLat([e.lngLat.lng,e.lngLat.lat]).addTo(map);
       placeMode=false; hidePlaceModeUI();
-      window.location.href = `spot-erstellen.html?lat=${tempLatLng.lat}&lng=${tempLatLng.lng}`;
+      SMFlow.go(`spot-erstellen.html?lat=${tempLatLng.lat}&lng=${tempLatLng.lng}`);
     } else {
       if (currentDrawer) closeDrawer();
     }
@@ -2948,7 +2948,7 @@ async function openSpotDetail(spotId) {
     ${offers.length
       ? `<div>${offers.map(o => `<span class="profile-chip offer">🎁 ${esc(o)}</span>`).join('')}</div>`
       : ''}
-    <a href="spot.html?id=${spot.id}" style="display:block;text-align:center;margin-top:0.75rem;padding:0.6rem;border-radius:12px;border:1px solid var(--bord2);color:var(--acc);font-size:0.82rem;font-weight:600;text-decoration:none;">🔗 Zur Platz-Spot-Seite (teilen)</a>
+    <a href="spot.html?id=${spot.id}" onclick="event.preventDefault();SMFlow.go(this.getAttribute('href'))" style="display:block;text-align:center;margin-top:0.75rem;padding:0.6rem;border-radius:12px;border:1px solid var(--bord2);color:var(--acc);font-size:0.82rem;font-weight:600;text-decoration:none;">🔗 Zur Platz-Spot-Seite (teilen)</a>
   `;
 
   renderWeatherBar(spot.lat, spot.lng);
@@ -3602,10 +3602,10 @@ const HELP_MAP = {
   invites:   { file: 'einladungen',   action: () => openDrawer('invites') },
   chats:     { file: 'chat',          action: () => openDrawer('chats') },
   meetings:  { file: 'treffen',       action: () => openMeetingsModal() },
-  push:      { file: 'push',          action: () => { location.href = 'benachrichtigungen.html'; } },
+  push:      { file: 'push',          action: () => { SMFlow.go('benachrichtigungen.html'); } },
   filter:    { file: 'kategorien',    action: () => toggleFilterStrip() },
   radius:    { file: 'radius-suche',  action: () => openRadiusSearch() },
-  waypoints: { file: 'waypoints',     action: () => location.href='waypoints.html' },
+  waypoints: { file: 'waypoints',     action: () => SMFlow.go('waypoints.html') },
   myspots:   { file: 'meine-spots',   action: () => openDrawer('myspots') },
   allspots:  { file: 'alle-spots',    action: () => openDrawer('all') },
   newspots:  { file: 'neue-spots',    action: () => openNewSpots() },
@@ -3704,7 +3704,7 @@ function initHelpSystem() {
     { id: 'inviteHeaderBtn', key: 'invites',  action: () => openDrawer('invites') },
     { id: 'chatHeaderBtn',   key: 'chats',    action: () => openDrawer('chats') },
     { id: 'meetingsBtn',     key: 'meetings', action: () => openMeetingsModal() },
-    { id: 'pushBtn',         key: 'push',     action: () => { location.href = 'benachrichtigungen.html'; } },
+    { id: 'pushBtn',         key: 'push',     action: () => { SMFlow.go('benachrichtigungen.html'); } },
     { id: 'filterTopBtn',    key: 'filter',   action: () => toggleFilterStrip() },
     { id: 'radiusTopBtn',    key: 'radius',   action: () => openRadiusSearch() },
   ];
@@ -3797,7 +3797,7 @@ async function renderLiveSpotMarkers() {
     el.className = 'live-spot-marker' + (s.status === 'planned' ? ' planned' : '');
     el.title = s.name + (s.location_hidden ? ' (ungefährer Bereich)' : '');
     if (s.location_hidden) el.style.opacity = '0.7';
-    el.addEventListener('click', () => window.location.href = `live-spot.html?id=${s.id}`);
+    el.addEventListener('click', () => SMFlow.go(`live-spot.html?id=${s.id}`));
     liveMarkers.push(new maplibregl.Marker({ element: el }).setLngLat([s.lng, s.lat]).addTo(map));
   });
 }
@@ -3837,14 +3837,14 @@ async function loadLiveDrawer(body) {
       </div>
       <div class="sc-actions">
         ${online&&s.lat&&!s.location_hidden?`<button class="sc-btn navigate" data-lat="${s.lat}" data-lng="${s.lng}">🧭</button>`:''}
-        <button class="sc-btn primary" onclick="window.location.href='live-spot.html?id=${s.id}'">${own?'⚙️':'📋'}</button>
+        <button class="sc-btn primary" onclick="SMFlow.go('live-spot.html?id=${s.id}')">${own?'⚙️':'📋'}</button>
       </div>
     </div>`;
   };
 
   let html = (staleT ? `<div style="font-size:.72rem;color:var(--muted2);margin-bottom:.6rem;font-family:'Space Mono',monospace;">📴 Offline – letzter Stand vor ${agoText(staleT)}</div>` : '') +
     `<button class="btn-primary" style="margin-bottom:0.75rem;"
-    onclick="location.href='live-spot-manage.html'">📡 Live Spot erstellen / verwalten</button>`;
+    onclick="SMFlow.go('live-spot-manage.html')">📡 Live Spot erstellen / verwalten</button>`;
 
   if (mine.length) html += `<div class="section-title" style="margin-bottom:0.4rem;">MEINE LIVE SPOTS</div>` + mine.map(s=>card(s,true)).join('');
   if (following.length) html += `<div class="section-title" style="margin:0.75rem 0 0.4rem;">ICH FOLGE</div>` + following.map(s=>card(s,false)).join('');
