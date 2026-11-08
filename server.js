@@ -455,7 +455,7 @@ async function initDB() {
         `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_spots_client ON user_spots(code, client_id) WHERE client_id IS NOT NULL`,
       )
       .catch((e) => console.error("idx_user_spots_client:", e.message));
-    console.log("✅ v15.0 – Alle Spalten bereit (inkl. SpotCache)");
+    console.log("✅ v30.0 – Alle Spalten bereit (inkl. SpotCache)");
   } catch (e) {
     console.log(
       "ℹ️ Spalten existieren bereits oder konnten nicht angelegt werden",
