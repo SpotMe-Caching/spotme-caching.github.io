@@ -455,7 +455,7 @@ async function initDB() {
         `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_spots_client ON user_spots(code, client_id) WHERE client_id IS NOT NULL`,
       )
       .catch((e) => console.error("idx_user_spots_client:", e.message));
-    console.log("✅ v30.0 – Alle Spalten bereit (inkl. SpotCache)");
+    console.log("✅ v15.0 – Alle Spalten bereit (inkl. SpotCache)");
   } catch (e) {
     console.log(
       "ℹ️ Spalten existieren bereits oder konnten nicht angelegt werden",
@@ -2697,11 +2697,24 @@ app.delete("/api/userspots/:id", async (req, res) => {
   try {
     if (!(await authCheck(String(code), token)))
       return res.status(403).json({ error: "Ungültiger Token" });
-    const r = await pool.query("DELETE FROM user_spots WHERE id = $1 AND code = $2", [
-      id,
-      code,
-    ]);
-    if (!r.rowCount) return res.status(404).json({ error: "Spot nicht gefunden" });
+    // Abhängige Daten mitlöschen (Einladungen haben einen Fremdschlüssel auf den Spot –
+    // ältere Spots mit Einladungen/Favoriten/Check-ins ließen sich sonst nicht löschen).
+    const own = await pool.query("SELECT 1 FROM user_spots WHERE id = $1 AND code = $2", [id, code]);
+    if (!own.rows.length) return res.status(404).json({ error: "Spot nicht gefunden" });
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      for (const t of ["spot_cache_invites", "spot_favorites", "spot_checkins_public"]) {
+        await client.query("SAVEPOINT sp");
+        try { await client.query(`DELETE FROM ${t} WHERE spot_id = $1`, [id]); await client.query("RELEASE SAVEPOINT sp"); }
+        catch (e) { await client.query("ROLLBACK TO SAVEPOINT sp"); }
+      }
+      await client.query("DELETE FROM user_spots WHERE id = $1 AND code = $2", [id, code]);
+      await client.query("COMMIT");
+    } catch (e) {
+      try { await client.query("ROLLBACK"); } catch (_) {}
+      throw e;
+    } finally { client.release(); }
     res.json({ success: true });
   } catch (e) {
     console.error(e);
