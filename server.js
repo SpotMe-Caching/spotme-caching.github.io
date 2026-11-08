@@ -2475,6 +2475,7 @@ app.get("/api/userspots/:code", async (req, res) => {
               image,           -- immer zurückgeben, nicht nach Status filtern
               image_status,    -- Frontend kann den Status selbst anzeigen
               active,
+              area_type, time_pref, crowd_level, intimacy_level,
               created_at
        FROM user_spots
        WHERE code = $1
@@ -2638,7 +2639,11 @@ app.put("/api/userspots/:id", async (req, res) => {
   if (!code || !name || !wishTag) {
     return res.status(400).json({ error: "code, name, wishTag erforderlich" });
   }
+  const token = String(req.body.token || req.headers["x-spotme-token"] || "");
+  if (!token) return res.status(401).json({ error: "Token erforderlich" });
   try {
+    if (!(await authCheck(String(code), token)))
+      return res.status(403).json({ error: "Ungültiger Token" });
     // Eigentümer prüfen
     const check = await pool.query(
       "SELECT code FROM user_spots WHERE id = $1",
@@ -2649,28 +2654,33 @@ app.put("/api/userspots/:id", async (req, res) => {
     if (check.rows[0].code !== code)
       return res.status(403).json({ error: "Keine Berechtigung" });
 
+    // Felder: Pflichtfelder immer; optionale nur, wenn sie mitgeschickt wurden
+    const sets = ["name=$1", "description=$2", "wish_tag=$3"];
+    const vals = [String(name).slice(0, 100), description ? String(description).slice(0, 500) : null, wishTag];
+    for (const [key, col] of [
+      ["area_type", "area_type"],
+      ["time_pref", "time_pref"],
+      ["crowd_level", "crowd_level"],
+      ["intimacy_level", "intimacy_level"],
+    ]) {
+      if (req.body[key] !== undefined) {
+        vals.push(req.body[key] ? String(req.body[key]).slice(0, 60) : null);
+        sets.push(`${col}=$${vals.length}`);
+      }
+    }
     if (image) {
       // Neues Bild mitgeschickt → speichern und auf 'pending' setzen
       // Das neue Bild muss vom Admin erneut freigegeben werden
-      await pool.query(
-        `UPDATE user_spots
-         SET name=$1, description=$2, wish_tag=$3, image=$4, image_status='pending'
-         WHERE id=$5`,
-        [name, description || null, wishTag, image, id],
-      );
-    } else {
-      // Kein neues Bild → name/description/wishTag aktualisieren,
-      // aber image und image_status NICHT anfassen.
-      // Das ist der Schutz vor dem "versehentlichen Löschen" –
-      // wenn das Frontend beim Bearbeiten image=null schickt weil es
-      // das pending-Bild nicht kennt, bleibt das Bild trotzdem erhalten.
-      await pool.query(
-        `UPDATE user_spots
-         SET name=$1, description=$2, wish_tag=$3
-         WHERE id=$4`,
-        [name, description || null, wishTag, id],
-      );
+      vals.push(image);
+      sets.push(`image=$${vals.length}`, "image_status='pending'");
     }
+    // Ohne neues Bild bleiben image und image_status unangetastet
+    // (Schutz vor dem "versehentlichen Löschen" des pending-Bildes).
+    vals.push(id);
+    await pool.query(
+      `UPDATE user_spots SET ${sets.join(", ")} WHERE id=$${vals.length}`,
+      vals,
+    );
     res.json({ success: true });
   } catch (e) {
     console.error(e);
@@ -2680,13 +2690,18 @@ app.put("/api/userspots/:id", async (req, res) => {
 
 app.delete("/api/userspots/:id", async (req, res) => {
   const { id } = req.params;
-  const { code } = req.body;
+  const { code } = req.body || {};
   if (!code) return res.status(400).json({ error: "code fehlt" });
+  const token = String((req.body && req.body.token) || req.headers["x-spotme-token"] || "");
+  if (!token) return res.status(401).json({ error: "Token erforderlich" });
   try {
-    await pool.query("DELETE FROM user_spots WHERE id = $1 AND code = $2", [
+    if (!(await authCheck(String(code), token)))
+      return res.status(403).json({ error: "Ungültiger Token" });
+    const r = await pool.query("DELETE FROM user_spots WHERE id = $1 AND code = $2", [
       id,
       code,
     ]);
+    if (!r.rowCount) return res.status(404).json({ error: "Spot nicht gefunden" });
     res.json({ success: true });
   } catch (e) {
     console.error(e);
