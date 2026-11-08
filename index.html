@@ -444,7 +444,7 @@ let invitePollInterval = null, knownInviteCount = 0;
 let toastTimer, currentDrawer = null;
 let activeRadius = null, detailSpot = null, detailMiniMap = null;
 let radiusCatFilter = null;
-let nearbyMode = false, nearbyCtx = null, pendingNearbyCtx = null;
+let nearbyMode = false, nearbyCtx = null, pendingNearbyCtx = null, spotsLoadedOnce = false;
 let weeklyMiniMap = null, weeklyMarker = null, weeklyCoords = null;
 let urlSpotChecked = false; // Verhindert mehrfaches Fliegen zum Platz Spot beim Laden
 
@@ -1056,7 +1056,7 @@ async function loadAllSpots() {
   }
 
   try {
-    const r = await tfetch(`${API}/userspots/all?noimage=1`, {}, 12000);
+    const r = await tfetch(`${API}/userspots/all?noimage=1${myCountry() ? '&country=' + myCountry() : ''}`, {}, 12000);
     if (r.ok) {
       const freshSpots = await r.json();
       await saveSpotsOffline(freshSpots);
@@ -1083,6 +1083,7 @@ async function loadAllSpots() {
     if (!offlineSpots.length) { try { await renderMarkers(); } catch {} }
     console.warn('Kein Netzwerk, verwende Cache-Daten');
   }
+  spotsLoadedOnce = true;
   updateSyncBar(allSpots.filter(s => s.pending && !s.failed).length, allSpots.filter(s => s.pending && s.failed).length);
 }
 
@@ -3216,8 +3217,12 @@ async function openDrawerFiltered(allList, km) {
 
   if (!spots.length) {
     const catNote = radiusCatFilter ? ` in der Kategorie „${radiusCatFilter}"` : '';
-    body.innerHTML = chipsHtml + `<div class="empty-state"><div class="es-icon">${nearbyNewOnly ? '✨' : '🔍'}</div>${nearbyMode && nearbyNewOnly ? `Keine neuen Spots in den letzten ${NEW_SPOT_DAYS} Tagen.` : `Keine Platz Spots${catNote} innerhalb ${km} km.`}${nearbyMode ? '<br><span style="font-size:0.78rem;">Weiter weg suchen: oben das Radius-Symbol (5 / 10 km).</span>' : ''}</div>`;
+    const firstHint = nearbyMode && !nearbyNewOnly && !allList.length
+      ? `<br><br><button class="btn-primary" id="nbCreate" style="padding:.7rem 1rem;border-radius:12px;">➕ Ersten Spot hier anlegen</button>` : '';
+    body.innerHTML = chipsHtml + `<div class="empty-state"><div class="es-icon">${nearbyNewOnly ? '✨' : '🔍'}</div>${nearbyMode && nearbyNewOnly ? `Keine neuen Spots in den letzten ${NEW_SPOT_DAYS} Tagen.` : `Keine Platz Spots${catNote} innerhalb ${km} km.`}${nearbyMode ? '<br><span style="font-size:0.78rem;">Weiter weg suchen: oben das Radius-Symbol (5 / 10 km).</span>' : ''}${firstHint}</div>`;
     bindNearbyChips(body, allList, km);
+    const nbc = document.getElementById('nbCreate');
+    if (nbc) nbc.addEventListener('click', () => { closeDrawer(); SMFlow.go('spot-erstellen.html'); });
     return;
   }
 
@@ -3956,6 +3961,14 @@ updatePushBtnState();
 if (typeof lucide !== 'undefined') lucide.createIcons();
 initHelpSystem();
 // ── SPOTS IN DER UMGEBUNG (großer Button, fest 2 km) ─────────────────────────
+// Länder sind getrennt: Spots nur aus dem eigenen Land. Bestandsprofile = Spanien.
+function myCountry() {
+  try {
+    const c = localStorage.getItem('sm_country');
+    if (c) return c;
+    return hasProfile() ? 'ES' : '';
+  } catch { return ''; }
+}
 function hasProfile() { return CODE !== '000000' && !!localStorage.getItem('sm_token'); }
 
 async function openNearby() {
@@ -4010,7 +4023,7 @@ setInterval(syncHubBadge, 2500);
   let tries = 0;
   const iv = setInterval(() => {
     tries++;
-    const ready = userPos && Array.isArray(allSpots) && allSpots.length;
+    const ready = userPos && spotsLoadedOnce;
     if (ready || tries > 40) { clearInterval(iv); openNearby(); }
   }, 500);
 })();

@@ -416,6 +416,9 @@ async function initDB() {
     // Gast-Profile (schneller Einstieg): guest=true bis ein vollständiges Profil gespeichert wird
     await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS guest BOOLEAN DEFAULT FALSE`);
     await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_visit BIGINT`);
+    // Länder getrennt (ES/DE/…): Bestand ist Spanien → Default 'ES'
+    await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS country TEXT DEFAULT 'ES'`);
+    await pool.query(`ALTER TABLE user_spots ADD COLUMN IF NOT EXISTS country TEXT DEFAULT 'ES'`);
     await pool.query(
       `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS looking_for TEXT`,
     );
@@ -831,8 +834,10 @@ app.post("/api/profile", async (req, res) => {
     token,
     spot = "gay",
     guest,
+    country,
   } = req.body;
   const isGuest = guest === true;
+  const ctry = /^[A-Za-z]{2}$/.test(String(country || "")) ? String(country).toUpperCase() : null;
 
   if (!code || !name || !region) {
     return res.status(400).json({ error: "Pflichtfelder: code, name, region" });
@@ -885,7 +890,8 @@ app.post("/api/profile", async (req, res) => {
           wish_tags=$15, offer_tags=$16,
           avatar        = COALESCE($21, avatar),
           avatar_status = CASE WHEN $21 IS NOT NULL THEN 'pending' ELSE avatar_status END,
-          updated_at=$17, visible_until=$18, guest=$22
+          updated_at=$17, visible_until=$18, guest=$22,
+          country = COALESCE($23, country)
          WHERE code=$19 AND spot=$20`,
         [
           encrypt(name),
@@ -910,6 +916,7 @@ app.post("/api/profile", async (req, res) => {
           spot,
           avatar || null, // $21
           isGuest, // $22 – ein gespeichertes Vollprofil ist kein Gast mehr
+          ctry, // $23 – nur setzen wenn mitgeschickt
         ],
       );
     } else {
@@ -922,8 +929,8 @@ app.post("/api/profile", async (req, res) => {
            help_mode, help_category, category, bio,
            wish_tags, offer_tags,
            avatar, avatar_status,
-           token, updated_at, visible_until, guest, last_visit)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$22)`,
+           token, updated_at, visible_until, guest, last_visit, country)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$22,$25)`,
         [
           code,
           spot,
@@ -949,6 +956,7 @@ app.post("/api/profile", async (req, res) => {
           now,
           visibleUntil,
           isGuest,
+          ctry || "ES",
         ],
       );
     }
@@ -2459,8 +2467,9 @@ app.post("/api/userspots", async (req, res) => {
     const ins = await pool.query(
       `INSERT INTO user_spots
          (code, lat, lng, name, description, wish_tag, image, active,
-          area_type, time_pref, crowd_level, intimacy_level, created_at, client_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10, $11, $12, $13)
+          area_type, time_pref, crowd_level, intimacy_level, created_at, client_id, country)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10, $11, $12, $13,
+         COALESCE((SELECT country FROM profiles WHERE code = $1 AND spot = 'caching' LIMIT 1), 'ES'))
        ON CONFLICT (code, client_id) WHERE client_id IS NOT NULL DO NOTHING
        RETURNING id`,
       [
@@ -2495,14 +2504,20 @@ app.post("/api/userspots", async (req, res) => {
 // Nur aktive Spots werden geliefert – deaktivierte Spots sind unsichtbar
 app.get("/api/userspots/all", async (req, res) => {
   const noImage = req.query.noimage === "1";
+  // ?country=DE → nur Spots dieses Landes (ohne Angabe: alle, wie bisher)
+  const ctry = /^[A-Za-z]{2}$/.test(String(req.query.country || ""))
+    ? String(req.query.country).toUpperCase()
+    : null;
   try {
     const { rows } = await pool.query(
       `SELECT id, code, lat, lng, name, description, wish_tag AS "wishTag",
               ${noImage ? "NULL AS image" : "CASE WHEN image_status = 'approved' THEN image ELSE NULL END AS image"},
-              active, area_type, time_pref, crowd_level, intimacy_level, created_at
+              active, area_type, time_pref, crowd_level, intimacy_level, created_at, COALESCE(country,'ES') AS country
        FROM user_spots
        WHERE active = true
+         AND ($1::text IS NULL OR COALESCE(country,'ES') = $1)
        ORDER BY created_at DESC`,
+      [ctry],
     );
     res.json(rows);
   } catch (e) {

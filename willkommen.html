@@ -62,8 +62,11 @@ input:focus,select:focus{outline:none;border-color:var(--acc)}
     <div class="card">
       <div class="loc" id="locText">📍 Standort wird gesucht …<small id="locSub"></small></div>
       <div id="regionEdit" style="display:none">
-        <label for="regSel">Region</label>
+        <label for="ctrySel">Land</label>
+        <select id="ctrySel"></select>
+        <label for="regSel" id="regLbl">Region</label>
         <select id="regSel"></select>
+        <input id="regIn" maxlength="60" placeholder="Bundesland / Region" style="display:none">
         <label for="cityIn">Ort (optional)</label>
         <input id="cityIn" maxlength="60" placeholder="z.B. Oliva">
       </div>
@@ -119,15 +122,19 @@ const REGIONS = {
   'Madrid':[40.4,-3.7],'Murcia':[38.0,-1.5],'Navarra':[42.7,-1.65],'Valencia (Region)':[39.4,-0.75]
 };
 const ALIAS = [
-  [/valenci/i,'Valencia (Region)'],[/catal|catalunya/i,'Katalonien'],[/andaluc/i,'Andalusien'],[/arag/i,'Aragón'],
+  [/valenci/i,'Valencia (Region)'],[/catal|catalunya/i,'Katalonien'],[/andaluc|andalus/i,'Andalusien'],[/arag/i,'Aragón'],
   [/asturias/i,'Asturien'],[/balear|illes/i,'Balearen'],[/pa[ií]s vasco|euskadi|basque/i,'Baskenland'],[/extremadura/i,'Extremadura'],
   [/galic/i,'Galicien'],[/canarias|canary/i,'Kanaren'],[/cantabria/i,'Kantabrien'],[/la mancha/i,'Kastilien-La Mancha'],
-  [/le[oó]n/i,'Kastilien-León'],[/rioja/i,'La Rioja'],[/madrid/i,'Madrid'],[/murcia/i,'Murcia'],[/navarra|nafarroa/i,'Navarra']
+  [/le[oó]n/i,'Kastilien-León'],[/rioja/i,'La Rioja'],[/madrid/i,'Madrid'],[/murcia/i,'Murcia'],[/navarra|navarre|nafarroa/i,'Navarra']
 ];
+/* Länder (Deutsche Tester sehen nur deutsche Spots – Länder sind getrennt) */
+const COUNTRIES = {ES:'Spanien',DE:'Deutschland',AT:'Österreich',CH:'Schweiz',FR:'Frankreich',IT:'Italien',PT:'Portugal'};
+const BOX = {ES:[27.5,43.9,-18.3,4.5], DE:[47.2,55.1,5.8,15.1]};   // grobe Erkennung ohne Netz
+function countryByBox(lat,lng){for(const [c,[a,b,l,r]] of Object.entries(BOX)) if(lat>=a&&lat<=b&&lng>=l&&lng<=r) return c; return null}
 const NAMES_A = ['Sonnen','Mond','Wald','Meer','Berg','Wind','Sand','Stern','Nebel','Glut','Eisen','Mohn','Dünen','Sturm'];
 const NAMES_B = ['fuchs','falke','wolf','luchs','rabe','otter','delfin','drache','igel','bär','hirsch','kauz','wanderer','pfad'];
 
-let region = null, city = '', geo = null, step = 1;
+let region = null, city = '', country = null, countryName = '', geo = null, step = 1;
 
 function toast(t){const e=$('toast');e.textContent=t;e.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>e.classList.remove('show'),2600)}
 function show(n){step=n;[1,2,3].forEach(i=>{$('s'+i).classList.toggle('on',i===n);$('d'+i).classList.toggle('on',i<=n)});window.scrollTo(0,0)}
@@ -149,39 +156,74 @@ function nearestRegion(lat,lng){
   return best;
 }
 function showLoc(){
-  $('locText').firstChild.textContent = '📍 ' + (city ? city + ' · ' : '') + (region || 'Ort unbekannt');
+  const parts=[];
+  if(city) parts.push(city);
+  if(region) parts.push(region);
+  if(country && country!=='ES') parts.push(COUNTRIES[country]||countryName||country);
+  $('locText').firstChild.textContent = '📍 ' + (parts.length ? parts.join(' · ') : 'Ort unbekannt');
   $('locSub').textContent = geo ? 'Per GPS erkannt' : 'Bitte wähle deinen Ort';
-  $('locOk').disabled = !region;
+  $('locOk').disabled = !(country && region);
 }
-async function reverse(lat,lng){
+async function reverse(lat,lng,lang){
   try{
     const c=new AbortController();const t=setTimeout(()=>c.abort(),4500);
-    const r=await fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&accept-language=es&lat='+lat+'&lon='+lng,{signal:c.signal});
+    const r=await fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&accept-language='+lang+'&lat='+lat+'&lon='+lng,{signal:c.signal});
     clearTimeout(t);if(!r.ok)return null;return await r.json();
   }catch(e){return null}
 }
+function setCountryUI(){
+  const es = country==='ES';
+  $('regSel').style.display = es ? '' : 'none';
+  $('regIn').style.display = es ? 'none' : '';
+  $('regLbl').textContent = es ? 'Region' : 'Bundesland / Region';
+  $('regLbl').setAttribute('for', es ? 'regSel' : 'regIn');
+}
+function applyAddress(g){
+  if(!g||!g.address) return;
+  const a=g.address;
+  const cc=(a.country_code||'').toUpperCase();
+  if(cc) {country=cc;countryName=a.country||cc;}
+  city=a.city||a.town||a.village||a.municipality||city;
+  const st=a.state||a.region||'';
+  if(country==='ES'){const hit=ALIAS.find(([re])=>re.test(st)); if(hit) region=hit[1];}
+  else if(st) region=st;
+}
 function detect(){
-  if(!navigator.geolocation){region=null;$('regionEdit').style.display='block';sel.value=Object.keys(REGIONS)[0];showLoc();return}
+  const fail=()=>{geo=null;$('regionEdit').style.display='block';$('locChange').style.display='none';fillEdit();showLoc()};
+  if(!navigator.geolocation){fail();return}
   navigator.geolocation.getCurrentPosition(async pos=>{
     geo={lat:pos.coords.latitude,lng:pos.coords.longitude};
-    region=nearestRegion(geo.lat,geo.lng);showLoc();               // sofort (ohne Netz)
-    const g=await reverse(geo.lat,geo.lng);                          // verfeinern (best effort)
-    if(g&&g.address){
-      const a=g.address;
-      city=a.city||a.town||a.village||a.municipality||'';
-      const st=a.state||a.region||'';
-      const hit=ALIAS.find(([re])=>re.test(st));
-      if(hit)region=hit[1];
-    }
+    country=countryByBox(geo.lat,geo.lng);                          // sofort (ohne Netz)
+    if(country==='ES') region=nearestRegion(geo.lat,geo.lng);
     showLoc();
-  },()=>{region=null;geo=null;$('regionEdit').style.display='block';showLoc()},{enableHighAccuracy:false,timeout:9000,maximumAge:600000});
+    let g=await reverse(geo.lat,geo.lng,'en,es');                    // verfeinern (best effort)
+    applyAddress(g);
+    if(country && country!=='ES' && ['DE','AT','CH'].includes(country)){   // deutsche Namen für Bundesland/Ort
+      const gd=await reverse(geo.lat,geo.lng,'de'); if(gd&&gd.address){city='';applyAddress(gd)}
+    }
+    if(country==='ES' && !region) region=nearestRegion(geo.lat,geo.lng);
+    if(!country){fail();return}
+    showLoc();
+  },fail,{enableHighAccuracy:false,timeout:9000,maximumAge:600000});
 }
 detect();
 
-$('locChange').onclick=()=>{$('regionEdit').style.display='block';if(region)sel.value=region;else sel.value=Object.keys(REGIONS)[0];$('cityIn').value=city;region=sel.value;showLoc()};
+/* "Anderer Ort" – Land, Region, Ort selbst wählen */
+Object.entries(COUNTRIES).forEach(([k,v])=>{const o=document.createElement('option');o.value=k;o.textContent=v;$('ctrySel').appendChild(o)});
+function fillEdit(){
+  $('ctrySel').value = (country && COUNTRIES[country]) ? country : 'ES';
+  if(!country) {country=$('ctrySel').value;}
+  setCountryUI();
+  if(country==='ES'){ if(region&&REGIONS[region]) $('regSel').value=region; else {region=null;} }
+  else $('regIn').value = region||'';
+  $('cityIn').value = city||'';
+}
+$('locChange').onclick=()=>{$('regionEdit').style.display='block';fillEdit();if(country==='ES'&&!region){region=$('regSel').value}showLoc()};
+$('ctrySel').onchange=()=>{country=$('ctrySel').value;countryName=COUNTRIES[country];region=null;setCountryUI();if(country==='ES'){region=$('regSel').value}else{$('regIn').value=''}showLoc()};
 sel.onchange=()=>{region=sel.value;showLoc()};
+$('regIn').oninput=()=>{region=$('regIn').value.trim()||null;showLoc()};
 $('cityIn').oninput=()=>{city=$('cityIn').value.trim();showLoc()};
-$('locOk').onclick=()=>{if(!region){toast('Bitte Ort wählen');return}show(2);setTimeout(()=>$('nameIn').focus(),50)};
+$('locOk').onclick=()=>{if(!(country&&region)){toast('Bitte Ort wählen');return}show(2);setTimeout(()=>$('nameIn').focus(),50)};
 
 $('diceBtn').onclick=()=>{$('nameIn').value=NAMES_A[Math.floor(Math.random()*NAMES_A.length)]+NAMES_B[Math.floor(Math.random()*NAMES_B.length)];$('nameErr').textContent=''};
 $('nameBack').onclick=()=>show(1);
@@ -204,13 +246,14 @@ $('go').onclick=async()=>{
   try{
     const c=new AbortController();const t=setTimeout(()=>c.abort(),15000);
     const r=await fetch(API+'/profile',{method:'POST',headers:{'Content-Type':'application/json'},signal:c.signal,
-      body:JSON.stringify({code,name,spot:'caching',region,city:city||null,guest:true,token:localStorage.getItem('sm_token')||undefined})});
+      body:JSON.stringify({code,name,spot:'caching',region,city:city||null,country,guest:true,token:localStorage.getItem('sm_token')||undefined})});
     clearTimeout(t);
     const d=await r.json().catch(()=>({}));
     if(!r.ok||!d.token)throw new Error(d.error||('Fehler '+r.status));
     localStorage.setItem('sm_code',code);
     localStorage.setItem('sm_token',d.token);
     localStorage.setItem('sm_name',name);
+    localStorage.setItem('sm_country',country);
     localStorage.setItem('sm_profile_caching',JSON.stringify({name,region,city:city||null,province:null,bio:'',wishes:[],offers:[],updated:Date.now()}));
     try{sessionStorage.setItem('sm_open_nearby','1')}catch(e){}
     location.replace('index.html');

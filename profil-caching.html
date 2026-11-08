@@ -392,6 +392,26 @@ function showTab(name) {
 }
 
 // ── GEO ──────────────────────────────────────────────────────────────────────
+/* Länder außerhalb Spaniens: Region/Stadt als freie Eingabe (die Auswahllisten kennen nur Spanien) */
+function applyCountryUI() {
+  let c = 'ES';
+  try { c = localStorage.getItem('sm_country') || 'ES'; } catch (e) {}
+  if (c === 'ES') return;
+  const sel = document.getElementById('f-region');
+  const inp = document.createElement('input');
+  inp.id = 'f-region'; inp.className = sel.className; inp.type = 'text'; inp.maxLength = 60;
+  inp.placeholder = 'Region / Bundesland'; inp.oninput = () => autoSave();
+  sel.replaceWith(inp);
+  const prov = document.getElementById('f-province');
+  prov.closest('.field').style.display = 'none';
+  const city = document.getElementById('f-city');
+  const ci = document.createElement('input');
+  ci.id = 'f-city'; ci.className = city.className; ci.type = 'text'; ci.maxLength = 60;
+  ci.placeholder = 'Stadt'; ci.oninput = () => autoSave();
+  city.replaceWith(ci);
+  ci.closest('.two-col').style.gridTemplateColumns = '1fr';
+}
+
 function fillRegions() {
   const sel = document.getElementById('f-region');
   Object.keys(GEO).forEach(r => {
@@ -583,6 +603,8 @@ function loadProfile() {
       if (p.province) {
         document.getElementById('f-province').value = p.province; fillCity();
         if (p.city) document.getElementById('f-city').value = p.city;
+      } else if (p.city) {
+        document.getElementById('f-city').value = p.city;   // Länder ohne Provinz-Liste (freie Eingabe)
       }
     }
     if (p.avatar) { avatarData = p.avatar; renderAvatar(); }
@@ -643,6 +665,7 @@ async function saveProfile() {
         code, name, spot: SPOT,
         region: profile.region, province: profile.province, city: profile.city,
         bio: profile.bio, wishTags: wishArray, offerTags: offerArray,
+        country: localStorage.getItem('sm_country') || undefined,
         token: token || undefined
       })
     });
@@ -1006,6 +1029,7 @@ function confirmDeleteProfile() {
 // ── INIT ─────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
   fillRegions();
+  applyCountryUI();
   loadProfile();
   
   // Event-Listener an die neuen/verschobenen Buttons binden
