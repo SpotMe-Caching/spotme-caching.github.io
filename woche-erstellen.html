@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+<title>SpotMe · Wochen-Spot erstellen</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.css" rel="stylesheet">
+<link href="theme-vars.css" rel="stylesheet">
+<script>try{document.documentElement.setAttribute("data-theme",localStorage.getItem("sm_theme")||"dark")}catch(e){}</script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--bg:#0a0d12;--card:#141a22;--bord:rgba(255,255,255,.07);--bord2:rgba(255,255,255,.12);--text:#e2e8f0;--muted:#64748b;--acc:#f59e0b;--green:#10b981;--red:#ef4444;--inp:#0f1318;--lbl:#94a3b8;--pillbg:rgba(15,19,24,.9);--toastbg:rgba(20,26,34,.95)}
+:root[data-theme="light"]{--inp:#f4f6f8;--lbl:#475569;--pillbg:rgba(255,255,255,.92);--toastbg:rgba(255,255,255,.97);--muted:#5a6b7b}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;font-size:17px;line-height:1.45;padding:max(env(safe-area-inset-top),1rem) 16px 60px;overflow-y:auto}
+.container{max-width:600px;margin:0 auto}
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.logo{font-family:'Space Mono',monospace;font-size:1.3rem;font-weight:700;color:var(--acc);display:flex;align-items:center;gap:8px}
+.logo-dot{width:10px;height:10px;border-radius:50%;background:var(--acc);box-shadow:0 0 10px var(--acc)}
+.hdr-actions{display:flex;gap:8px;align-items:center}
+.theme-btn{width:38px;height:38px;border-radius:50%;border:1px solid var(--bord2);background:var(--pillbg);color:var(--text);font-size:1.05rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.back-btn{font-size:.85rem;font-weight:600;color:var(--muted);background:var(--pillbg);border:1px solid var(--bord2);border-radius:40px;padding:9px 16px;cursor:pointer;font-family:inherit}
+.type-switch{display:flex;gap:8px;margin-bottom:16px}
+.type-switch a{flex:1;text-align:center;padding:10px 8px;border-radius:14px;border:1px solid var(--bord2);background:var(--pillbg);color:var(--muted);font-weight:600;font-size:.9rem;text-decoration:none}
+.type-switch a.on{border-color:var(--acc);color:var(--acc);background:rgba(245,158,11,.12)}
+.map-card{background:var(--card);border:1px solid var(--bord);border-radius:24px;overflow:hidden;margin-bottom:20px}
+#map{width:100%;height:280px}
+.map-note{font-size:.72rem;font-family:'Space Mono',monospace;color:var(--muted);background:var(--inp);border-top:1px solid var(--bord);padding:10px 18px;text-align:center}
+.card{background:var(--card);border:1px solid var(--bord);border-radius:24px;padding:20px;margin-bottom:20px}
+.label{font-size:.8rem;font-weight:500;color:var(--lbl);display:block;margin:0 0 7px 4px}
+.field{width:100%;background:var(--inp);border:1px solid var(--bord2);border-radius:14px;padding:13px 14px;color:var(--text);font-family:inherit;font-size:1rem;margin-bottom:14px}
+.field:focus{outline:none;border-color:rgba(245,158,11,.5);box-shadow:0 0 0 2px rgba(245,158,11,.15)}
+.hint{font-size:.8rem;color:var(--muted);margin-bottom:14px}
+.btn{width:100%;border:none;border-radius:16px;padding:16px;font-family:inherit;font-weight:700;font-size:1.05rem;cursor:pointer;background:linear-gradient(135deg,#f59e0b,#e67e22);color:#0a0d12;margin-bottom:10px}
+.btn.ghost{background:var(--pillbg);color:var(--text);border:1px solid var(--bord2);font-weight:600}
+.btn:disabled{opacity:.5}
+.url{background:var(--inp);border:1px dashed var(--bord2);border-radius:12px;padding:12px;font-family:'Space Mono',monospace;font-size:.78rem;word-break:break-all;margin:10px 0;cursor:pointer}
+#toast{position:fixed;bottom:max(env(safe-area-inset-bottom),24px);left:50%;transform:translateX(-50%) translateY(20px);background:var(--toastbg);border:1px solid var(--bord2);border-radius:100px;padding:12px 24px;font-size:.9rem;font-weight:600;z-index:9999;opacity:0;pointer-events:none;transition:all .3s;white-space:nowrap}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="logo"><div class="logo-dot"></div>SPOT<span style="color:var(--text);font-weight:400">ME</span></div>
+    <div class="hdr-actions">
+      <button class="theme-btn" id="themeBtn" title="Hell/Dunkel" aria-label="Hell/Dunkel">🌙</button>
+      <button class="back-btn" id="backBtn">← Zurück</button>
+    </div>
+  </div>
+
+  <div class="type-switch">
+    <a href="spot-erstellen.html" id="toPlatz">📍 Platz Spot</a>
+    <a class="on" href="#">🗓️ Wochen-Spot</a>
+  </div>
+
+  <div id="formView">
+    <div class="hint">Ein Wochen-Spot läuft nach 7 Tagen ab. Tippe auf die Karte, um den Ort festzulegen, und teile danach den Link.</div>
+    <div class="map-card">
+      <div id="map"></div>
+      <div class="map-note" id="coords">📍 Tippe auf die Karte – GPS wird geladen …</div>
+    </div>
+    <div class="card">
+      <label class="label" for="wkName">Name</label>
+      <input id="wkName" class="field" placeholder="z.B. Kaffee im Park" maxlength="50">
+      <label class="label" for="wkCat">Kategorie</label>
+      <select id="wkCat" class="field"></select>
+      <label class="label" for="wkDesc">Beschreibung (optional)</label>
+      <input id="wkDesc" class="field" placeholder="Was erwartet die Besucher?" maxlength="120">
+    </div>
+    <button class="btn" id="submitBtn">🗓️ Wochen-Spot erstellen</button>
+  </div>
+
+  <div id="doneView" style="display:none">
+    <div class="card">
+      <div style="font-size:1.2rem;font-weight:700">🔗 Bereit zum Teilen!</div>
+      <div id="doneName" style="font-weight:600;margin-top:6px"></div>
+      <div class="hint" style="margin-top:4px">Besucher können mit diesem Link 7 Tage einchecken.</div>
+      <div class="url" id="shareUrl" title="Tippen zum Kopieren"></div>
+    </div>
+    <button class="btn" id="shareBtn">↗️ Teilen</button>
+    <button class="btn ghost" id="copyBtn">📋 Link kopieren</button>
+    <button class="btn ghost" id="toMine">📍 Zu Meine Spots</button>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script src="sm-flow.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
+<script>
+'use strict';
+const API  = 'https://spotme-chat-obom.onrender.com/api';
+const CODE = localStorage.getItem('sm_code') || '000000';
+const $ = id => document.getElementById(id);
+const CATS = {'Bahnhof':'🚉','Club':'🎉','Einkaufsviertel':'🛍️','Filmtheater':'🎬','Fitnesscenter':'💪','Industriepark':'🏭','Internetcafé':'💻','Naturschutzgebiet':'🌿','Park':'🌳','Rastplatz':'🛣️','Restaurant':'🍽️','Sauna':'🧖','Strand':'🏖️','Sonstiges':'📌'};
+$('wkCat').innerHTML = Object.entries(CATS).map(([k, v]) => `<option value="${k}">${v} ${k}</option>`).join('');
+
+function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2400); }
+
+/* Theme */
+function applyTheme(t) { document.documentElement.setAttribute('data-theme', t); try { localStorage.setItem('sm_theme', t); } catch (e) {} $('themeBtn').textContent = t === 'light' ? '🌙' : '☀️'; }
+applyTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+$('themeBtn').onclick = () => applyTheme(document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
+
+/* Navigation */
+$('backBtn').onclick = () => SMFlow.back('hub.html#meine');
+$('toPlatz').addEventListener('click', e => { e.preventDefault(); location.replace('spot-erstellen.html'); });
+$('toMine').onclick = () => { location.href = 'hub.html#meine'; };
+
+/* Karte */
+let map, marker, coords = null;
+function setPos(lat, lng) {
+  coords = { lat, lng };
+  if (marker) marker.remove();
+  const el = document.createElement('div');
+  el.style.cssText = 'width:22px;height:22px;background:#ff9f00;border-radius:50%;border:3px solid #fff;box-shadow:0 0 14px rgba(245,158,11,.8)';
+  marker = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
+  $('coords').textContent = '📍 ' + lat.toFixed(5) + ', ' + lng.toFixed(5);
+}
+try {
+  map = new maplibregl.Map({ container: 'map', style: 'https://tiles.openfreemap.org/styles/liberty', center: [2.8, 41.9], zoom: 12, attributionControl: false });
+  map.on('click', e => { setPos(e.lngLat.lat, e.lngLat.lng); toast('📍 Position gesetzt'); });
+  if (navigator.geolocation) navigator.geolocation.getCurrentPosition(p => {
+    map.jumpTo({ center: [p.coords.longitude, p.coords.latitude], zoom: 14 });
+    $('coords').textContent = '📍 Tippe auf die Karte, um den Ort zu setzen';
+  }, () => { $('coords').textContent = '📍 Tippe auf die Karte, um den Ort zu setzen'; }, { timeout: 8000 });
+} catch (e) { $('coords').textContent = '⚠️ Karte nicht verfügbar (offline?)'; }
+
+/* Erstellen */
+let SHARE = '';
+$('submitBtn').onclick = async () => {
+  const name = $('wkName').value.trim();
+  if (!name) return toast('⚠️ Bitte einen Namen eingeben');
+  if (!coords) return toast('⚠️ Bitte einen Ort auf der Karte tippen');
+  if (navigator.onLine === false) return toast('📴 Erstellen geht nur online');
+  const b = $('submitBtn'); b.disabled = true; b.textContent = '⏳ …';
+  try {
+    const r = await fetch(API + '/weekly-spots', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: CODE, token: localStorage.getItem('sm_token'), name, category: $('wkCat').value, description: $('wkDesc').value.trim(), lat: coords.lat, lng: coords.lng })
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.spot) throw new Error(d.error || 'Fehler');
+    SHARE = new URL('spot-woche.html?token=' + d.spot.token, location.href).href;
+    $('doneName').textContent = d.spot.name;
+    $('shareUrl').textContent = SHARE;
+    $('formView').style.display = 'none'; $('doneView').style.display = '';
+    window.scrollTo(0, 0);
+  } catch (e) {
+    toast('❌ ' + (e.message || 'Erstellen fehlgeschlagen'));
+    b.disabled = false; b.textContent = '🗓️ Wochen-Spot erstellen';
+  }
+};
+async function copy() { try { await navigator.clipboard.writeText(SHARE); toast('🔗 Link kopiert'); } catch (e) { prompt('Link:', SHARE); } }
+$('copyBtn').onclick = copy; $('shareUrl').onclick = copy;
+$('shareBtn').onclick = async () => {
+  if (navigator.share) { try { await navigator.share({ title: 'SpotMe · ' + $('doneName').textContent, url: SHARE }); } catch (e) {} }
+  else copy();
+};
+</script>
+</body>
+</html>

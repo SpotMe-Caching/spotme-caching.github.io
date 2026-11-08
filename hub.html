@@ -193,6 +193,7 @@ function panelOverview() {
   h += '</div><div class="sec">Schnellzugriff</div><div class="acts">' +
     '<button class="btn" data-url="index.html">🗺️ Karte</button>' +
     '<button class="btn" data-url="spot-erstellen.html">➕ Platz Spot</button>' +
+    '<button class="btn" data-url="woche-erstellen.html">🗓️ Wochen-Spot</button>' +
     '<button class="btn" data-url="live-spot-manage.html">📡 Live Spots</button>' +
     '<button class="btn" data-url="benachrichtigungen.html">🔔 Hinweise</button></div>';
   return h;
@@ -259,7 +260,7 @@ function panelMine() {
   if (spotFilter === 'wartet' && !cnt.wartet) spotFilter = 'alle';
   const chips = [['alle', 'Alle'], ['platz', '📍 Platz Spots'], ['woche', '🗓️ Wochen-Spots']].concat(cnt.pausiert ? [['pausiert', '⏸️ Pausiert']] : []).concat(cnt.wartet ? [['wartet', '⏳ Wartet']] : [])
     .map(c => `<button class="chip ${spotFilter === c[0] ? 'on' : ''}" data-filter="${c[0]}">${c[1]} (${cnt[c[0]]})</button>`).join('');
-  let h = `<h1>📍 Meine Spots</h1><div class="chips">${chips}</div><button class="btn primary" data-url="spot-erstellen.html">➕ Neuen Platz Spot erstellen</button>`;
+  let h = `<h1>📍 Meine Spots</h1><div class="chips">${chips}</div><div class="acts"><button class="btn primary" data-url="spot-erstellen.html">➕ Platz Spot</button><button class="btn primary" data-url="woche-erstellen.html">🗓️ Wochen-Spot</button></div>`;
   const shown = all.filter(i => spotFilter === 'alle' || i.kind === spotFilter || (spotFilter === 'pausiert' && i.kind === 'platz' && i.s.active === false));
   if (!shown.length) return h + '<div class="empty"><div class="i">📍</div>Hier ist noch nichts.</div>';
   return h + shown.map(i => {
