@@ -42,6 +42,8 @@
     .dock-btn.nearby{flex-direction:row;justify-content:center;gap:.55rem;padding:.95rem .8rem;font-size:1rem;font-weight:700;border-color:var(--acc-glow,rgba(255,159,0,.5));background:var(--acc-dim,rgba(255,159,0,.12));color:var(--acc,#f59e0b)}
     .dock-btn.nearby .di{font-size:1.25rem}
     .nav-btn.rail-hidden{display:none!important}
+    .nb-chip{flex:1;padding:.6rem .5rem;border-radius:12px;border:1px solid var(--bord2,rgba(255,255,255,.12));background:transparent;color:var(--muted2,#94a3b8);font-family:inherit;font-weight:600;font-size:.82rem;cursor:pointer}
+    .nb-chip.on{border-color:var(--acc,#f59e0b);color:var(--acc,#f59e0b);background:var(--acc-dim,rgba(245,158,11,.12))}
     .my-spot-marker.pending{opacity:.6;outline:2px dashed var(--orange,#f90);outline-offset:3px;border-radius:50%}
     .my-spot-marker.pending.failed{outline-color:#e55}
     #spotSyncBar{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 58px);z-index:900;
@@ -3193,7 +3195,17 @@ function clearRadius() {
   document.getElementById('radiusTopBtn').classList.remove('active');
 }
 
-async function openDrawerFiltered(spots, km) {
+const NEW_SPOT_DAYS = 7;
+let nearbyNewOnly = false;
+async function openDrawerFiltered(allList, km) {
+  // Umgebungs-Liste: Filter "✨ Neu" (Spots der letzten 7 Tage)
+  const isNew = s => (Date.now() - Number(s.created_at || s.createdAt || 0)) <= NEW_SPOT_DAYS * 86400000;
+  const newCount = nearbyMode ? allList.filter(isNew).length : 0;
+  let spots = (nearbyMode && nearbyNewOnly) ? allList.filter(isNew) : allList;
+  const chipsHtml = nearbyMode ? `<div style="display:flex;gap:8px;margin-bottom:10px;">
+    <button class="nb-chip ${nearbyNewOnly ? '' : 'on'}" data-nbf="all">📍 Alle (${allList.length})</button>
+    <button class="nb-chip ${nearbyNewOnly ? 'on' : ''}" data-nbf="new">✨ Neu · ${NEW_SPOT_DAYS} Tage (${newCount})</button>
+  </div>` : '';
   document.getElementById('drawerOverlay').classList.add('show');
   document.getElementById('drawer').classList.add('open');
 
@@ -3204,11 +3216,12 @@ async function openDrawerFiltered(spots, km) {
 
   if (!spots.length) {
     const catNote = radiusCatFilter ? ` in der Kategorie „${radiusCatFilter}"` : '';
-    body.innerHTML = `<div class="empty-state"><div class="es-icon">🔍</div>Keine Platz Spots${catNote} innerhalb ${km} km.${nearbyMode ? '<br><span style="font-size:0.78rem;">Weiter weg suchen: oben das Radius-Symbol (5 / 10 km).</span>' : ''}</div>`;
+    body.innerHTML = chipsHtml + `<div class="empty-state"><div class="es-icon">${nearbyNewOnly ? '✨' : '🔍'}</div>${nearbyMode && nearbyNewOnly ? `Keine neuen Spots in den letzten ${NEW_SPOT_DAYS} Tagen.` : `Keine Platz Spots${catNote} innerhalb ${km} km.`}${nearbyMode ? '<br><span style="font-size:0.78rem;">Weiter weg suchen: oben das Radius-Symbol (5 / 10 km).</span>' : ''}</div>`;
+    bindNearbyChips(body, allList, km);
     return;
   }
 
-  body.innerHTML = spots.map(s => {
+  body.innerHTML = chipsHtml + spots.map(s => {
     const dist = haversineKm(userPos.lat, userPos.lng, s.lat, s.lng);
     const distLabel = dist < 1 ? Math.round(dist * 1000) + 'm' : dist.toFixed(1) + 'km';
     const catIcon = CATEGORY_EMOJI[s.area_type] || '📍';
@@ -3230,12 +3243,13 @@ async function openDrawerFiltered(spots, km) {
     </div>`;
   }).join('');
 
+  bindNearbyChips(body, allList, km);
   body.querySelectorAll('[data-lat]').forEach(b =>
     b.addEventListener('click', () => navigateToSpot(+b.dataset.lat, +b.dataset.lng)));
   body.querySelectorAll('[data-det]').forEach(b =>
     b.addEventListener('click', () => {
       const s = allSpots.find(x => x.id == b.dataset.det);
-      if (s) { pendingNearbyCtx = { spots, km, nearby: nearbyMode }; closeDrawer(); setTimeout(() => openSpotDetail(s.id), 300); }
+      if (s) { pendingNearbyCtx = { spots: allList, km, nearby: nearbyMode }; closeDrawer(); setTimeout(() => openSpotDetail(s.id), 300); }
     }));
 
   try {
@@ -3259,6 +3273,13 @@ async function openDrawerFiltered(spots, km) {
       if (badge) badge.textContent = '🌡️';
     });
   }
+}
+
+function bindNearbyChips(body, allList, km) {
+  body.querySelectorAll('[data-nbf]').forEach(b => b.addEventListener('click', () => {
+    nearbyNewOnly = b.dataset.nbf === 'new';
+    openDrawerFiltered(allList, km);
+  }));
 }
 
 // ── WOCHEN-SPOTS ─────────────────────────────────────────────────────────────
@@ -3952,6 +3973,7 @@ async function openNearby() {
     } catch { toast('❌ Kein Standort – bitte Standortzugriff erlauben'); return; }
   }
   radiusCatFilter = null;
+  nearbyNewOnly = false;
   closeDrawer();
   selectRadius(2, true);
 }
