@@ -1282,7 +1282,7 @@ async function saveSpot() {
     try {
       const r = await fetch(`${API}/userspots/${editSpotId}`, {
         method:'PUT', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ code:CODE, name, description:desc, wishTag:wish, area_type:category||null, image:spotPhotoData||null })
+        body: JSON.stringify({ code:CODE, token:localStorage.getItem('sm_token'), name, description:desc, wishTag:wish, area_type:category||null, image:spotPhotoData||null })
       });
       ok = r.ok;
     } catch {}
@@ -1307,7 +1307,7 @@ async function saveSpot() {
 async function deleteSpot(id) {
   let ok = false;
   try {
-    const r = await fetch(`${API}/userspots/${id}`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:CODE})});
+    const r = await fetch(`${API}/userspots/${id}`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:CODE,token:localStorage.getItem('sm_token')})});
     ok = r.ok;
   } catch {}
   toast(ok ? '🗑️ Platz Spot gelöscht' : (navigator.onLine === false ? '📴 Löschen geht nur online' : '⚠️ Nicht gelöscht'));

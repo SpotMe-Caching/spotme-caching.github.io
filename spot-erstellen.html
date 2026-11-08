@@ -485,6 +485,8 @@ let photoData     = null; // Base64-JPEG für den Upload
 // So weiß die Seite sofort wo der Spot platziert werden soll,
 // ohne dass der Nutzer nochmal auf die Karte tippen muss.
 const urlParams = new URLSearchParams(window.location.search);
+const EDIT_ID  = urlParams.get('edit');   // ?edit=ID → bestehenden Platz Spot ändern
+let editHadPhoto = false;
 const paramLat  = parseFloat(urlParams.get('lat'));
 const paramLng  = parseFloat(urlParams.get('lng'));
 
@@ -494,7 +496,7 @@ if (!isNaN(paramLat) && !isNaN(paramLng)) {
 
 // ── Zurück-Navigation ─────────────────────────────────────────────────────────
 // Wenn history vorhanden → zurück, sonst direkt zur index.html
-function goBack() { SMFlow.back('index.html'); }
+function goBack() { SMFlow.back(EDIT_ID ? 'hub.html#meine' : 'index.html'); }
 
 // ── Profil-Wünsche als Chips laden ───────────────────────────────────────────
 // Der Nutzer soll seinen eigenen Wunsch-Tag wählen – so ist der Spot
@@ -662,8 +664,33 @@ async function saveSpot() {
   if (!timePref)   { showToast('⚠️ Bitte eine Tageszeit auswählen');    return; }
   if (!crowd)      { showToast('⚠️ Bitte den Besucherandrang angeben'); return; }
   if (!intimacy)   { showToast('⚠️ Bitte die Intimität angeben');       return; }
-  if (!currentCoords) { showToast('⚠️ Bitte den Standort auf der Karte setzen'); return; }
+  if (!EDIT_ID && !currentCoords) { showToast('⚠️ Bitte den Standort auf der Karte setzen'); return; }
   if (CODE === '000000') { showToast('⚠️ Kein aktives Profil gefunden'); return; }
+
+  // Ändern (bestehender Platz Spot) – nur online
+  if (EDIT_ID) {
+    if (navigator.onLine === false) { showToast('📴 Ändern geht nur online'); return; }
+    const b = document.getElementById('saveBtn');
+    b.disabled = true;
+    document.getElementById('loadingOverlay').classList.add('show');
+    try {
+      const r = await fetch(`${API}/userspots/${encodeURIComponent(EDIT_ID)}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: CODE, token: localStorage.getItem('sm_token'), name, description: desc || null, wishTag,
+          image: photoData || null, area_type: areaType, time_pref: timePref, crowd_level: crowd, intimacy_level: intimacy })
+      });
+      const d = await r.json().catch(() => ({}));
+      document.getElementById('loadingOverlay').classList.remove('show');
+      if (r.ok && d.success) {
+        showToast('✅ Änderungen gespeichert');
+        setTimeout(() => { SMFlow.back('hub.html#meine'); }, 1000);
+      } else { b.disabled = false; showToast('⚠️ ' + (d.error || 'Nicht gespeichert')); }
+    } catch (err) {
+      document.getElementById('loadingOverlay').classList.remove('show');
+      b.disabled = false; showToast('⚠️ Server nicht erreichbar');
+    }
+    return;
+  }
 
   // Senden
   const btn = document.getElementById('saveBtn');
@@ -711,13 +738,54 @@ function showToast(msg) {
   setTimeout(() => el.classList.remove('show'), 2800);
 }
 
+// ── Änderungsmodus ────────────────────────────────────────────────────────────
+function selectPill(groupId, val) {
+  document.querySelectorAll(`#${groupId} .pill`).forEach(p => p.classList.toggle('selected', p.dataset.val === val));
+}
+async function loadForEdit() {
+  document.title = 'SpotMe · Platz Spot ändern';
+  document.querySelector('.map-card').style.display = 'none';
+  document.getElementById('saveBtn').textContent = '💾 Änderungen speichern';
+  document.querySelector('#loadingOverlay').lastChild.textContent = ' Änderungen werden gespeichert …';
+  const first = document.querySelector('.form-section .section-title');
+  if (first) first.insertAdjacentHTML('afterend', '<div class="pill-hint" style="margin-bottom:.6rem">✏️ Du änderst einen bestehenden Platz Spot. Der Standort bleibt, wie er ist.</div>');
+  if (navigator.onLine === false) { showToast('📴 Ändern geht nur online'); document.getElementById('saveBtn').disabled = true; return; }
+  try {
+    const r = await fetch(`${API}/userspots/${encodeURIComponent(CODE)}`);
+    const list = r.ok ? await r.json() : [];
+    const s = list.find(x => String(x.id) === String(EDIT_ID));
+    if (!s) { showToast('⚠️ Platz Spot nicht gefunden'); document.getElementById('saveBtn').disabled = true; return; }
+    document.getElementById('spotName').value = s.name || '';
+    if (s.area_type) document.getElementById('areaType').value = s.area_type;
+    document.getElementById('description').value = s.description || '';
+    // Wunsch-Tag: Chip wählen, bei Bedarf ergänzen
+    const wc = document.getElementById('wishChips');
+    let chip = [...wc.querySelectorAll('.wish-chip')].find(c => c.dataset.wish === s.wishTag);
+    if (!chip && s.wishTag) {
+      wc.insertAdjacentHTML('beforeend', `<div class="wish-chip" data-wish="${String(s.wishTag).replace(/"/g, '&quot;')}"></div>`);
+      chip = wc.lastElementChild; chip.textContent = s.wishTag;
+      chip.addEventListener('click', () => { wc.querySelectorAll('.wish-chip').forEach(c => c.classList.remove('selected')); chip.classList.add('selected'); document.getElementById('selectedWish').value = chip.dataset.wish; });
+    }
+    if (chip) chip.click();
+    selectPill('timeGroup', s.time_pref); selectPill('crowdGroup', s.crowd_level); selectPill('intimacyGroup', s.intimacy_level);
+    if (s.image) {
+      editHadPhoto = true;
+      document.getElementById('photoPreview').src = s.image;
+      document.getElementById('photoPreview').style.display = 'block';
+      document.getElementById('photoPlaceholder').style.display = 'none';
+      document.getElementById('photoRemoveBtn').style.display = 'none';   // Server behält das Foto, solange kein neues kommt
+    }
+  } catch (err) { showToast('⚠️ Konnte nicht geladen werden'); document.getElementById('saveBtn').disabled = true; }
+}
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   loadWishChips();
-  initMap();
+  if (!EDIT_ID) initMap();
   setupPillGroup('timeGroup');
   setupPillGroup('crowdGroup');
   setupPillGroup('intimacyGroup');
+  if (EDIT_ID) loadForEdit();
 });
 </script>
 </body>

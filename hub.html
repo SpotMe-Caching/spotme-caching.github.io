@@ -254,12 +254,13 @@ function mineItems() {
 }
 function panelMine() {
   const all = mineItems();
-  const cnt = { alle: all.length, platz: S.mine.length, woche: S.weekly.length, wartet: S.pending.length };
+  const cnt = { alle: all.length, platz: S.mine.length, woche: S.weekly.length, wartet: S.pending.length, pausiert: S.mine.filter(s => s.active === false).length };
+  if (spotFilter === 'pausiert' && !cnt.pausiert) spotFilter = 'alle';
   if (spotFilter === 'wartet' && !cnt.wartet) spotFilter = 'alle';
-  const chips = [['alle', 'Alle'], ['platz', '📍 Platz Spots'], ['woche', '🗓️ Wochen-Spots']].concat(cnt.wartet ? [['wartet', '⏳ Wartet']] : [])
+  const chips = [['alle', 'Alle'], ['platz', '📍 Platz Spots'], ['woche', '🗓️ Wochen-Spots']].concat(cnt.pausiert ? [['pausiert', '⏸️ Pausiert']] : []).concat(cnt.wartet ? [['wartet', '⏳ Wartet']] : [])
     .map(c => `<button class="chip ${spotFilter === c[0] ? 'on' : ''}" data-filter="${c[0]}">${c[1]} (${cnt[c[0]]})</button>`).join('');
   let h = `<h1>📍 Meine Spots</h1><div class="chips">${chips}</div><button class="btn primary" data-url="spot-erstellen.html">➕ Neuen Platz Spot erstellen</button>`;
-  const shown = all.filter(i => spotFilter === 'alle' || i.kind === spotFilter);
+  const shown = all.filter(i => spotFilter === 'alle' || i.kind === spotFilter || (spotFilter === 'pausiert' && i.kind === 'platz' && i.s.active === false));
   if (!shown.length) return h + '<div class="empty"><div class="i">📍</div>Hier ist noch nichts.</div>';
   return h + shown.map(i => {
     if (i.kind === 'wartet') {
@@ -267,8 +268,9 @@ function panelMine() {
       return `<div class="card"><div class="head"><div class="ico">⏳</div><div class="info"><div class="nm">${esc(p.name)}</div><div class="dt">${p.failed ? '<span class="pill bad">⚠️ Nicht gesendet</span> ' + esc(p.err || '') : '<span class="pill pending">⏳ Wartet auf Verbindung</span>'}</div></div></div><div class="acts"><button class="btn primary" data-retry="1">🔄 Jetzt senden</button><button class="btn danger" data-discard="${esc(p.cid)}">🗑️ Verwerfen</button></div></div>`;
     }
     if (i.kind === 'platz') {
-      const s = i.s;
-      return `<div class="card"><div class="head"><div class="ico">📍</div><div class="info"><div class="nm">${esc(s.name)}</div><div class="dt">${esc(s.wishTag || '')}${s.area_type ? ' · ' + esc(s.area_type) : ''}</div></div></div><div class="acts"><button class="btn primary" data-pg="${s.id}">📄 Öffnen</button><button class="btn" data-spot="${s.id}">🗺️ Karte</button></div></div>`;
+      const s = i.s, paused = s.active === false;
+      const img = s.image ? (s.image_status === 'pending' ? ' <span class="pill pending">🖼️ Foto wird geprüft</span>' : s.image_status === 'rejected' ? ' <span class="pill bad">🖼️ Foto abgelehnt</span>' : '') : '';
+      return `<div class="card" style="${paused ? 'opacity:.75' : ''}"><div class="head"><div class="ico">${paused ? '⏸️' : '📍'}</div><div class="info"><div class="nm">${esc(s.name)}</div><div class="dt">${esc(s.wishTag || '')}${s.area_type ? ' · ' + esc(s.area_type) : ''}</div><div class="dt">${paused ? '<span class="pill pending">⏸️ Pausiert – nicht auf der Karte</span>' : '<span class="pill ok">● Aktiv</span>'}${img}</div></div></div><div class="acts"><button class="btn primary" data-pg="${s.id}">📄 Öffnen</button><button class="btn" data-spot="${s.id}">🗺️ Karte</button></div><div class="acts"><button class="btn" data-edit="${s.id}">✏️ Ändern</button><button class="btn" data-toggle="${s.id}">${paused ? '▶️ Aktivieren' : '⏸️ Pausieren'}</button><button class="btn ghost danger" data-delspot="${s.id}" data-sname="${esc(s.name)}" aria-label="Löschen">🗑️</button></div></div>`;
     }
     const w = i.w;
     return `<div class="card"><div class="head"><div class="ico">🗓️</div><div class="info"><div class="nm">${esc(w.name)}</div><div class="dt">${w.category ? esc(w.category) + ' · ' : ''}<span class="mono">${leftText(w.expires_at)}</span> · 👥 ${w.checkin_count || 0} Check-in${w.checkin_count == 1 ? '' : 's'}</div></div></div><div class="acts"><button class="btn primary" data-share="${esc(w.token)}" data-sname="${esc(w.name)}">🔗 Teilen</button><button class="btn danger" data-delw="${esc(w.token)}">🗑️</button></div></div>`;
@@ -299,6 +301,9 @@ function bind(p) {
   p.querySelectorAll('[data-unfav]').forEach(b => b.onclick = () => unfav(b.dataset.unfav));
   p.querySelectorAll('[data-retry]').forEach(b => b.onclick = async () => { toast('🔄 Sende…'); const r = await SpotOutbox.retryNow(); if (!r.sent) toast(navigator.onLine === false ? '📴 Noch offline' : '⚠️ Senden nicht möglich'); });
   p.querySelectorAll('[data-discard]').forEach(b => b.onclick = async () => { await SpotOutbox.discard(b.dataset.discard); toast('🗑️ Verworfen'); await loadPending(); render(); });
+  p.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => go('spot-erstellen.html?edit=' + encodeURIComponent(b.dataset.edit)));
+  p.querySelectorAll('[data-toggle]').forEach(b => b.onclick = () => toggleSpot(b.dataset.toggle));
+  p.querySelectorAll('[data-delspot]').forEach(b => b.onclick = () => delSpot(b.dataset.delspot, b.dataset.sname));
   p.querySelectorAll('[data-share]').forEach(b => b.onclick = () => shareWeekly(b.dataset.share, b.dataset.sname));
   p.querySelectorAll('[data-delw]').forEach(b => b.onclick = () => delWeekly(b.dataset.delw));
 }
@@ -336,6 +341,22 @@ async function unfav(id) {
   try { await tfetch(API + '/favorites/' + id, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: CODE }) }, 10000); toast('✕ Favorit entfernt'); }
   catch (e) { toast(navigator.onLine === false ? '📴 Nur online möglich' : '⚠️ Fehler'); return; }
   await loadFavs(); render();
+}
+async function toggleSpot(id) {
+  try {
+    const r = await post('/userspots/' + id + '/toggle', 'PATCH', { code: CODE, token: TOK });
+    if (r.ok && r.d.success !== false) toast(r.d.active === false ? '⏸️ Pausiert – nicht mehr auf der Karte' : '▶️ Wieder aktiv');
+    else toast('⚠️ ' + (r.d.error || 'Fehler'));
+  } catch (e) { toast(navigator.onLine === false ? '📴 Nur online möglich' : '⚠️ Server nicht erreichbar'); return; }
+  await loadMine(); render();
+}
+async function delSpot(id, name) {
+  if (!confirm('Platz Spot „' + name + '“ wirklich löschen?\nDas kann nicht rückgängig gemacht werden.')) return;
+  try {
+    const r = await post('/userspots/' + id, 'DELETE', { code: CODE, token: TOK });
+    toast(r.ok ? '🗑️ Platz Spot gelöscht' : '⚠️ ' + (r.d.error || 'Nicht gelöscht'));
+  } catch (e) { toast(navigator.onLine === false ? '📴 Löschen geht nur online' : '⚠️ Server nicht erreichbar'); return; }
+  await loadMine(); render();
 }
 async function shareWeekly(token, name) {
   const url = new URL('spot-woche.html?token=' + token, location.href).href;

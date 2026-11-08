@@ -815,7 +815,7 @@ async function deleteSpot(id) {
   try {
     await fetch(`${API_BASE}/userspots/${id}`, {
       method: 'DELETE', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ code })
+      body: JSON.stringify({ code, token: localStorage.getItem('sm_token') })
     });
   } catch {}
   toast('🗑️ Platz Spot gelöscht');
