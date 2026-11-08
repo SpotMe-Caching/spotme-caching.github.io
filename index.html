@@ -39,6 +39,9 @@
   <script src="chat-core.js"></script>
   <script src="spot-outbox.js"></script>
   <style>
+    .dock-btn.nearby{flex-direction:row;justify-content:center;gap:.55rem;padding:.95rem .8rem;font-size:1rem;font-weight:700;border-color:var(--acc-glow,rgba(255,159,0,.5));background:var(--acc-dim,rgba(255,159,0,.12));color:var(--acc,#f59e0b)}
+    .dock-btn.nearby .di{font-size:1.25rem}
+    .nav-btn.rail-hidden{display:none!important}
     .my-spot-marker.pending{opacity:.6;outline:2px dashed var(--orange,#f90);outline-offset:3px;border-radius:50%}
     .my-spot-marker.pending.failed{outline-color:#e55}
     #spotSyncBar{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 58px);z-index:900;
@@ -92,11 +95,12 @@
 
     <button class="nav-btn" id="hubBtn" onclick="SMFlow.go('hub.html')" title="Mein SpotMe">
       <i data-lucide="layout-dashboard" class="nav-icon"></i>
+      <span class="badge" id="hubBadge" style="display:none">0</span>
     </button>
     <button class="nav-btn" onclick="SMFlow.go('profil-caching.html')" title="Profil">
       <i data-lucide="user" class="nav-icon"></i>
     </button>
-    <button class="nav-btn" id="inviteHeaderBtn" onclick="openDrawer('invites')" title="Einladungen">
+    <button class="nav-btn rail-hidden" id="inviteHeaderBtn" onclick="openDrawer('invites')" title="Einladungen">
       <i data-lucide="mail" class="nav-icon"></i>
       <span class="badge" id="inviteBadge" style="display:none">0</span>
     </button>
@@ -104,15 +108,15 @@
       <i data-lucide="calendar" class="nav-icon"></i>
       <span class="badge" id="meetingsBadge" style="display:none;background:var(--green);color:#080b10;">0</span>
     </button>
-    <button class="nav-btn" id="chatHeaderBtn" onclick="openDrawer('chats')" title="Chat">
+    <button class="nav-btn rail-hidden" id="chatHeaderBtn" onclick="openDrawer('chats')" title="Chat">
       <i data-lucide="message-circle" class="nav-icon"></i>
       <span class="badge" id="chatBadge" style="display:none">0</span>
     </button>
-    <button class="nav-btn" onclick="openDrawer('favorites')" title="Favoriten">
+    <button class="nav-btn rail-hidden" onclick="openDrawer('favorites')" title="Favoriten">
       <i data-lucide="star" class="nav-icon"></i>
       <span class="badge" id="favBadge" style="display:none">0</span>
     </button>
-    <button class="nav-btn" id="weeklyBtn" onclick="openDrawer('weekly')" title="Wochen-Spots">
+    <button class="nav-btn rail-hidden" id="weeklyBtn" onclick="openDrawer('weekly')" title="Wochen-Spots">
       <i data-lucide="calendar-days" class="nav-icon"></i>
       <span class="badge" id="weeklyBadge" style="display:none;background:var(--cyan);color:#080b10;">0</span>
     </button>
@@ -160,9 +164,7 @@
 </div>
 
 <div class="dock">
-  <button class="dock-btn" onclick="openDrawer('myspots')"><span class="di">🟠</span>Meine Platz Spots</button>
-  <button class="dock-btn" onclick="openDrawer('all')"><span class="di">🌐</span>Alle Platz Spots</button>
-  <button class="dock-btn" id="newSpotsBtn" onclick="openNewSpots()"><span class="di">✨</span>Neue Platz Spots</button>
+  <button class="dock-btn nearby" id="nearbyBtn" onclick="openNearby()"><span class="di">📍</span>Spots in der Umgebung</button>
 </div>
 
 <!-- ── Help Page Overlay (iframe, 80% Screen, scrollable) ──────────────── -->
@@ -440,6 +442,7 @@ let invitePollInterval = null, knownInviteCount = 0;
 let toastTimer, currentDrawer = null;
 let activeRadius = null, detailSpot = null, detailMiniMap = null;
 let radiusCatFilter = null;
+let nearbyMode = false, nearbyCtx = null, pendingNearbyCtx = null;
 let weeklyMiniMap = null, weeklyMarker = null, weeklyCoords = null;
 let urlSpotChecked = false; // Verhindert mehrfaches Fliegen zum Platz Spot beim Laden
 
@@ -2843,6 +2846,7 @@ async function openSpotDetail(spotId) {
   if (!spot) { toast('⚠️ Nicht gefunden'); return; }
 
   detailSpot = spot;
+  nearbyCtx = pendingNearbyCtx; pendingNearbyCtx = null;
 
   document.getElementById('spotDetailContent').innerHTML =
     `<div class="empty-state"><div class="es-icon">⏳</div>Lädt…</div>`;
@@ -3138,7 +3142,8 @@ function openRadiusSearch() {
   document.getElementById('radiusModal').classList.add('show');
 }
 
-function selectRadius(km) {
+function selectRadius(km, isNearby) {
+  nearbyMode = !!isNearby;
   if (!userPos) { toast('❌ Kein Standort'); return; }
   document.querySelectorAll('.radius-choice').forEach(b=>b.classList.remove('selected'));
   document.getElementById(`rc${km}`)?.classList.add('selected');
@@ -3193,13 +3198,13 @@ async function openDrawerFiltered(spots, km) {
   document.getElementById('drawer').classList.add('open');
 
   const catSuffix = radiusCatFilter ? ` · ${CATEGORY_EMOJI[radiusCatFilter]||'📌'} ${radiusCatFilter}` : '';
-  document.getElementById('drawerTitle').textContent = `RADIUS ${km} KM${catSuffix}`;
+  document.getElementById('drawerTitle').textContent = nearbyMode ? `📍 SPOTS IN DER UMGEBUNG · ${km} KM` : `RADIUS ${km} KM${catSuffix}`;
   currentDrawer = 'radius';
   const body = document.getElementById('drawerBody');
 
   if (!spots.length) {
     const catNote = radiusCatFilter ? ` in der Kategorie „${radiusCatFilter}"` : '';
-    body.innerHTML = `<div class="empty-state"><div class="es-icon">🔍</div>Keine Platz Spots${catNote} innerhalb ${km} km.</div>`;
+    body.innerHTML = `<div class="empty-state"><div class="es-icon">🔍</div>Keine Platz Spots${catNote} innerhalb ${km} km.${nearbyMode ? '<br><span style="font-size:0.78rem;">Weiter weg suchen: oben das Radius-Symbol (5 / 10 km).</span>' : ''}</div>`;
     return;
   }
 
@@ -3230,7 +3235,7 @@ async function openDrawerFiltered(spots, km) {
   body.querySelectorAll('[data-det]').forEach(b =>
     b.addEventListener('click', () => {
       const s = allSpots.find(x => x.id == b.dataset.det);
-      if (s) { closeDrawer(); setTimeout(() => openSpotDetail(s.id), 300); }
+      if (s) { pendingNearbyCtx = { spots, km, nearby: nearbyMode }; closeDrawer(); setTimeout(() => openSpotDetail(s.id), 300); }
     }));
 
   try {
@@ -3904,7 +3909,14 @@ document.getElementById('spotPhotoClear').addEventListener('click', () => {
 });
 document.getElementById('inviteModalCancel').addEventListener('click', closeModals);
 document.getElementById('inviteModalSend').addEventListener('click', sendInvite);
-document.getElementById('spotDetailClose').addEventListener('click', closeModals);
+document.getElementById('spotDetailClose').addEventListener('click', () => {
+  closeModals();
+  // Aus der Umkreis-Liste geöffnet → zurück zur Liste (Flow: Liste → Spot → Liste)
+  if (nearbyCtx) {
+    const c = nearbyCtx; nearbyCtx = null;
+    setTimeout(() => { nearbyMode = !!c.nearby; openDrawerFiltered(c.spots, c.km); }, 250);
+  }
+});
 
 document.getElementById('profileModalClose').addEventListener('click', closeModals);
 document.getElementById('radiusClear').addEventListener('click', ()=>{clearRadius();closeModals();});
@@ -3922,6 +3934,65 @@ loadWeeklyBadge();
 updatePushBtnState();
 if (typeof lucide !== 'undefined') lucide.createIcons();
 initHelpSystem();
+// ── SPOTS IN DER UMGEBUNG (großer Button, fest 2 km) ─────────────────────────
+function hasProfile() { return CODE !== '000000' && !!localStorage.getItem('sm_token'); }
+
+async function openNearby() {
+  // Ohne Profil → Gast-Einstieg (Standort bestätigen, Name wählen)
+  if (!hasProfile()) { SMFlow.go('willkommen.html'); return; }
+  if (!userPos) {
+    toast('📍 Standort wird gesucht …');
+    try {
+      await new Promise((res, rej) => {
+        if (!navigator.geolocation) return rej(new Error('geo'));
+        navigator.geolocation.getCurrentPosition(
+          p => { userPos = { lat: p.coords.latitude, lng: p.coords.longitude }; res(); },
+          rej, { timeout: 9000, maximumAge: 600000 });
+      });
+    } catch { toast('❌ Kein Standort – bitte Standortzugriff erlauben'); return; }
+  }
+  radiusCatFilter = null;
+  closeDrawer();
+  selectRadius(2, true);
+}
+
+// Hub-Button: Summe aus neuen Einladungen + ungelesenen Chats (die einzelnen Rail-Buttons sind ausgeblendet)
+function syncHubBadge() {
+  let n = 0;
+  ['inviteBadge', 'chatBadge'].forEach(id => {
+    const e = document.getElementById(id);
+    if (e && e.style.display !== 'none') n += parseInt(e.textContent, 10) || 0;
+  });
+  const b = document.getElementById('hubBadge');
+  if (b) { b.textContent = n > 99 ? '99+' : String(n); b.style.display = n > 0 ? '' : 'none'; }
+}
+setTimeout(syncHubBadge, 1500);
+setInterval(syncHubBadge, 2500);
+
+// Besuch melden: hält Gast-Profile am Leben (einmal pro Sitzung)
+(function visitPing() {
+  try {
+    const tok = localStorage.getItem('sm_token');
+    if (!hasProfile() || sessionStorage.getItem('sm_visit_sent')) return;
+    fetch(`${API}/profile/visit`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: CODE, token: tok }) })
+      .then(r => { if (r.ok) sessionStorage.setItem('sm_visit_sent', '1'); }).catch(() => {});
+  } catch {}
+})();
+
+// Nach dem Gast-Einstieg direkt die Spots in der Umgebung zeigen
+(function autoNearby() {
+  let want = false;
+  try { want = sessionStorage.getItem('sm_open_nearby') === '1'; sessionStorage.removeItem('sm_open_nearby'); } catch {}
+  if (!want) return;
+  let tries = 0;
+  const iv = setInterval(() => {
+    tries++;
+    const ready = userPos && Array.isArray(allSpots) && allSpots.length;
+    if (ready || tries > 40) { clearInterval(iv); openNearby(); }
+  }, 500);
+})();
+
 updateLastLocation();       // Standort für 10km Push-Filter aktualisieren
 renderLiveSpotMarkers();    // Live Spots auf der Karte anzeigen
 

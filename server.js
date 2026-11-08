@@ -413,6 +413,9 @@ async function initDB() {
     await pool.query(
       `ALTER TABLE offline_messages ADD COLUMN IF NOT EXISTS spot_type TEXT`,
     );
+    // Gast-Profile (schneller Einstieg): guest=true bis ein vollständiges Profil gespeichert wird
+    await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS guest BOOLEAN DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_visit BIGINT`);
     await pool.query(
       `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS looking_for TEXT`,
     );
@@ -732,6 +735,14 @@ setInterval(async () => {
       console.error("Cleanup offline_messages:", e.message);
     }
 
+    // ── Gast-Profile ohne Aktivität (7 Tage) ──────────────────────────────
+    try {
+      const n = await cleanupGuestProfiles(now);
+      if (n > 0) console.log(`🧹 ${n} inaktive Gast-Profile gelöscht`);
+    } catch (e) {
+      console.error("Cleanup Gast-Profile:", e.message);
+    }
+
     // ── Inaktive Profile löschen ──────────────────────────────────────────
     const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
     try {
@@ -819,7 +830,9 @@ app.post("/api/profile", async (req, res) => {
     avatar, // ← NEU: optional Base64‑Avatar
     token,
     spot = "gay",
+    guest,
   } = req.body;
+  const isGuest = guest === true;
 
   if (!code || !name || !region) {
     return res.status(400).json({ error: "Pflichtfelder: code, name, region" });
@@ -872,7 +885,7 @@ app.post("/api/profile", async (req, res) => {
           wish_tags=$15, offer_tags=$16,
           avatar        = COALESCE($21, avatar),
           avatar_status = CASE WHEN $21 IS NOT NULL THEN 'pending' ELSE avatar_status END,
-          updated_at=$17, visible_until=$18
+          updated_at=$17, visible_until=$18, guest=$22
          WHERE code=$19 AND spot=$20`,
         [
           encrypt(name),
@@ -896,6 +909,7 @@ app.post("/api/profile", async (req, res) => {
           code,
           spot,
           avatar || null, // $21
+          isGuest, // $22 – ein gespeichertes Vollprofil ist kein Gast mehr
         ],
       );
     } else {
@@ -908,8 +922,8 @@ app.post("/api/profile", async (req, res) => {
            help_mode, help_category, category, bio,
            wish_tags, offer_tags,
            avatar, avatar_status,
-           token, updated_at, visible_until)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
+           token, updated_at, visible_until, guest, last_visit)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$22)`,
         [
           code,
           spot,
@@ -934,6 +948,7 @@ app.post("/api/profile", async (req, res) => {
           profileToken,
           now,
           visibleUntil,
+          isGuest,
         ],
       );
     }
@@ -1241,6 +1256,41 @@ app.get("/api/location/:code", (req, res) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // HEARTBEAT & ONLINE-STATUS
 // ══════════════════════════════════════════════════════════════════════════════
+
+// ── Gast-Profile: nach 7 Tagen ohne jede Aktivität löschen ("Leichen" vermeiden) ──
+// Gast = Profil, das über den Schnell-Einstieg angelegt wurde und nie als Vollprofil gespeichert wurde.
+// Aktivität = erneuter Besuch (last_visit), eigener Spot, Favorit, Einladung oder Chat-Nachricht.
+// Sobald etwas davon existiert, gilt wieder die normale 30-Tage-Regel.
+const GUEST_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+async function cleanupGuestProfiles(now) {
+  const cutoff = (now || Date.now()) - GUEST_TTL_MS;
+  const r = await pool.query(
+    `DELETE FROM profiles p
+      WHERE p.guest = TRUE
+        AND p.updated_at < $1
+        AND COALESCE(p.last_visit, 0) < $1
+        AND NOT EXISTS (SELECT 1 FROM user_spots u WHERE u.code = p.code)
+        AND NOT EXISTS (SELECT 1 FROM spot_favorites f WHERE f.code = p.code)
+        AND NOT EXISTS (SELECT 1 FROM spot_cache_invites i WHERE i.from_code = p.code OR i.to_code = p.code)
+        AND NOT EXISTS (SELECT 1 FROM offline_messages m WHERE m.sender_code = p.code)`,
+    [cutoff],
+  );
+  return r.rowCount;
+}
+
+// Besuch melden (Token nötig) – hält Gast-Profile am Leben
+app.post("/api/profile/visit", async (req, res) => {
+  const { code, token } = req.body || {};
+  if (!code || !token) return res.status(400).json({ error: "code und token erforderlich" });
+  try {
+    if (!(await authCheck(String(code), String(token))))
+      return res.status(403).json({ error: "Ungültiger Token" });
+    await pool.query("UPDATE profiles SET last_visit = $1 WHERE code = $2", [Date.now(), String(code)]);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: "Datenbankfehler" });
+  }
+});
 
 app.post("/api/heartbeat", async (req, res) => {
   const { code, spot = "gay" } = req.body;
