@@ -32,6 +32,15 @@ h1{font-size:1.15rem;font-weight:700}
 .nm{font-weight:600;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dt{font-size:.74rem;color:var(--muted2);line-height:1.45;margin-top:2px}
 .mono{font-family:'Space Mono',monospace}
+.wx{background:var(--bg);border:1px solid var(--bord);border-radius:12px;padding:.5rem .6rem;font-size:.74rem;color:var(--muted2)}
+.wx .now{display:flex;align-items:center;gap:.5rem;font-size:.82rem;color:var(--text)}
+.wx .now b{font-size:1.05rem}
+.wx .strip{display:flex;gap:4px;margin-top:.45rem;overflow-x:auto}
+.wx .h{flex:1 0 46px;text-align:center;border:1px solid var(--bord);border-radius:10px;padding:.3rem 0}
+.wx .h.me{border-color:var(--acc);background:rgba(245,158,11,.12)}
+.wx .h .t{font-family:'Space Mono',monospace;font-size:.62rem}
+.wx .h .e{font-size:1rem;line-height:1.3}
+.wx .h .r{font-size:.6rem;color:#22d3ee;min-height:.8rem}
 .pill{display:inline-block;font-size:.66rem;padding:2px 8px;border-radius:99px;border:1px solid var(--bord2);font-family:'Space Mono',monospace}
 .pill.pending{color:var(--warn,#f5a623);border-color:currentColor}
 .pill.ok{color:var(--green);border-color:currentColor}
@@ -199,6 +208,62 @@ function panelOverview() {
   return h;
 }
 
+/* ── Wetter zum Treffen (Open-Meteo, Ort + Uhrzeit des Treffens) ───────────── */
+function wxEmoji(c) { return c === 0 ? '☀️' : c <= 2 ? '🌤️' : c === 3 ? '☁️' : c <= 48 ? '🌫️' : c <= 55 ? '🌦️' : c <= 65 ? '🌧️' : c <= 77 ? '❄️' : c <= 82 ? '🌦️' : c <= 86 ? '🌨️' : c <= 99 ? '⛈️' : '🌡️'; }
+function wxDesc(c) { return c === 0 ? 'Klarer Himmel' : c <= 2 ? 'Überwiegend klar' : c === 3 ? 'Bedeckt' : c <= 48 ? 'Neblig' : c <= 55 ? 'Nieselregen' : c <= 65 ? 'Regen' : c <= 77 ? 'Schneefall' : c <= 82 ? 'Regenschauer' : c <= 86 ? 'Schneeschauer' : c <= 99 ? 'Gewitter' : 'Unbekannt'; }
+const WX_MEM = new Map(), WX_TTL = 10 * 60 * 1000, WX_KEEP = 12 * 3600 * 1000;
+function wxKey(lat, lng) { return 'sm_wx_' + lat.toFixed(2) + '_' + lng.toFixed(2); }
+const WX_FLY = new Map();
+function fetchWx(lat, lng) {   // gleiche Anfragen (mehrere Karten, gleicher Ort) teilen sich einen Abruf
+  const k = wxKey(lat, lng), m = WX_MEM.get(k);
+  if (m && Date.now() - m.ts < WX_TTL) return Promise.resolve(m);
+  if (!WX_FLY.has(k)) WX_FLY.set(k, fetchWxNet(lat, lng).finally(() => WX_FLY.delete(k)));
+  return WX_FLY.get(k);
+}
+async function fetchWxNet(lat, lng) {
+  const k = wxKey(lat, lng), now = Date.now();
+  try {
+    const r = await tfetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lng +
+      '&hourly=temperature_2m,weather_code,precipitation_probability,wind_speed_10m&wind_speed_unit=kmh&timezone=auto&forecast_days=7', {}, 7000);
+    if (!r.ok) throw new Error('http');
+    const j = await r.json();
+    const d = { ts: now, off: j.utc_offset_seconds || 0, h: j.hourly };
+    WX_MEM.set(k, d);
+    try { localStorage.setItem(k, JSON.stringify(d)); } catch (e) {}
+    return d;
+  } catch (e) {   // offline: letzter Stand (max. 12 h alt)
+    try { const d = JSON.parse(localStorage.getItem(k) || 'null'); if (d && d.h && now - d.ts < WX_KEEP) { d.old = true; return d; } } catch (e2) {}
+    return null;
+  }
+}
+function wxSlot(inv, past) {
+  const lat = parseFloat(inv.lat), lng = parseFloat(inv.lng), ts = Number(inv.time_start || 0), te = Number(inv.time_end || 0);
+  if (past || isNaN(lat) || isNaN(lng) || !ts || te < Date.now() || (inv.status !== 'accepted' && inv.status !== 'pending')) return '';
+  return '<div class="wx" data-wx data-lat="' + lat + '" data-lng="' + lng + '" data-ts="' + ts + '">⏳ Wetter …</div>';
+}
+async function hydrateWx(root) {
+  const els = [...root.querySelectorAll('[data-wx]')];
+  await Promise.all(els.map(async el => {
+    const lat = +el.dataset.lat, lng = +el.dataset.lng, ts = +el.dataset.ts;
+    const w = await fetchWx(lat, lng);
+    if (!el.isConnected) return;
+    if (!w) { el.style.display = 'none'; return; }
+    // Stunden-Zeiten der API sind Ortszeit → Treffen-Zeit auf Ortszeit umrechnen
+    const iso = new Date(ts + w.off * 1000).toISOString().slice(0, 13);
+    const i = w.h.time.findIndex(t => t.startsWith(iso));
+    if (i < 0) { el.innerHTML = '🌦️ Vorhersage erst ab 7 Tage vor dem Treffen'; return; }
+    const from = Math.max(0, i - 2), to = Math.min(w.h.time.length, i + 6);
+    let strip = '';
+    for (let j = from; j < to; j++) {
+      const rain = w.h.precipitation_probability[j] || 0;
+      strip += '<div class="h' + (j === i ? ' me' : '') + '"><div class="t">' + (j === i ? '📍' : w.h.time[j].slice(11, 16)) + '</div><div class="e">' + wxEmoji(w.h.weather_code[j]) + '</div><div class="t">' + Math.round(w.h.temperature_2m[j]) + '°</div><div class="r">' + (rain ? rain + '%' : '') + '</div></div>';
+    }
+    const c = w.h.weather_code[i], rp = w.h.precipitation_probability[i] || 0;
+    el.innerHTML = '<div class="now"><span style="font-size:1.5rem">' + wxEmoji(c) + '</span><b>' + Math.round(w.h.temperature_2m[i]) + '°C</b><span>' + wxDesc(c) + '</span><span style="margin-left:auto">💨 ' + Math.round(w.h.wind_speed_10m[i]) + ' km/h' + (rp ? ' · 🌧️ ' + rp + '%' : '') + '</span></div><div class="strip">' + strip + '</div>' +
+      (w.old ? '<div style="margin-top:.35rem;font-size:.62rem">📴 Stand ' + new Date(w.ts).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' – offline</div>' : '');
+  }));
+}
+
 function inviteCard(inv, past) {
   const now = Date.now(), isSender = inv.from_code === CODE, ts = Number(inv.time_start || 0), te = Number(inv.time_end || 0);
   const other = isSender ? (inv.to_name || inv.to_code) : (inv.from_name || inv.from_code);
@@ -214,7 +279,7 @@ function inviteCard(inv, past) {
     acts = `<div class="acts"><button class="btn primary" data-acc="${inv.id}">✅ Akzeptieren</button><button class="btn danger" data-dec="${inv.id}">Ablehnen</button></div>`;
   if (!past && inv.status === 'accepted')
     acts = `<div class="acts"><button class="btn" data-spot="${inv.spot_id || ''}">🧭 Zum Spot</button><button class="btn primary" data-ci="${inv.id}">📍 Check-in</button><button class="btn ghost" data-chat="${esc(otherCode)}" data-name="${esc(other)}">💬</button><button class="btn ghost danger" data-cancel="${inv.id}">🚫</button></div>`;
-  return `<div class="card" style="${past ? 'opacity:.55' : ''}"><div class="head"><div class="ico">${isSender ? '📤' : '📨'}</div><div class="info"><div class="nm">${esc(inv.spot_name || 'Platz Spot')}</div><div class="dt">${st} ${ts > now && !past ? '<span class="mono">⏰ ' + countdown(ts) + '</span>' : ''}</div><div class="dt mono">${fmt(ts)} – ${fmt(te)}</div><div class="dt">${isSender ? '📤 An' : '📨 Von'}: <b>${esc(other)}</b></div></div></div>${acts}</div>`;
+  return `<div class="card" style="${past ? 'opacity:.55' : ''}"><div class="head"><div class="ico">${isSender ? '📤' : '📨'}</div><div class="info"><div class="nm">${esc(inv.spot_name || 'Platz Spot')}</div><div class="dt">${st} ${ts > now && !past ? '<span class="mono">⏰ ' + countdown(ts) + '</span>' : ''}</div><div class="dt mono">${fmt(ts)} – ${fmt(te)}</div><div class="dt">${isSender ? '📤 An' : '📨 Von'}: <b>${esc(other)}</b></div></div></div>${wxSlot(inv, past)}${acts}</div>`;
 }
 function panelInvites() {
   const act = activeInvites(), past = pastInvites();
@@ -281,8 +346,10 @@ function panelMine() {
 function render() {
   renderTabs(); staleBar();
   const p = $('panel');
+  const wasTab = tab;
   p.innerHTML = tab === 'einladungen' ? panelInvites() : tab === 'chats' ? panelChats() : tab === 'favoriten' ? panelFavs() : tab === 'meine' ? panelMine() : panelOverview();
   bind(p);
+  if (wasTab === 'einladungen') hydrateWx(p);
 }
 
 /* ── Aktionen ──────────────────────────────────────────── */

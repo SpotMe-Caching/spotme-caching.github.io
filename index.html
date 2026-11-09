@@ -288,6 +288,11 @@
     <div class="modal-handle"></div>
     <div id="spotDetailMap"></div>
     <div id="spotDetailContent"><div class="empty-state"><div class="es-icon">⏳</div>Lädt…</div></div>
+     <div id="spotNav" style="display:none;align-items:center;gap:0.5rem;margin-top:0.9rem;">
+       <button class="btn-ghost" style="flex:1;" id="spotPrev">‹ Vorheriger</button>
+       <span id="spotNavCount" style="font-family:var(--mono,monospace);font-size:0.8rem;color:var(--muted);white-space:nowrap;">1 / 1</span>
+       <button class="btn-ghost" style="flex:1;" id="spotNext">Nächster ›</button>
+     </div>
      <div style="display:flex;gap:0.5rem;margin-top:1rem;">
        <button class="btn-ghost" style="flex:1;" id="spotDetailClose">Schließen</button>
        <button id="spotFavoriteBtn" title="Als Favorit speichern">⭐</button>
@@ -2850,6 +2855,7 @@ async function openSpotDetail(spotId) {
 
   detailSpot = spot;
   nearbyCtx = pendingNearbyCtx; pendingNearbyCtx = null;
+  updateSpotNav(spotId);
 
   document.getElementById('spotDetailContent').innerHTML =
     `<div class="empty-state"><div class="es-icon">⏳</div>Lädt…</div>`;
@@ -3254,7 +3260,7 @@ async function openDrawerFiltered(allList, km) {
   body.querySelectorAll('[data-det]').forEach(b =>
     b.addEventListener('click', () => {
       const s = allSpots.find(x => x.id == b.dataset.det);
-      if (s) { pendingNearbyCtx = { spots: allList, km, nearby: nearbyMode }; closeDrawer(); setTimeout(() => openSpotDetail(s.id), 300); }
+      if (s) { pendingNearbyCtx = { spots: allList, km, nearby: nearbyMode, seq: spots.map(x => x.id) }; closeDrawer(); setTimeout(() => openSpotDetail(s.id), 300); }
     }));
 
   try {
@@ -3279,6 +3285,40 @@ async function openDrawerFiltered(allList, km) {
     });
   }
 }
+
+// ── Durchblättern in der Umkreis-Liste (Vorheriger / Nächster / Wischen) ─────
+function updateSpotNav(spotId) {
+  const nav = document.getElementById('spotNav');
+  if (!nav) return;
+  const seq = nearbyCtx && nearbyCtx.seq;
+  const i = seq ? seq.indexOf(spotId) : -1;
+  if (i < 0 || seq.length < 2) { nav.style.display = 'none'; return; }
+  nav.style.display = 'flex';
+  document.getElementById('spotNavCount').textContent = `${i + 1} / ${seq.length}`;
+  const prev = document.getElementById('spotPrev'), next = document.getElementById('spotNext');
+  prev.disabled = i === 0; next.disabled = i === seq.length - 1;
+  prev.style.opacity = prev.disabled ? '0.35' : '1'; next.style.opacity = next.disabled ? '0.35' : '1';
+}
+function stepSpot(delta) {
+  if (!nearbyCtx || !nearbyCtx.seq || !detailSpot) return;
+  const seq = nearbyCtx.seq, j = seq.indexOf(detailSpot.id) + delta;
+  if (j < 0 || j >= seq.length) return;
+  pendingNearbyCtx = nearbyCtx;
+  const m = document.querySelector('#spotDetailModal .modal'); if (m) m.scrollTop = 0;
+  openSpotDetail(seq[j]);
+}
+document.getElementById('spotPrev').addEventListener('click', () => stepSpot(-1));
+document.getElementById('spotNext').addEventListener('click', () => stepSpot(1));
+(function swipeSpots() {
+  const el = document.getElementById('spotDetailModal');
+  let x0 = 0, y0 = 0, t0 = 0;
+  el.addEventListener('touchstart', e => { const t = e.changedTouches[0]; x0 = t.clientX; y0 = t.clientY; t0 = Date.now(); }, { passive: true });
+  el.addEventListener('touchend', e => {
+    if (!nearbyCtx || !nearbyCtx.seq) return;
+    const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0;
+    if (Math.abs(dx) > 70 && Math.abs(dy) < 45 && Date.now() - t0 < 600) stepSpot(dx < 0 ? 1 : -1);
+  }, { passive: true });
+})();
 
 function bindNearbyChips(body, allList, km) {
   body.querySelectorAll('[data-nbf]').forEach(b => b.addEventListener('click', () => {
