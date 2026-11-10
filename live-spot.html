@@ -323,19 +323,35 @@ function initMap(lat, lng, approxR) {
 
 async function loadSpot(id) {
   const content = document.getElementById('content');
-  let spot;
+  let spot, offlineTs = 0;
+  const KEY = 'sm_ls_' + id;
+  let cached = null;
+  try { cached = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch {}
+  let notFound = false;
   try {
-    const r = await fetch(`${API}/live-spots/${id}` + (CODE ? `?code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(TOK)}` : ''));
-    if (!r.ok) throw new Error('not_found');
+    // Offline und Spot schon einmal gesehen: gar nicht erst warten
+    if (cached && cached.spot && navigator.onLine === false) throw new Error('offline');
+    const ctl = new AbortController();
+    const tm = cached ? setTimeout(() => ctl.abort(), 8000) : null;
+    let r;
+    try { r = await fetch(`${API}/live-spots/${id}` + (CODE ? `?code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(TOK)}` : ''), { signal: ctl.signal }); }
+    finally { if (tm) clearTimeout(tm); }
+    if (r.status === 404 || r.status === 410) { notFound = true; throw new Error('not_found'); }
+    if (!r.ok) throw new Error('server');
     spot = await r.json();
+    try { localStorage.setItem(KEY, JSON.stringify({ spot, ts: Date.now() })); } catch {}
   } catch {
-    content.innerHTML = `<div class="loading"><div class="loading-icon">🔍</div>Live Spot nicht gefunden.<br><a href="/" style="color:var(--acc);margin-top:1rem;display:block;">← Zur App</a></div>`;
-    return;
+    if (notFound) { try { localStorage.removeItem(KEY); } catch {} }
+    else if (cached && cached.spot) { spot = cached.spot; offlineTs = cached.ts || 1; }
+    if (!spot) {
+      content.innerHTML = `<div class="loading"><div class="loading-icon">🔍</div>${notFound ? 'Live Spot nicht gefunden.' : 'Live Spot kann gerade nicht geladen werden.<br>Bitte Verbindung prüfen.'}<br><a href="/" style="color:var(--acc);margin-top:1rem;display:block;">← Zur App</a></div>`;
+      return;
+    }
   }
 
   const hidden = !!spot.location_hidden;
   const ln = document.getElementById('locNotice'); if (ln) ln.style.display = hidden ? 'block' : 'none';
-  if (spot.lat && spot.lng) initMap(+spot.lat, +spot.lng, hidden ? (spot.approx_radius_m || 500) : 0);
+  if (spot.lat && spot.lng) { try { initMap(+spot.lat, +spot.lng, hidden ? (spot.approx_radius_m || 500) : 0); } catch {} }
   // Verborgener Spot: Ansicht NICHT merken, sonst springt die Übersicht beim Zurückkehren genau auf den Bereich
   try { if (!hidden && isFinite(+spot.lat) && isFinite(+spot.lng) && spot.lat != null) sessionStorage.setItem('sm_map_view', JSON.stringify({ lat: +spot.lat, lng: +spot.lng, zoom: 16, ts: Date.now() })); } catch {}
 
@@ -366,7 +382,9 @@ async function loadSpot(id) {
     return `vor ${Math.floor(m/1440)} Tagen`;
   };
 
+  const offNote = offlineTs ? `<div style="font-size:0.74rem;color:var(--muted2);background:var(--card,rgba(255,255,255,.05));border:1px dashed var(--muted2);border-radius:10px;padding:0.5rem 0.7rem;">📴 Offline – gespeicherter Stand von ${new Date(offlineTs).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>` : '';
   content.innerHTML = `
+    ${offNote}
     <div class="profile-head">
       <div class="avatar" ${spot.avatar ? `onclick="openImg('${spot.avatar}')" style="cursor:zoom-in;"` : ''}>${spot.avatar?`<img src="${spot.avatar}" alt="">`:`${catIcon}`}</div>
       <div class="profile-info">
