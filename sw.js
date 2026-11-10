@@ -5,7 +5,7 @@
 // Der Browser erkennt den neuen SW, löscht den alten Cache
 // und installiert die neuen Dateien automatisch.
 // ════════════════════════════════════════════════════════════
-const CACHE_VERSION = "v399.9"; // Erhöht für SW-Update
+const CACHE_VERSION = "v399.10"; // Erhöht für SW-Update
 const CACHE_STATIC = `spotme-caching-${CACHE_VERSION}`;
 const CACHE_API = `spotme-api-${CACHE_VERSION}`;
 // Karten-Cache: FESTER Name – überlebt Updates (kein Versions-Suffix!).
@@ -29,6 +29,15 @@ const STATIC_ASSETS = [
   "/spot-outbox.js",
   "/benachrichtigungen.html",
   "/spotme.css",
+  "/fonts.css",
+  "/fonts/outfit-latin.woff2",
+  "/fonts/outfit-latin-ext.woff2",
+  "/fonts/space-mono-latin-400.woff2",
+  "/fonts/space-mono-latin-700.woff2",
+  "/fonts/space-mono-latin-ext-400.woff2",
+  "/fonts/space-mono-latin-ext-700.woff2",
+  "/fonts/space-mono-latin-400-italic.woff2",
+  "/fonts/space-mono-latin-ext-400-italic.woff2",
   "/theme-vars.css",
   "/help/help.css",
   "/spot-woche.html",
@@ -216,24 +225,6 @@ self.addEventListener("fetch", (event) => {
 
   // Nur GET-Requests cachen — POST/PUT/DELETE immer ans Netz.
   if (request.method !== "GET") return;
-
-  // Google Fonts: einmal geladen, danach offline verfügbar (Cache zuerst, im Hintergrund auffrischen)
-  if (url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com") {
-    event.respondWith(
-      caches.open(CACHE_STATIC).then(async (cache) => {
-        const cached = await cache.match(request);
-        const net = fetch(request)
-          .then((res) => {
-            if (res && (res.ok || res.type === "opaque")) cache.put(request, res.clone());
-            return res;
-          })
-          .catch(() => null);
-        if (cached) { net.catch(() => {}); return cached; }
-        return (await net) || Response.error();
-      }),
-    );
-    return;
-  }
 
   // Externe Domains, die wir nicht cachen wollen.
   if (

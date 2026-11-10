@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>SpotMe · Community</title>
+<meta name="theme-color" content="#080b10">
+<meta name="description" content="SpotMe Caching Community – Tritt unserem SimpleX-Kanal bei.">
+  <link href="fonts.css" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#080b10;--card:#111820;--card2:#141e2a;
+  --bord:rgba(255,255,255,0.07);--bord2:rgba(255,255,255,0.12);
+  --acc:#ff9f00;--acc-dim:rgba(255,159,0,0.10);--acc-glow:rgba(255,159,0,0.28);
+  --cyan:#00e5ff;--cyan-dim:rgba(0,229,255,0.08);--cyan-glow:rgba(0,229,255,0.25);
+  --text:#dce8f0;--muted:#4a6070;--muted2:#7a98aa;
+}
+
+html,body{
+  min-height:100vh;
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Outfit',sans-serif;
+  overflow-x:hidden;
+}
+
+/* ── GRID BACKGROUND ── */
+body::before{
+  content:'';
+  position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(rgba(255,159,0,0.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,159,0,0.03) 1px,transparent 1px);
+  background-size:50px 50px;
+}
+
+/* ── RADIAL GLOW ── */
+body::after{
+  content:'';
+  position:fixed;top:-20vh;left:50%;transform:translateX(-50%);
+  width:80vw;height:60vh;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse,rgba(255,159,0,0.07) 0%,transparent 70%);
+}
+
+/* ── HEADER ── */
+header{
+  position:relative;z-index:10;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:1.25rem 1.5rem;
+  border-bottom:1px solid var(--bord2);
+  background:rgba(8,11,16,0.85);
+  backdrop-filter:blur(20px);
+}
+.logo{
+  display:flex;align-items:center;gap:8px;
+  font-family:'Space Mono',monospace;font-size:1rem;
+  font-weight:700;color:var(--acc);letter-spacing:0.02em;
+}
+.logo-dot{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--acc);box-shadow:0 0 10px var(--acc);
+  animation:pdot 2s ease infinite;
+}
+@keyframes pdot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+
+.back-btn{
+  display:flex;align-items:center;gap:6px;
+  padding:7px 14px;border-radius:40px;
+  background:var(--card);border:1px solid var(--bord2);
+  color:var(--muted2);font-size:0.8rem;
+  text-decoration:none;transition:all 0.18s;
+}
+.back-btn:hover{border-color:var(--acc-glow);color:var(--acc);}
+
+/* ── MAIN ── */
+main{
+  position:relative;z-index:10;
+  max-width:520px;margin:0 auto;
+  padding:2rem 1.25rem 3rem;
+  display:flex;flex-direction:column;gap:1.5rem;
+}
+
+/* ── HERO ── */
+.hero{text-align:center;padding:1rem 0 0.5rem;}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:5px 14px;border-radius:100px;
+  background:var(--cyan-dim);border:1px solid var(--cyan-glow);
+  color:var(--cyan);font-size:0.72rem;font-weight:700;
+  font-family:'Space Mono',monospace;letter-spacing:0.06em;
+  margin-bottom:1rem;
+}
+.hero h1{
+  font-size:clamp(1.6rem,5vw,2.1rem);
+  font-weight:700;line-height:1.2;margin-bottom:0.6rem;
+}
+.hero h1 span{color:var(--acc);}
+.hero p{
+  font-size:0.9rem;color:var(--muted2);
+  line-height:1.6;max-width:360px;margin:0 auto;
+}
+
+/* ── SIMPLEX WIDGET WRAPPER ── */
+.widget-card{
+  background:var(--card);
+  border:1px solid var(--bord2);
+  border-radius:20px;
+  overflow:hidden;
+  position:relative;
+}
+.widget-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--acc-glow),var(--cyan-glow),transparent);
+}
+.widget-inner{
+  padding:0.5rem;
+}
+
+/* SimpleX Widget Overrides – passt das eingebettete Widget an */
+.widget-inner [data-simplex-channel-preview]{
+  border-radius:14px !important;
+  overflow:hidden;
+}
+
+/* ── FEATURE PILLS ── */
+.features{
+  display:flex;flex-wrap:wrap;gap:0.5rem;
+  justify-content:center;
+}
+.feat-pill{
+  display:flex;align-items:center;gap:6px;
+  padding:6px 13px;border-radius:100px;
+  background:var(--card2);border:1px solid var(--bord);
+  font-size:0.75rem;color:var(--muted2);
+  font-family:'Space Mono',monospace;
+}
+.feat-pill span{font-size:0.9rem;}
+
+/* ── WHY SIMPLEX ── */
+.info-card{
+  background:var(--card2);
+  border:1px solid var(--bord);
+  border-radius:16px;padding:1.1rem 1.15rem;
+}
+.info-card-title{
+  font-family:'Space Mono',monospace;
+  font-size:0.65rem;font-weight:700;
+  color:var(--muted);letter-spacing:0.1em;
+  margin-bottom:0.75rem;
+}
+.info-rows{display:flex;flex-direction:column;gap:0.55rem;}
+.info-row{
+  display:flex;align-items:flex-start;gap:0.65rem;
+  font-size:0.83rem;color:var(--muted2);line-height:1.45;
+}
+.info-row strong{color:var(--text);}
+.info-icon{font-size:1rem;flex-shrink:0;margin-top:1px;}
+
+/* ── FOOTER ── */
+footer{
+  position:relative;z-index:10;
+  text-align:center;padding:1.25rem;
+  border-top:1px solid var(--bord);
+  font-size:0.73rem;color:var(--muted);
+  font-family:'Space Mono',monospace;
+}
+footer a{color:var(--acc);text-decoration:none;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    SPOT<span style="font-weight:300;color:var(--text);">ME</span>
+    <span style="font-size:0.68rem;color:var(--muted);font-weight:400;letter-spacing:0;">· CACHING</span>
+  </div>
+  <a href="/" class="back-btn">← App öffnen</a>
+</header>
+
+<main>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-badge">📡 Community · SimpleX</div>
+    <h1>Tritt der<br><span>Community</span> bei.</h1>
+    <p>Updates, Feedback und direkte Kommunikation – verschlüsselt und ohne Tracking.</p>
+  </div>
+
+  <!-- SimpleX Kanal Preview (nachgebaut mit echten Kanal-Daten) -->
+  <div class="widget-card">
+    <div class="widget-inner" style="padding:1rem;">
+
+      <!-- Kanal-Header -->
+      <div style="display:flex;align-items:center;gap:0.85rem;margin-bottom:1rem;">
+        <div style="width:56px;height:56px;border-radius:15px;overflow:hidden;flex-shrink:0;border:1px solid var(--bord2);box-shadow:0 0 20px rgba(255,159,0,0.15);">
+          <img src="data:image/jpg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEI=" 
+               alt="SpotME Caching" width="56" height="56" style="object-fit:cover;width:100%;height:100%;">
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:1rem;margin-bottom:2px;">SpotME Caching</div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:0.68rem;color:var(--cyan);font-family:'Space Mono',monospace;background:var(--cyan-dim);border:1px solid var(--cyan-glow);padding:2px 8px;border-radius:100px;">📢 Kanal</span>
+          </div>
+        </div>
+        <img src="https://simplex.chat/img/simplex-logo.svg" alt="SimpleX" width="28" onerror="this.style.display='none'" style="opacity:0.5;flex-shrink:0;">
+      </div>
+
+      <!-- Kanal-Infos -->
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
+        <div style="display:flex;align-items:center;gap:4px;font-size:0.7rem;color:var(--muted2);font-family:'Space Mono',monospace;">
+          <span>💬</span> Reaktionen
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;font-size:0.7rem;color:var(--muted2);font-family:'Space Mono',monospace;">
+          <span>🎤</span> Sprachnachrichten
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;font-size:0.7rem;color:var(--muted2);font-family:'Space Mono',monospace;">
+          <span>📎</span> Dateien
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;font-size:0.7rem;color:var(--muted2);font-family:'Space Mono',monospace;">
+          <span>📜</span> Verlauf
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <div style="height:1px;background:var(--bord2);margin-bottom:1rem;"></div>
+
+      <!-- QR + Buttons -->
+      <div style="display:flex;gap:1rem;align-items:center;margin-bottom:0.85rem;">
+        <div style="flex-shrink:0;padding:8px;background:#fff;border-radius:10px;">
+          <img src="https://api.qrserver.com/v1/create-qr-code/?size=88x88&color=080b10&bgcolor=ffffff&data=https%3A%2F%2Fsmp4.simplexonflux.com%2Fc%23hh2yqwyNnAh0g0AN3XTk-OG1U_uaLmQoRKhDEu7krBM"
+               alt="QR" width="88" height="88" style="display:block;border-radius:4px;">
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:0.5rem;">
+          <a href="https://smp4.simplexonflux.com/c#hh2yqwyNnAh0g0AN3XTk-OG1U_uaLmQoRKhDEu7krBM"
+             style="display:flex;align-items:center;justify-content:center;gap:0.4rem;padding:0.75rem;border-radius:12px;background:var(--acc);color:#080b10;font-family:'Outfit',sans-serif;font-size:0.88rem;font-weight:700;text-decoration:none;">
+            📡 Kanal öffnen
+          </a>
+          <a href="https://simplex.chat/downloads" target="_blank" rel="noopener"
+             style="display:flex;align-items:center;justify-content:center;gap:0.4rem;padding:0.7rem;border-radius:12px;background:var(--card2);border:1px solid var(--bord2);color:var(--muted2);font-family:'Outfit',sans-serif;font-size:0.82rem;text-decoration:none;">
+            App herunterladen
+          </a>
+        </div>
+      </div>
+
+      <p style="font-size:0.68rem;color:var(--muted);text-align:center;font-family:'Space Mono',monospace;line-height:1.4;">
+        SimpleX Chat · Ende-zu-Ende verschlüsselt · Kein Tracking
+      </p>
+
+    </div>
+  </div>
+
+  <!-- Feature Pills -->
+  <div class="features">
+    <div class="feat-pill"><span>🔒</span> Ende-zu-Ende verschlüsselt</div>
+    <div class="feat-pill"><span>👤</span> Kein Account nötig</div>
+    <div class="feat-pill"><span>📵</span> Kein Tracking</div>
+    <div class="feat-pill"><span>🌍</span> Open Source</div>
+  </div>
+
+  <!-- Warum SimpleX -->
+  <div class="info-card">
+    <div class="info-card-title">WARUM SIMPLEX?</div>
+    <div class="info-rows">
+      <div class="info-row">
+        <span class="info-icon">🔑</span>
+        <div><strong>Keine Telefonnummer.</strong> Keine E-Mail. Einfach beitreten.</div>
+      </div>
+      <div class="info-row">
+        <span class="info-icon">📡</span>
+        <div><strong>Dezentral.</strong> Kein zentraler Server der alle Nachrichten kennt.</div>
+      </div>
+      <div class="info-row">
+        <span class="info-icon">🚀</span>
+        <div><strong>Updates direkt.</strong> Neue Features, Bugfixes und Community-Austausch in Echtzeit.</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  <a href="/">SpotMe · Caching</a> · Community Channel ·
+  <a href="https://simplex.chat" target="_blank" rel="noopener">SimpleX Chat</a>
+</footer>
+
+</body>
+</html>
