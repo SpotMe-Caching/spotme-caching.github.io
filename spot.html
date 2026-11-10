@@ -321,17 +321,31 @@ function fmtCheckin(ts) {
 
 async function loadSpot(id) {
   const content = document.getElementById('content');
-  let spot;
+  let spot, offlineTs = 0, notFound = false;
+  const KEY = 'sm_sp_' + id;
+  let cached = null;
+  try { cached = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch {}
   try {
-    const r = await fetch(`${API}/spots/${encodeURIComponent(id)}` + (CODE ? `?code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(TOK)}` : ''));
-    if (!r.ok) throw new Error('not_found');
+    if (cached && cached.spot && navigator.onLine === false) throw new Error('offline');
+    const ctl = new AbortController();
+    const tm = cached ? setTimeout(() => ctl.abort(), 8000) : null;
+    let r;
+    try { r = await fetch(`${API}/spots/${encodeURIComponent(id)}` + (CODE ? `?code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(TOK)}` : ''), { signal: ctl.signal }); } finally { if (tm) clearTimeout(tm); }
+    if (r.status === 404 || r.status === 410) { notFound = true; throw new Error('not_found'); }
+    if (!r.ok) throw new Error('server');
     spot = await r.json();
+    try { localStorage.setItem(KEY, JSON.stringify({ spot, ts: Date.now() })); } catch {}
   } catch {
-    content.innerHTML = `<div class="loading"><div class="loading-icon">🔍</div>Platz Spot nicht gefunden.<br><a href="/" style="color:var(--acc);margin-top:1rem;display:block;">← Zur App</a></div>`;
-    return;
+    if (notFound) { try { localStorage.removeItem(KEY); } catch {} }
+    else if (cached && cached.spot) { spot = cached.spot; offlineTs = cached.ts || 1; }
+    if (!spot) {
+      const msg = notFound ? '' : 'Kann gerade nicht geladen werden.<br>Bitte Verbindung prüfen.';
+      content.innerHTML = `<div class="loading"><div class="loading-icon">🔍</div>${notFound ? 'Platz Spot nicht gefunden.' : msg}<br><a href="/" style="color:var(--acc);margin-top:1rem;display:block;">← Zur App</a></div>`;
+      return;
+    }
   }
-
-  initMap(+spot.lat, +spot.lng);
+  const offNote = offlineTs ? `<div style="font-size:0.74rem;color:var(--muted2,#94a3b8);border:1px dashed var(--muted2,#94a3b8);border-radius:10px;padding:0.5rem 0.7rem;margin-bottom:0.6rem;">📴 Offline – gespeicherter Stand von ${new Date(offlineTs).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>` : '';
+  try { initMap(+spot.lat, +spot.lng); } catch {}
   try { if (isFinite(+spot.lat) && isFinite(+spot.lng) && spot.lat != null) sessionStorage.setItem('sm_map_view', JSON.stringify({ lat: +spot.lat, lng: +spot.lng, zoom: 16, ts: Date.now() })); } catch {}
 
   // Favorit-Status + Besitzer-Profil nur für angemeldete Betrachter
@@ -358,7 +372,7 @@ async function loadSpot(id) {
   const offers = ((owner && (owner.offerTags || owner.offers)) || []).filter(Boolean);
   const safeName = esc(spot.name).replace(/'/g, "\\'");
 
-  content.innerHTML = `
+  content.innerHTML = offNote + `
     <div class="profile-head">
       <div class="avatar" ${spot.image ? `onclick="openImg('${spot.image}')" style="cursor:zoom-in;"` : ''}>${spot.image ? `<img src="${spot.image}" alt="">` : '📍'}</div>
       <div class="profile-info">
