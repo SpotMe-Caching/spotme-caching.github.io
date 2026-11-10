@@ -1,0 +1,5 @@
+Outfit (c) The Outfit Project Authors (https://github.com/Outfitio/Outfit-Fonts)
+Space Mono (c) Colophon Foundry (https://github.com/googlefonts/spacemono)
+Beide Schriften stehen unter der SIL Open Font License 1.1 – frei nutzbar und weitergebbar.
+Volltext: https://openfontlicense.org
+Quelle der Dateien: npm-Pakete @fontsource-variable/outfit und @fontsource/space-mono (Version 5.3.0).
