@@ -747,16 +747,9 @@ setInterval(async () => {
     }
 
     // ── Inaktive Profile löschen ──────────────────────────────────────────
-    const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
     try {
-      const r = await pool.query(
-        `DELETE FROM profiles
-         WHERE visible_until < $1
-           AND COALESCE(last_seen, updated_at) < $2`,
-        [now, thirtyDaysAgo],
-      );
-      if (r.rowCount > 0)
-        console.log(`🧹 ${r.rowCount} inaktive Profile gelöscht`);
+      const n = await cleanupInactiveProfiles(now);
+      if (n > 0) console.log(`🧹 ${n} inaktive Profile gelöscht`);
     } catch (e) {
       console.error("Cleanup profiles:", e.message);
     }
@@ -1286,6 +1279,19 @@ async function cleanupGuestProfiles(now) {
   return r.rowCount;
 }
 
+// ── Profile ohne Besuch seit 30 Tagen löschen ──
+// Ein Besuch (last_visit), Heartbeat (last_seen) oder eine Profil-Änderung (updated_at) hält das Profil am Leben.
+async function cleanupInactiveProfiles(now) {
+  const cutoff = (now || Date.now()) - 30 * 24 * 60 * 60 * 1000;
+  const r = await pool.query(
+    `DELETE FROM profiles
+      WHERE visible_until < $1
+        AND GREATEST(COALESCE(last_seen, updated_at), COALESCE(last_visit, 0)) < $2`,
+    [now || Date.now(), cutoff],
+  );
+  return r.rowCount;
+}
+
 // Besuch melden (Token nötig) – hält Gast-Profile am Leben
 app.post("/api/profile/visit", async (req, res) => {
   const { code, token } = req.body || {};
@@ -1297,6 +1303,51 @@ app.post("/api/profile/visit", async (req, res) => {
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: "Datenbankfehler" });
+  }
+});
+
+// ── ALLES LÖSCHEN (Datenschutz): entfernt alle Daten zu einem Code endgültig ──
+// Token nötig. Löscht Profil(e), eigene Spots (samt Einladungen/Favoriten dazu), Wochen-Spots,
+// Favoriten, Einladungen, Check-ins, Push-Abos, wartende Nachrichten, Live-Spot-Folgen, Bluesky-Verbindung.
+app.delete("/api/account/:code", async (req, res) => {
+  const code = String(req.params.code || "");
+  const token = (req.body && req.body.token) || req.headers["x-spotme-token"];
+  if (!code || !token) return res.status(400).json({ error: "code und token erforderlich" });
+  try {
+    if (!(await authCheck(code, String(token))))
+      return res.status(403).json({ error: "Ungültiger Token" });
+    const client = await pool.connect();
+    const removed = {};
+    try {
+      await client.query("BEGIN");
+      const run = async (label, sql, params) => {
+        await client.query("SAVEPOINT s");
+        try { const r = await client.query(sql, params); removed[label] = r.rowCount; await client.query("RELEASE SAVEPOINT s"); }
+        catch (e) { await client.query("ROLLBACK TO SAVEPOINT s"); removed[label] = "-"; }
+      };
+      await run("einladungen", "DELETE FROM spot_cache_invites WHERE from_code=$1 OR to_code=$1 OR spot_id IN (SELECT id FROM user_spots WHERE code=$1)", [code]);
+      await run("favoriten_auf_eigene_spots", "DELETE FROM spot_favorites WHERE spot_id IN (SELECT id FROM user_spots WHERE code=$1)", [code]);
+      await run("favoriten", "DELETE FROM spot_favorites WHERE code=$1", [code]);
+      await run("checkins", "DELETE FROM spot_checkins_public WHERE code=$1 OR spot_id IN (SELECT id FROM user_spots WHERE code=$1)", [code]);
+      await run("spots", "DELETE FROM user_spots WHERE code=$1", [code]);
+      await run("wochenspots", "DELETE FROM weekly_spots WHERE code=$1", [code]);
+      await run("push", "DELETE FROM push_subscriptions WHERE code=$1", [code]);
+      await run("nachrichten", "DELETE FROM offline_messages WHERE recipient=$1 OR sender_code=$1", [code]);
+      await run("live_folgen", "DELETE FROM live_followers WHERE follower_code=$1", [code]);
+      await run("kommentare", "DELETE FROM profile_comments WHERE profile_code=$1 OR sender_code=$1", [code]);
+      await run("bluesky", "DELETE FROM bluesky_accounts WHERE code=$1", [code]);
+      await run("profil", "DELETE FROM profiles WHERE code=$1", [code]);
+      await client.query("COMMIT");
+    } catch (e) {
+      try { await client.query("ROLLBACK"); } catch (_) {}
+      throw e;
+    } finally { client.release(); }
+    for (const k of [...locationCache.keys()]) if (k.startsWith(code + ":")) locationCache.delete(k);
+    for (const k of [...authCache.keys()]) if (k.startsWith(code + "\u0000")) authCache.delete(k);
+    res.json({ success: true, removed });
+  } catch (e) {
+    console.error("DELETE /api/account:", e.message);
+    res.status(500).json({ error: "Löschen fehlgeschlagen" });
   }
 });
 
@@ -4467,9 +4518,13 @@ app.post("/api/location/update", async (req, res) => {
   try {
     if (!(await authCheck(code, token)))
       return res.status(403).json({ error: "Ungültiger Token" });
+    // Datenschutz: nur eine grobe Position (auf ~1 km gerundet) – reicht für den 10-km-Hinweis-Filter
+    const la = Number(lat), ln = Number(lng);
+    if (!isFinite(la) || !isFinite(ln) || Math.abs(la) > 90 || Math.abs(ln) > 180)
+      return res.status(400).json({ error: "Ungültige Position" });
     await pool.query(
-      "UPDATE profiles SET last_lat=$1, last_lng=$2, last_seen=NOW() WHERE code=$3",
-      [lat, lng, code],
+      "UPDATE profiles SET last_lat=$1, last_lng=$2, last_visit=$3 WHERE code=$4",
+      [Math.round(la * 100) / 100, Math.round(ln * 100) / 100, Date.now(), code],
     );
     res.json({ success: true });
   } catch (e) {

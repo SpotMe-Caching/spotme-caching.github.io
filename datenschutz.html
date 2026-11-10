@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SpotMe · Das kennt SpotMe von dir</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>try{document.documentElement.setAttribute("data-theme",localStorage.getItem("sm_theme")||"dark")}catch(e){}</script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--bg:#0a0d12;--card:#141a22;--bord:rgba(255,255,255,.07);--bord2:rgba(255,255,255,.12);--text:#e2e8f0;--muted:#8a99ad;--acc:#f59e0b;--green:#10b981;--red:#ef4444;--inp:#0f1318;--pillbg:rgba(15,19,24,.9)}
+:root[data-theme="light"]{--bg:#f4f6f8;--card:#fff;--bord:rgba(0,0,0,.08);--bord2:rgba(0,0,0,.14);--text:#1e293b;--muted:#566677;--inp:#f4f6f8;--pillbg:rgba(255,255,255,.92)}
+body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:max(14px,env(safe-area-inset-top)) 16px 40px;line-height:1.55}
+.wrap{max-width:560px;margin:0 auto}
+.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.logo{font-family:'Space Mono',monospace;font-weight:700;color:var(--acc);letter-spacing:1px;display:flex;align-items:center;gap:8px}
+.logo i{width:10px;height:10px;border-radius:50%;background:var(--acc);box-shadow:0 0 12px var(--acc)}
+.logo span{color:var(--text);font-weight:400}
+.row{display:flex;gap:8px}
+.hb{width:38px;height:38px;border-radius:50%;border:1px solid var(--bord2);background:var(--pillbg);color:var(--text);font-size:1.05rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
+h1{font-size:1.55rem;font-weight:800;margin-bottom:6px}
+p.lead{color:var(--muted);font-size:.98rem;margin-bottom:18px}
+h2{font-size:1.02rem;font-weight:700;margin:22px 0 8px;display:flex;align-items:center;gap:8px}
+.card{background:var(--card);border:1px solid var(--bord);border-radius:16px;padding:14px 16px;margin-bottom:10px}
+.card.ok{border-color:rgba(16,185,129,.35)}
+ul{list-style:none}
+li{padding:7px 0;border-top:1px solid var(--bord);font-size:.93rem}
+li:first-child{border-top:0}
+li b{font-weight:700}
+li small,.small{display:block;color:var(--muted);font-size:.8rem;margin-top:2px}
+.tag{display:inline-block;font-size:.68rem;font-weight:700;border-radius:20px;padding:1px 8px;margin-left:4px;vertical-align:1px}
+.tag.must{background:rgba(245,158,11,.16);color:var(--acc)}
+.tag.opt{background:rgba(100,116,139,.2);color:var(--muted)}
+details{background:var(--card);border:1px solid var(--bord);border-radius:16px;margin-bottom:10px}
+details>summary{cursor:pointer;list-style:none;padding:14px 16px;font-weight:700;font-size:.98rem;display:flex;align-items:center;gap:8px}
+details>summary::-webkit-details-marker{display:none}
+details>summary::after{content:'＋';margin-left:auto;color:var(--muted)}
+details[open]>summary::after{content:'－'}
+details>.in{padding:0 16px 12px}
+.btn{width:100%;padding:13px;border-radius:14px;border:1px solid var(--bord2);background:var(--pillbg);color:var(--text);font-family:inherit;font-weight:700;font-size:.98rem;cursor:pointer;margin-top:8px}
+.btn.danger{border-color:rgba(239,68,68,.5);color:var(--red)}
+.btn:disabled{opacity:.5}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:.9rem}
+.kv span:nth-child(odd){color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--card);border:1px solid var(--bord2);padding:10px 16px;border-radius:12px;font-size:.9rem;opacity:0;transition:opacity .25s;pointer-events:none;max-width:90vw;text-align:center}
+.toast.show{opacity:1}
+.stand{color:var(--muted);font-size:.78rem;margin-top:22px;text-align:center}
+</style>
+<script src="sm-flow.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="logo"><i></i>SPOT<span>ME</span></div>
+    <div class="row">
+      <button class="hb" id="themeBtn" title="Hell/Dunkel" aria-label="Hell/Dunkel">🌙</button>
+      <button class="hb" id="closeBtn" title="Zurück" aria-label="Zurück">✕</button>
+    </div>
+  </div>
+
+  <h1>🔒 Das kennt SpotMe von dir</h1>
+  <p class="lead">SpotMe soll so wenig wie möglich von dir wissen. Hier steht in einfachen Worten, was gespeichert wird, wofür – und wie du alles wieder loswirst.</p>
+
+  <div class="card ok">
+    <ul>
+      <li>✅ Du brauchst <b>keine E-Mail</b>, <b>keine Telefonnummer</b> und <b>keinen echten Namen</b>.</li>
+      <li>✅ SpotMe führt <b>keine Bewegungsspur</b>. Es gibt keinen Standort-Verlauf.</li>
+      <li>✅ <b>Keine Werbung</b>, keine Tracker, keine Analyse-Dienste. Deine Daten werden nicht verkauft.</li>
+      <li>✅ Du kannst <b>alles mit einem Knopf löschen</b> – ganz unten auf dieser Seite.</li>
+    </ul>
+  </div>
+
+  <h2>🗄️ Das speichert SpotMe auf dem Server</h2>
+  <div class="card">
+    <ul>
+      <li>🎭 <b>Dein Fantasiename</b> <span class="tag must">nötig</span>
+        <small>Damit andere dich in Einladungen und Chats erkennen. Wird verschlüsselt gespeichert.</small></li>
+      <li>🌍 <b>Dein Ort: Land, Region, Stadt</b> <span class="tag must">nötig</span>
+        <small>Nur als Wort („Hamburg“), nicht als Standort. So siehst du die Spots deines Landes.</small></li>
+      <li>🔑 <b>Dein Schlüssel: Code und Token</b> <span class="tag must">nötig</span>
+        <small>Wie ein Hausschlüssel für dein Profil. Er liegt auf deinem Gerät. Ohne ihn kommst du nicht mehr an dein Profil – deshalb gibt es im Profil eine Sicherung.</small></li>
+      <li>📝 <b>Alter, „Über mich“, Wünsche und Angebote</b> <span class="tag opt">freiwillig</span>
+        <small>Nur wenn du sie im Profil einträgst. „Über mich“, Wünsche und Angebote werden verschlüsselt gespeichert.</small></li>
+      <li>🖼️ <b>Profilbild</b> <span class="tag opt">freiwillig</span>
+        <small>Wird vor der Freigabe geprüft. Ein freigegebenes Bild können andere sehen.</small></li>
+      <li>📍 <b>Deine Spots</b> <span class="tag opt">freiwillig</span>
+        <small>Ort, Name, Beschreibung und Foto eines Spots, den du anlegst. Alle in deinem Land können ihn sehen. Wochen-Spots sehen nur Leute mit dem Link, und nur 7 Tage lang.</small></li>
+      <li>⭐ <b>Favoriten, Einladungen und Check-ins</b> <span class="tag opt">freiwillig</span>
+        <small>Wer wen wann zu welchem Spot einlädt. Öffentliche Check-ins („Ich bin dann dort“) sehen Leute, die den Spot als Favorit haben.</small></li>
+      <li>💬 <b>Nachrichten</b>
+        <small>Deine Chats liegen nur auf deinem Gerät. Ist der andere gerade offline, wartet die Nachricht verschlüsselt auf dem Server – höchstens 7 Tage, dann wird sie gelöscht.</small></li>
+      <li>📡 <b>Deine grobe letzte Position</b> <span class="tag opt">nur mit Erlaubnis</span>
+        <small>Wenn du den Standort erlaubst, merkt sich SpotMe beim Öffnen eine Position, <b>auf etwa 1 km gerundet</b>. Sie dient nur dazu, dich bei Live Spots im Umkreis von 10 km zu benachrichtigen. Jede neue Position <b>überschreibt</b> die alte – es entsteht keine Liste.</small></li>
+      <li>🕒 <b>Zeitpunkt deines letzten Besuchs</b>
+        <small>Damit SpotMe Profile aufräumen kann, die nicht mehr genutzt werden.</small></li>
+      <li>🔔 <b>Hinweise (Push)</b> <span class="tag opt">freiwillig</span>
+        <small>Wenn du sie einschaltest, speichert SpotMe die technische Adresse deines Browsers beim Push-Dienst. Ohne Namen.</small></li>
+      <li>🦋 <b>Bluesky</b> <span class="tag opt">freiwillig</span>
+        <small>Nur wenn du es verbindest: dein Bluesky-Name und ein App-Passwort (verschlüsselt), damit SpotMe für dich teilen kann.</small></li>
+      <li>🧾 <b>Technische Server-Protokolle</b>
+        <small>Beim Hosting-Anbieter steht kurzzeitig, wann welche Anfrage von welcher Internet-Adresse (IP) kam. Das dient der Fehlersuche.</small></li>
+    </ul>
+  </div>
+
+  <h2>🚫 Das kennt SpotMe nicht</h2>
+  <div class="card">
+    <ul>
+      <li>Deinen <b>echten Namen</b>, deine <b>E-Mail</b>, deine <b>Telefonnummer</b></li>
+      <li>Dein <b>Adressbuch</b> und deine Kontakte</li>
+      <li>Wo du dich <b>über den Tag bewegst</b> – keinen Standort-Verlauf</li>
+      <li>Deine Chats im Klartext (nur verschlüsselt und höchstens 7 Tage, wenn jemand offline ist)</li>
+      <li>Zahlungsdaten und Werbe-Kennungen</li>
+    </ul>
+  </div>
+
+  <h2>📱 Das liegt nur auf deinem Gerät</h2>
+  <div class="card">
+    <p class="small" style="margin:0">Dein Schlüssel, deine Einstellungen (zum Beispiel Hell oder Dunkel), deine Chats, noch nicht gesendete Spots und ein Zwischenspeicher für Karte, Spots und Wetter – damit SpotMe auch ohne Netz funktioniert. Das bleibt auf deinem Handy und lässt sich unten löschen.</p>
+  </div>
+
+  <details>
+    <summary>📍 Wann benutzt SpotMe meinen Standort?</summary>
+    <div class="in"><ul>
+      <li><b>Spots in der Umgebung:</b> Die Entfernung rechnet dein Gerät aus.</li>
+      <li><b>Beim Öffnen:</b> Eine grobe Position (1 km) wird gemerkt – siehe oben.</li>
+      <li><b>Check-in:</b> Dein Standort wird einmal geschickt, damit geprüft wird, ob du am Spot bist. Er wird nicht gespeichert.</li>
+      <li><b>Gast-Einstieg:</b> Dein Standort geht einmal an den Kartendienst OpenStreetMap, damit er den Ortsnamen findet.</li>
+    </ul></div>
+  </details>
+
+  <details>
+    <summary>🌐 Welche anderen Dienste bekommen etwas mit?</summary>
+    <div class="in"><ul>
+      <li><b>OpenFreeMap</b> – liefert die Kartenbilder. Sieht deine Internet-Adresse und den Kartenausschnitt.</li>
+      <li><b>Waymarked Trails</b> – nur wenn du die Wanderwege (🥾) einschaltest.</li>
+      <li><b>Open-Meteo</b> – liefert das Wetter. Bekommt den Ort des <i>Spots</i>, nicht deinen Standort.</li>
+      <li><b>OpenStreetMap (Nominatim)</b> – findet beim Gast-Einstieg deinen Ortsnamen.</li>
+      <li><b>Google Fonts, unpkg, jsDelivr</b> – liefern Schriften und Programmteile. Sehen deine Internet-Adresse.</li>
+      <li><b>GitHub, Render, Neon</b> – hier läuft die Webseite, der Server und die Datenbank.</li>
+      <li><b>Push-Dienst deines Browsers</b> – nur wenn du Hinweise einschaltest.</li>
+    </ul>
+    <p class="small">Keiner dieser Dienste bekommt deinen Fantasienamen oder dein Profil.</p></div>
+  </details>
+
+  <details>
+    <summary>⏳ Wie lange bleibt was gespeichert?</summary>
+    <div class="in"><ul>
+      <li><b>Gast ohne Aktivität:</b> 7 Tage, dann wird das Profil gelöscht.</li>
+      <li><b>Profil ohne Besuch:</b> wird nach etwa 30 Tagen aufgeräumt.</li>
+      <li><b>Wartende Nachrichten:</b> höchstens 7 Tage.</li>
+      <li><b>Einladungen:</b> 30 Tage nach Ablauf.</li>
+      <li><b>Wochen-Spots:</b> nach 7 Tagen.</li>
+      <li><b>Deine Spots:</b> bis du sie löschst – oder „Alles löschen“ drückst.</li>
+    </ul></div>
+  </details>
+
+  <h2>🎛️ Du hast die Kontrolle</h2>
+  <div class="card" id="ctl">
+    <div id="noProfile" style="display:none"><b>Du hast noch kein Profil.</b><span class="small">Dann weiß SpotMe auch noch nichts von dir. ✅</span></div>
+    <div id="hasProfile" style="display:none">
+      <button class="btn" id="viewBtn">👁️ Zeig mir, was SpotMe gerade über mich gespeichert hat</button>
+      <div id="viewOut" style="display:none;margin-top:12px"></div>
+      <button class="btn" id="localBtn">🧹 Nur die Daten auf diesem Gerät löschen</button>
+      <span class="small">Dein Profil auf dem Server bleibt. Du verlierst aber deinen Schlüssel – ohne Sicherung kommst du nicht mehr rein.</span>
+      <button class="btn danger" id="wipeBtn">🗑️ Alles von mir bei SpotMe löschen</button>
+      <span class="small">Löscht endgültig: dein Profil, deine Spots, Einladungen, Favoriten, Check-ins, Hinweise und wartende Nachrichten – auf dem Server und auf diesem Gerät. Das lässt sich nicht rückgängig machen.</span>
+    </div>
+  </div>
+
+  <div class="stand">Stand: November 2026</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const API='https://spotme-chat-obom.onrender.com/api';
+const $=id=>document.getElementById(id);
+function toast(t){const e=$('toast');e.textContent=t;e.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>e.classList.remove('show'),3000)}
+function applyTheme(t){document.documentElement.setAttribute('data-theme',t);try{localStorage.setItem('sm_theme',t)}catch(e){}$('themeBtn').textContent=t==='light'?'🌙':'☀️'}
+applyTheme(document.documentElement.getAttribute('data-theme')||'dark');
+$('themeBtn').onclick=()=>applyTheme(document.documentElement.getAttribute('data-theme')==='light'?'dark':'light');
+$('closeBtn').onclick=()=>SMFlow.back('index.html');
+
+const CODE=(()=>{try{return localStorage.getItem('sm_code')||''}catch(e){return ''}})();
+const TOK=(()=>{try{return localStorage.getItem('sm_token')||''}catch(e){return ''}})();
+const has=!!(CODE&&TOK&&CODE!=='000000');
+$('hasProfile').style.display=has?'block':'none';
+$('noProfile').style.display=has?'none':'block';
+
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function j(url){const r=await fetch(API+url);if(!r.ok)throw new Error(r.status);return r.json()}
+
+$('viewBtn').onclick=async()=>{
+  const out=$('viewOut');out.style.display='block';out.innerHTML='<span class="small">⏳ Lädt …</span>';
+  if(navigator.onLine===false){out.innerHTML='<span class="small">📴 Dafür brauchst du Internet.</span>';return}
+  const [p,sp,fv,iv]=await Promise.all([
+    j('/profile/'+encodeURIComponent(CODE)+'?spot=caching').catch(()=>null),
+    j('/userspots/'+encodeURIComponent(CODE)).catch(()=>null),
+    j('/favorites/'+encodeURIComponent(CODE)).catch(()=>null),
+    j('/spotcache/invites/'+encodeURIComponent(CODE)).catch(()=>null)]);
+  const rows=[];
+  if(p){
+    rows.push(['Name',esc(p.name)]);
+    const ort=[p.city,p.province,p.region].filter(Boolean).join(', ');
+    if(ort)rows.push(['Ort',esc(ort)]);
+    if(p.age)rows.push(['Alter',esc(p.age)]);
+    if(p.bio)rows.push(['Über mich',esc(p.bio)]);
+    const w=Array.isArray(p.wishTags)?p.wishTags:(Array.isArray(p.wish_tags)?p.wish_tags:[]);
+    const o=Array.isArray(p.offerTags)?p.offerTags:(Array.isArray(p.offer_tags)?p.offer_tags:[]);
+    if(w.length)rows.push(['Wünsche',esc(w.join(', '))]);
+    if(o.length)rows.push(['Angebote',esc(o.join(', '))]);
+  } else rows.push(['Profil','nicht gefunden']);
+  rows.push(['Meine Spots',sp?(Array.isArray(sp)?sp.length:'?'):'?']);
+  rows.push(['Favoriten',fv?(Array.isArray(fv)?fv.length:'?'):'?']);
+  rows.push(['Einladungen',iv?(Array.isArray(iv)?iv.length:'?'):'?']);
+  out.innerHTML='<div class="kv">'+rows.map(r=>'<span>'+r[0]+'</span><span>'+r[1]+'</span>').join('')+'</div><div class="small" style="margin-top:8px">Dazu kommen dein Schlüssel, deine grobe letzte Position und der Zeitpunkt deines letzten Besuchs. Die zeigen wir nicht an, weil sie nur technisch sind.</div>';
+};
+
+async function wipeLocal(){
+  try{const keep=localStorage.getItem('sm_theme');Object.keys(localStorage).filter(k=>/^sm_/.test(k)).forEach(k=>localStorage.removeItem(k));if(keep)localStorage.setItem('sm_theme',keep)}catch(e){}
+  try{sessionStorage.clear()}catch(e){}
+  try{if(indexedDB.databases){const dbs=await indexedDB.databases();await Promise.all(dbs.map(d=>new Promise(res=>{const q=indexedDB.deleteDatabase(d.name);q.onsuccess=q.onerror=q.onblocked=()=>res()})))}else{['SpotMeDB','SpotMeOutbox'].forEach(n=>indexedDB.deleteDatabase(n))}}catch(e){}
+  try{if(window.caches){const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)))}}catch(e){}
+}
+
+$('localBtn').onclick=async()=>{
+  if(!confirm('Daten auf diesem Gerät löschen?\n\nDein Schlüssel wird mit gelöscht. Ohne Sicherung kommst du danach nicht mehr an dein Profil.'))return;
+  await wipeLocal();toast('✅ Daten auf diesem Gerät gelöscht');setTimeout(()=>location.replace('index.html'),1400);
+};
+
+$('wipeBtn').onclick=async()=>{
+  if(!confirm('ALLES von dir bei SpotMe löschen?\n\nProfil, Spots, Einladungen, Favoriten, Check-ins und Hinweise werden endgültig entfernt.'))return;
+  if(!confirm('Wirklich sicher? Das kann nicht rückgängig gemacht werden.'))return;
+  if(navigator.onLine===false){toast('📴 Zum Löschen brauchst du Internet');return}
+  const b=$('wipeBtn');b.disabled=true;b.textContent='⏳ Wird gelöscht …';
+  try{
+    const r=await fetch(API+'/account/'+encodeURIComponent(CODE),{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:TOK})});
+    if(!r.ok&&r.status!==403&&r.status!==404)throw new Error(r.status);
+    if(r.status===403){toast('⚠️ Schlüssel wird nicht akzeptiert – Profil ist vielleicht schon gelöscht');}
+    await wipeLocal();
+    b.textContent='✅ Alles gelöscht';toast('✅ Alles gelöscht. Danke fürs Ausprobieren!');
+    setTimeout(()=>location.replace('index.html'),2200);
+  }catch(e){
+    b.disabled=false;b.textContent='🗑️ Alles von mir bei SpotMe löschen';toast('⚠️ Löschen hat nicht geklappt – bitte später nochmal versuchen');
+  }
+};
+</script>
+</body>
+</html>

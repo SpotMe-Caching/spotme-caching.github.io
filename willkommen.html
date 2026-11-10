@@ -103,6 +103,7 @@ input:focus,select:focus{outline:none;border-color:var(--acc)}
       <div class="note"><div class="ic">🔁</div>
         <div>Beim nächsten Besuch erkennt dich SpotMe wieder. Du fängst nicht bei null an.</div></div>
     </div>
+    <p class="sub" style="margin:0 2px 8px;font-size:.85rem"><a href="datenschutz.html" id="privLink" style="color:var(--acc)">🔒 Das kennt SpotMe von dir – so wenig wie möglich</a></p>
     <div class="err" id="saveErr"></div>
     <button class="btn primary" id="go">🚀 Spots in meiner Umgebung ansehen</button>
     <button class="btn" id="goBack">← Zurück</button>
@@ -234,6 +235,7 @@ $('nameOk').onclick=()=>{
 };
 $('nameIn').addEventListener('keydown',e=>{if(e.key==='Enter')$('nameOk').click()});
 $('goBack').onclick=()=>show(2);
+$('privLink').onclick=e=>{e.preventDefault();SMFlow.go('datenschutz.html')};
 
 function newCode(){let c='';while(c.length<6)c=Math.random().toString(36).slice(2,8).toUpperCase();return c.slice(0,6)}
 

@@ -322,7 +322,13 @@
             style="padding:0.8rem;border-radius:12px;border:1px solid rgba(239,68,68,0.3);
                    background:rgba(239,68,68,0.08);color:var(--red);font-size:0.85rem;
                    font-weight:600;font-family:'Outfit',sans-serif;cursor:pointer;text-align:left;">
-      🗑️ Profil löschen
+      🙈 Profil ausblenden
+    </button>
+    <button onclick="SMFlow.go('datenschutz.html')"
+            style="padding:0.8rem;border-radius:12px;border:1px solid var(--bord2,rgba(255,255,255,0.12));
+                   background:transparent;color:var(--text);font-size:0.85rem;
+                   font-weight:600;font-family:'Outfit',sans-serif;cursor:pointer;text-align:left;">
+      🔒 Datenschutz · Was SpotMe von mir kennt · Alles löschen
     </button>
   </div>
 
@@ -1011,7 +1017,7 @@ async function importBackup(input) {
 }
 
 function confirmDeleteProfile() {
-  if (!confirm('Profil wirklich löschen? Alle lokalen Daten werden entfernt.')) return;
+  if (!confirm('Profil ausblenden?\n\nAndere sehen dich dann nicht mehr. Dein Schlüssel wird auf diesem Gerät entfernt.\nKomplett löschen kannst du alles unter „Datenschutz“.')) return;
   const code  = localStorage.getItem('sm_code');
   const token = localStorage.getItem('sm_token');
   if (code && token) {
@@ -1022,7 +1028,7 @@ function confirmDeleteProfile() {
   }
   localStorage.removeItem(PROFILE_KEY);
   localStorage.removeItem('sm_token');
-  toast('✅ Profil gelöscht');
+  toast('✅ Profil ausgeblendet');
   setTimeout(() => goBack(), 1500);
 }
 
