@@ -290,7 +290,16 @@ function openImg(src) {
   document.getElementById('imgFullscreen').classList.add('show');
 }
 
-function initMap(lat, lng) {
+function circlePoly(lat, lng, r) {
+  const pts = [];
+  for (let i = 0; i <= 64; i++) {
+    const a = (i / 64) * 2 * Math.PI;
+    pts.push([lng + (r * Math.sin(a)) / (111320 * Math.cos(lat * Math.PI / 180)), lat + (r * Math.cos(a)) / 111320]);
+  }
+  return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [pts] } };
+}
+
+function initMap(lat, lng, approxR) {
   if (spotMap) spotMap.remove();
   spotMap = new maplibregl.Map({
     container: 'map',
@@ -299,6 +308,12 @@ function initMap(lat, lng) {
     interactive: false, attributionControl: false
   });
   spotMap.on('load', () => {
+    if (approxR) {
+      spotMap.addSource('approx', { type: 'geojson', data: circlePoly(lat, lng, approxR) });
+      spotMap.addLayer({ id: 'approx-fill', type: 'fill', source: 'approx', paint: { 'fill-color': '#f59e0b', 'fill-opacity': 0.18 } });
+      spotMap.addLayer({ id: 'approx-line', type: 'line', source: 'approx', paint: { 'line-color': '#f59e0b', 'line-width': 2, 'line-dasharray': [2, 2] } });
+      return;
+    }
     const el = document.createElement('div');
     el.style.cssText = 'width:22px;height:22px;background:#00e676;border-radius:50%;border:3px solid white;box-shadow:0 0 16px rgba(0,230,118,0.9);';
     new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(spotMap);
@@ -353,7 +368,7 @@ async function loadSpot(id) {
     }
   }
   const offNote = offlineTs ? `<div style="font-size:0.74rem;color:var(--muted2,#94a3b8);border:1px dashed var(--muted2,#94a3b8);border-radius:10px;padding:0.5rem 0.7rem;margin-bottom:0.6rem;">📴 Keine Verbindung – gespeicherter Stand von ${new Date(offlineTs).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>` : '';
-  try { initMap(+spot.lat, +spot.lng); } catch {}
+  try { initMap(+spot.lat, +spot.lng, spot.location_hidden ? (spot.approx_radius_m || 500) : 0); } catch {}
   try { if (isFinite(+spot.lat) && isFinite(+spot.lng) && spot.lat != null) sessionStorage.setItem('sm_map_view', JSON.stringify({ lat: +spot.lat, lng: +spot.lng, zoom: 16, ts: Date.now() })); } catch {}
 
   // Favorit-Status + Besitzer-Profil nur für angemeldete Betrachter
@@ -426,9 +441,10 @@ async function loadSpot(id) {
       <div class="info-text">${planned.map(t => esc(fmtCheckin(t))).join('<br>')}</div>
     </div>` : ''}
 
+    ${spot.location_hidden ? `<div style="font-size:0.76rem;color:var(--muted2);line-height:1.5;margin-bottom:0.75rem;padding:0.6rem 0.75rem;border:1px dashed var(--muted2);border-radius:10px;">🔒 Ungefährer Bereich. Den genauen Ort siehst du als ⭐ Favorit oder nach dem Check-in bei einem Treffen. Gäste sehen immer nur den Bereich.</div>` : ''}
     <div class="btn-row">
       ${CODE && !spot.is_owner ? `<button class="btn btn-follow ${isFav ? 'following' : ''}" id="favBtn" onclick="toggleFav(${spot.id})">${isFav ? '⭐ Favorit' : '☆ Favorit'}</button>` : ''}
-      <button class="btn btn-nav" onclick="navigate(${spot.lat},${spot.lng},'${safeName}')">🧭 Route</button>
+      ${spot.location_hidden ? '' : `<button class="btn btn-nav" onclick="navigate(${spot.lat},${spot.lng},'${safeName}')">🧭 Route</button>`}
       ${CODE && spot.owner_code ? `<button class="btn btn-nav" onclick="openChatOverlay('${esc(spot.owner_code)}','${safeName}')">💬 Chat</button>` : ''}
     </div>
     <div class="btn-row" style="margin-top:0.5rem;">
@@ -450,7 +466,7 @@ async function toggleFav(id) {
     const r = await fetch(isFav ? `${API}/favorites/${id}` : `${API}/favorites`, {
       method: isFav ? 'DELETE' : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(isFav ? { code: CODE } : { code: CODE, spot_id: id })
+      body: JSON.stringify(isFav ? { code: CODE, token: TOK } : { code: CODE, token: TOK, spot_id: id })
     });
     if (r.ok) {
       btn.classList.toggle('following');
@@ -459,7 +475,7 @@ async function toggleFav(id) {
       const n = parseInt((el.textContent.match(/\d+/) || [0])[0], 10) + (btn.classList.contains('following') ? 1 : -1);
       el.textContent = '⭐ ' + Math.max(0, n);
       showToast(btn.classList.contains('following') ? '⭐ Favorit gespeichert' : 'Favorit entfernt');
-    } else showToast('⚠️ Fehler');
+    } else { let m = ''; try { m = (await r.json()).error; } catch {} showToast('⚠️ ' + (m || 'Fehler')); }
   } catch { showToast('⚠️ Verbindungsfehler'); }
   btn.disabled = false;
 }

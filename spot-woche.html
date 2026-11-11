@@ -138,6 +138,8 @@
 'use strict';
 
 const API = 'https://spotme-chat-obom.onrender.com/api';
+const WCODE = (() => { try { return localStorage.getItem('sm_code') || ''; } catch { return ''; } })();
+const WTOK  = (() => { try { return localStorage.getItem('sm_token') || ''; } catch { return ''; } })();
 let spotMap = null;
 let countdownTimer = null;
 
@@ -172,7 +174,16 @@ const CATEGORY_EMOJI = {
   'Sauna':'🧖','Strand':'🏖️','Sonstiges':'📌','Café':'☕','Aussichtspunkt':'⛰️'
 };
 
-function initMap(lat, lng) {
+function circlePoly(lat, lng, r) {
+  const pts = [];
+  for (let i = 0; i <= 64; i++) {
+    const a = (i / 64) * 2 * Math.PI;
+    pts.push([lng + (r * Math.sin(a)) / (111320 * Math.cos(lat * Math.PI / 180)), lat + (r * Math.cos(a)) / 111320]);
+  }
+  return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [pts] } };
+}
+
+function initMap(lat, lng, approxR) {
   if (spotMap) spotMap.remove();
   spotMap = new maplibregl.Map({
     container: 'map',
@@ -183,6 +194,12 @@ function initMap(lat, lng) {
     attributionControl: false
   });
   spotMap.on('load', () => {
+    if (approxR) {
+      spotMap.addSource('approx', { type: 'geojson', data: circlePoly(lat, lng, approxR) });
+      spotMap.addLayer({ id: 'approx-fill', type: 'fill', source: 'approx', paint: { 'fill-color': '#f59e0b', 'fill-opacity': 0.18 } });
+      spotMap.addLayer({ id: 'approx-line', type: 'line', source: 'approx', paint: { 'line-color': '#f59e0b', 'line-width': 2, 'line-dasharray': [2, 2] } });
+      return;
+    }
     const el = document.createElement('div');
     el.style.cssText = `width:22px; height:22px; background:#f59e0b; border-radius:50%; border:3px solid white; box-shadow:0 0 18px rgba(245,158,11,0.85);`;
     new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(spotMap);
@@ -208,7 +225,7 @@ async function loadSpot(token) {
     const ctl = new AbortController();
     const tm = cached ? setTimeout(() => ctl.abort(), navigator.onLine === false ? 1500 : 6000) : null;
     let r;
-    try { r = await fetch(`${API}/weekly-spots/${encodeURIComponent(token)}`, { signal: ctl.signal }); } finally { if (tm) clearTimeout(tm); }
+    try { r = await fetch(`${API}/weekly-spots/${encodeURIComponent(token)}` + (WCODE && WTOK ? `?code=${encodeURIComponent(WCODE)}&token=${encodeURIComponent(WTOK)}` : ''), { signal: ctl.signal }); } finally { if (tm) clearTimeout(tm); }
     if (r.status === 404 || r.status === 410) { notFound = true; throw new Error('not_found'); }
     if (!r.ok) throw new Error('server');
     spot = await r.json();
@@ -232,9 +249,14 @@ async function loadSpot(token) {
   const isMeetingCountdown = !!meetingTime;
   const countdownLabel = isMeetingCountdown ? (meetingExpired ? 'Treffen vorbei' : 'Treffen in') : (spotExpired ? 'Abgelaufen' : 'Spot verfügbar');
 
+  // Nach erfolgreichem Check-in vor Ort liefert der Server den genauen Punkt (nur in dieser Sitzung merken)
+  if (spot.location_hidden) {
+    try { const ex = JSON.parse(sessionStorage.getItem('wk_exact_' + token) || 'null'); if (ex && isFinite(ex.lat) && isFinite(ex.lng)) { spot.lat = ex.lat; spot.lng = ex.lng; spot.location_hidden = false; } } catch {}
+  }
+  const hiddenLoc = !!spot.location_hidden;
   const catEmoji = CATEGORY_EMOJI[spot.category] || '📍';
   const shareUrl = window.location.href;
-  try { initMap(+spot.lat, +spot.lng); } catch {}
+  try { initMap(+spot.lat, +spot.lng, hiddenLoc ? (spot.approx_radius_m || 500) : 0); } catch {}
 
   const checkinKey = `wk_checkin_${token}`;
   const alreadyCheckedIn = !!sessionStorage.getItem(checkinKey);
@@ -247,6 +269,7 @@ async function loadSpot(token) {
       ${!spotExpired ? `<span class="tag tag-time" id="timeTag">${isMeetingCountdown ? (meetingExpired ? '⏰ Treffen beendet' : `⏳ ${formatTimeLeft(meetingTime)}` ) : (spotExpired ? '⚠️ Abgelaufen' : `⏳ ${formatTimeLeft(expiresTime)}`)}</span>` : '<span class="tag tag-expired">⚠️ Abgelaufen</span>'}
     </div>
     ${spot.description ? `<div class="spot-desc">${esc(spot.description)}</div>` : ''}
+    ${hiddenLoc ? `<div style="font-size:0.76rem;color:var(--muted2,#94a3b8);line-height:1.5;margin:0.6rem 0;padding:0.6rem 0.75rem;border:1px dashed var(--muted2,#94a3b8);border-radius:10px;">🔒 Ungefährer Bereich. Den genauen Ort siehst du nach dem Einchecken vor Ort (im Umkreis von 100 m). Mit Profil – Gäste sehen immer nur den Bereich.</div>` : ''}
     <div class="countdown-bar">
       <div class="countdown-icon">${isMeetingCountdown ? '⏰' : '🗓️'}</div>
       <div>
@@ -263,7 +286,7 @@ async function loadSpot(token) {
     ${!spotExpired ? `
     <div class="btn-row">
       <button class="btn btn-checkin" id="checkinBtn" ${alreadyCheckedIn ? 'disabled' : ''}>${alreadyCheckedIn ? '✅ Eingecheckt' : '📍 Einchecken'}</button>
-      <button class="btn btn-nav" id="navBtn">🧭 Route</button>
+      ${hiddenLoc ? '' : `<button class="btn btn-nav" id="navBtn">🧭 Route</button>`}
     </div>` : ''}
     <div class="share-box">
       <div class="share-box-title">🔗 TEILEN</div>
@@ -277,7 +300,7 @@ async function loadSpot(token) {
 
   if (!spotExpired) {
     document.getElementById('checkinBtn').addEventListener('click', () => doCheckin(token, checkinKey));
-    document.getElementById('navBtn').addEventListener('click', () => navigate(+spot.lat, +spot.lng, spot.name));
+    document.getElementById('navBtn')?.addEventListener('click', () => navigate(+spot.lat, +spot.lng, spot.name));
     if (navigator.share) {
       document.getElementById('nativeShareBtn')?.addEventListener('click', () => {
         navigator.share({ title: `SpotMe · ${spot.name}`, url: shareUrl }).catch(() => {});
@@ -292,28 +315,37 @@ async function loadSpot(token) {
 
 async function doCheckin(token, checkinKey) {
   const btn = document.getElementById('checkinBtn');
-  if (!btn || btn.disabled) return;
+  if (!navigator.geolocation) { showToast('❌ Kein GPS'); return; }
   btn.disabled = true;
   btn.textContent = '⏳';
-  try {
-    const r = await fetch(`${API}/weekly-spots/${encodeURIComponent(token)}/checkin`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error || 'Fehler');
-    sessionStorage.setItem(checkinKey, '1');
-    btn.textContent = '✅ Eingecheckt';
-    showToast(`✅ Eingecheckt als ${data.label}`);
-    const numEl = document.getElementById('checkinNum');
-    if (numEl) numEl.textContent = parseInt(numEl.textContent || '0') + 1;
-    const banner = document.getElementById('checkinBanner');
-    if (banner) banner.style.display = 'block';
-  } catch(e) {
-    showToast('❌ ' + (e.message || 'Einchecken fehlgeschlagen'));
-    btn.disabled = false;
-    btn.textContent = '📍 Einchecken';
-  }
+  navigator.geolocation.getCurrentPosition(async pos => {
+    try {
+      const r = await fetch(`${API}/weekly-spots/${encodeURIComponent(token)}/checkin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: WCODE, vtoken: WTOK, lat: pos.coords.latitude, lng: pos.coords.longitude })
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Fehler');
+      sessionStorage.setItem(checkinKey, '1');
+      if (data.exact) {
+        try { sessionStorage.setItem('wk_exact_' + token, JSON.stringify(data.exact)); } catch {}
+        showToast('✅ Eingecheckt – der genaue Ort ist jetzt sichtbar');
+        loadSpot(token);
+        return;
+      }
+      btn.textContent = '✅ Eingecheckt';
+      showToast('✅ Eingecheckt – den genauen Ort sehen nur Profile mit Anmeldung');
+      const numEl = document.getElementById('checkinNum');
+      if (numEl) numEl.textContent = parseInt(numEl.textContent || '0') + 1;
+      const banner = document.getElementById('checkinBanner');
+      if (banner) banner.style.display = 'block';
+    } catch(e) {
+      showToast('❌ ' + (e.message || 'Einchecken fehlgeschlagen'));
+      btn.disabled = false;
+      btn.textContent = '📍 Einchecken';
+    }
+  }, () => { showToast('❌ Standort nicht verfügbar'); btn.disabled = false; btn.textContent = '📍 Einchecken'; }, { enableHighAccuracy: true });
 }
 
 function navigate(lat, lng, name) {

@@ -136,7 +136,7 @@ try { spotFilter = localStorage.getItem('sm_hub_filter') || 'alle'; } catch (e) 
 function activeInvites() { const now = Date.now(); return S.invites.filter(i => i.status !== 'expired' && Number(i.time_end || 0) >= now && i.status !== 'cancelled' && i.status !== 'declined'); }
 function pastInvites() { const now = Date.now(); return S.invites.filter(i => i.status === 'expired' || Number(i.time_end || 0) < now || i.status === 'cancelled' || i.status === 'declined'); }
 function newInvites() { return activeInvites().filter(i => i.status === 'pending' && i.from_code !== CODE); }
-function nextMeeting() { const now = Date.now(); return S.invites.filter(i => i.status === 'accepted' && Number(i.time_end || 0) > now).sort((a, b) => Number(a.time_start) - Number(b.time_start))[0] || null; }
+function nextMeeting() { const now = Date.now(); return S.invites.filter(i => (i.status === 'accepted' || i.status === 'completed') && Number(i.time_end || 0) > now).sort((a, b) => Number(a.time_start) - Number(b.time_start))[0] || null; }
 function chatList() {
   const out = [], un = unreadMap();
   for (let i = 0; i < localStorage.length; i++) {
@@ -272,14 +272,19 @@ function inviteCard(inv, past) {
   let st = '';
   if (inv.status === 'pending') st = '<span class="pill pending">⏳ Ausstehend</span>';
   else if (inv.status === 'accepted') st = (ts <= now && te >= now) ? '<span class="pill ok">🟢 JETZT</span>' : '<span class="pill ok">✅ Akzeptiert</span>';
+  else if (inv.status === 'completed') st = '<span class="pill ok">🟢 Beide eingecheckt</span>';
   else if (inv.status === 'declined') st = '<span class="pill bad">❌ Abgelehnt</span>';
-  else if (inv.status === 'cancelled') st = '<span class="pill bad">🚫 Storniert</span>';
+  else if (inv.status === 'cancelled') st = '<span class="pill bad">🚫 Beendet</span>';
   else st = '<span class="pill">📁 Abgelaufen</span>';
   let acts = '';
   if (!past && inv.status === 'pending' && !isSender)
     acts = `<div class="acts"><button class="btn primary" data-acc="${inv.id}">✅ Akzeptieren</button><button class="btn danger" data-dec="${inv.id}">Ablehnen</button></div>`;
-  if (!past && inv.status === 'accepted')
-    acts = `<div class="acts"><button class="btn" data-spot="${inv.spot_id || ''}">🧭 Zum Spot</button><button class="btn primary" data-ci="${inv.id}">📍 Check-in</button><button class="btn ghost" data-chat="${esc(otherCode)}" data-name="${esc(other)}">💬</button><button class="btn ghost danger" data-cancel="${inv.id}">🚫</button></div>`;
+  const hid = inv.location_hidden;
+  const priv = (!past && (inv.status === 'accepted' || inv.status === 'completed'))
+    ? (hid ? '<div class="dt" style="margin-top:.4rem;line-height:1.5">🔒 Der genaue Treffpunkt erscheint, sobald ihr <b>beide</b> eingecheckt seid. Einchecken geht im Umkreis von 100 m – schau dich erst in Ruhe um.</div>' : '<div class="dt" style="margin-top:.4rem;color:var(--green,#10b981)">✅ Treffpunkt freigegeben – ihr seid beide da.</div>')
+    : '';
+  if (!past && (inv.status === 'accepted' || inv.status === 'completed'))
+    acts = priv + `<div class="acts"><button class="btn" data-spot="${inv.spot_id || ''}">${hid ? '🗺️ Bereich' : '🧭 Zum Spot'}</button>${inv.status === 'accepted' ? `<button class="btn primary" data-ci="${inv.id}">📍 Einchecken</button>` : ''}<button class="btn ghost" data-chat="${esc(otherCode)}" data-name="${esc(other)}">💬</button><button class="btn ghost danger" data-cancel="${inv.id}" title="Treffen beenden">🚫</button></div>`;
   return `<div class="card" style="${past ? 'opacity:.55' : ''}"><div class="head"><div class="ico">${isSender ? '📤' : '📨'}</div><div class="info"><div class="nm">${esc(inv.spot_name || 'Platz Spot')}</div><div class="dt">${st} ${ts > now && !past ? '<span class="mono">⏰ ' + countdown(ts) + '</span>' : ''}</div><div class="dt mono">${fmt(ts)} – ${fmt(te)}</div><div class="dt">${isSender ? '📤 An' : '📨 Von'}: <b>${esc(other)}</b></div></div></div>${wxSlot(inv, past)}${acts}</div>`;
 }
 function panelInvites() {
@@ -400,14 +405,14 @@ function checkIn(id) {
   if (!navigator.geolocation) { toast('❌ Kein GPS'); return; }
   navigator.geolocation.getCurrentPosition(async pos => {
     try {
-      const r = await post('/spotcache/checkin', 'POST', { id, code: CODE, lat: pos.coords.latitude, lng: pos.coords.longitude });
-      if (r.d.error) toast('⚠️ ' + r.d.error); else toast(r.d.bothCheckedIn ? '🎉 Match! Du hast jemanden getroffen' : '✅ Eingecheckt – warte auf Partner…');
+      const r = await post('/spotcache/checkin', 'POST', { id, code: CODE, token: TOK, lat: pos.coords.latitude, lng: pos.coords.longitude });
+      if (r.d.error) toast('⚠️ ' + r.d.error); else toast(r.d.bothCheckedIn ? '🎉 Ihr seid beide da – Treffpunkt freigegeben' : '✅ Eingecheckt – der genaue Ort erscheint, sobald auch die andere Person eingecheckt ist');
     } catch (e) { toast(navigator.onLine === false ? '📴 Check-in nur online' : '⚠️ Server nicht erreichbar'); }
     await loadInvites(); render();
   }, () => toast('❌ Standort nicht verfügbar'), { enableHighAccuracy: true });
 }
 async function unfav(id) {
-  try { await tfetch(API + '/favorites/' + id, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: CODE }) }, 10000); toast('✕ Favorit entfernt'); }
+  try { await tfetch(API + '/favorites/' + id, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: CODE, token: TOK }) }, 10000); toast('✕ Favorit entfernt'); }
   catch (e) { toast(navigator.onLine === false ? '📴 Nur online möglich' : '⚠️ Fehler'); return; }
   await loadFavs(); render();
 }
@@ -453,8 +458,8 @@ async function fetchList(key, url, assign) {
     return changed;
   } catch (e) { return false; /* Cache bleibt, Stand-Hinweis zeigt Alter */ }
 }
-const loadInvites = () => fetchList('invites', '/spotcache/invites/' + CODE, d => { S.invites = d; });
-const loadFavs = () => fetchList('favs', '/favorites/' + CODE, d => { S.favs = d; });
+const loadInvites = () => fetchList('invites', '/spotcache/invites/' + CODE + '?token=' + encodeURIComponent(TOK), d => { S.invites = d; });
+const loadFavs = () => fetchList('favs', '/favorites/' + CODE + '?token=' + encodeURIComponent(TOK), d => { S.favs = d; });
 const loadWeekly = () => fetchList('weekly', '/weekly-spots/mine?code=' + encodeURIComponent(CODE) + '&token=' + encodeURIComponent(TOK), d => { S.weekly = d; });
 async function loadMine() {
   await fetchList('mine', '/userspots/' + CODE, d => { S.mine = d; });

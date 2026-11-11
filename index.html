@@ -449,6 +449,7 @@ let invitePollInterval = null, knownInviteCount = 0;
 let toastTimer, currentDrawer = null;
 let activeRadius = null, detailSpot = null, detailMiniMap = null;
 let radiusCatFilter = null;
+const smTokQ = () => encodeURIComponent(localStorage.getItem('sm_token') || '');
 let nearbyMode = false, nearbyCtx = null, pendingNearbyCtx = null, spotsLoadedOnce = false;
 let weeklyMiniMap = null, weeklyMarker = null, weeklyCoords = null;
 let urlSpotChecked = false; // Verhindert mehrfaches Fliegen zum Platz Spot beim Laden
@@ -941,7 +942,7 @@ async function openBlueskyShareDialog() {
 
   const token = localStorage.getItem('sm_token');
   const [spotsRes, liveRes] = await Promise.allSettled([
-    fetch(`${API}/userspots/${CODE}`).then(r => r.ok ? r.json() : null),
+    fetch(`${API}/userspots/${CODE}?token=${smTokQ()}`).then(r => r.ok ? r.json() : null),
     fetch(`${API}/live-spots/mine?code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(token || '')}`)
       .then(r => r.ok ? r.json() : null)
   ]);
@@ -1061,7 +1062,7 @@ async function loadAllSpots() {
   }
 
   try {
-    const r = await tfetch(`${API}/userspots/all?noimage=1${myCountry() ? '&country=' + myCountry() : ''}`, {}, 12000);
+    const r = await tfetch(`${API}/userspots/all?noimage=1${myCountry() ? '&country=' + myCountry() : ''}${hasProfile() ? '&code=' + encodeURIComponent(CODE) + '&token=' + smTokQ() : ''}`, {}, 12000);
     if (r.ok) {
       const freshSpots = await r.json();
       await saveSpotsOffline(freshSpots);
@@ -1075,7 +1076,7 @@ async function loadAllSpots() {
       await renderMarkers();
     }
 
-    const r2 = await tfetch(`${API}/userspots/${CODE}`, {}, 12000);
+    const r2 = await tfetch(`${API}/userspots/${CODE}?token=${smTokQ()}`, {}, 12000);
     if (r2.ok) {
       mySpots = (await withPending(await r2.json())).filter(s => s.code === CODE);
       document.getElementById('statSpots').textContent = mySpots.length;
@@ -1189,6 +1190,21 @@ function applyFilter() {
   });
 }
 
+// Platz Spots ohne Berechtigung: gestrichelter Bereich statt genauem Punkt (wie bei Live Spots)
+function drawSpotApprox() {
+  const feats = allSpots.filter(s => s.location_hidden && isFinite(+s.lat) && isFinite(+s.lng)).map(s => ({
+    type: 'Feature', properties: { id: s.id }, geometry: circlePolyIdx(+s.lat, +s.lng, s.approx_radius_m || 500).geometry
+  }));
+  const draw = () => {
+    const data = { type: 'FeatureCollection', features: feats };
+    if (map.getSource('spot-approx')) { map.getSource('spot-approx').setData(data); return; }
+    map.addSource('spot-approx', { type: 'geojson', data });
+    map.addLayer({ id: 'spot-approx-fill', type: 'fill', source: 'spot-approx', paint: { 'fill-color': '#f59e0b', 'fill-opacity': 0.10 } });
+    map.addLayer({ id: 'spot-approx-line', type: 'line', source: 'spot-approx', paint: { 'line-color': '#f59e0b', 'line-width': 1.5, 'line-dasharray': [2, 2] } });
+  };
+  try { if (map.isStyleLoaded()) draw(); else map.once('load', draw); } catch {}
+}
+
 async function renderMarkers() {
   markers.forEach(m => m.remove());
   markers = [];
@@ -1199,12 +1215,14 @@ async function renderMarkers() {
     const isMine=s.code===CODE;
     const el=document.createElement('div');
     el.className=isMine?('my-spot-marker'+(s.pending?' pending'+(s.failed?' failed':''):'')):`other-spot-marker${onlineSet.has(s.code)?' is-online':''}`;
+    if (s.location_hidden) { el.style.opacity='0.75'; el.title='Ungefährer Bereich'; }
     const marker=new maplibregl.Marker({element:el}).setLngLat([s.lng,s.lat]).addTo(map);
     markers.push(marker);
     el.addEventListener('click', e => { e.stopPropagation(); openMarkerDrawer(s,isMine,!isMine&&onlineSet.has(s.code)); });
     if (!isMine) { if (!byCode.has(s.code)) byCode.set(s.code, []); byCode.get(s.code).push(el); }
   });
 
+  drawSpotApprox();
   buildFilterStrip();
   applyFilter();
 
@@ -1259,8 +1277,8 @@ function openMarkerDrawer(s, isMine, isOnline) {
            <button id="md-edit" class="sc-btn navigate" style="flex:1;padding:0.8rem;font-size:0.9rem;border-radius:12px;">✏️ Bearbeiten</button>
            <button id="md-del"  class="sc-btn danger"   style="flex:1;padding:0.8rem;font-size:0.9rem;border-radius:12px;">🗑️ Löschen</button>
          </div>`
-      : `<div style="display:flex;gap:0.5rem;margin-bottom:0.5rem;">
-           <button id="md-nav"  class="sc-btn navigate" style="flex:1;padding:0.8rem;border-radius:12px;">🧭 Route</button>
+      : `${s.location_hidden ? `<div style="font-size:0.72rem;color:var(--muted2);margin-bottom:0.6rem;line-height:1.45;">🔒 Ungefährer Bereich – den genauen Ort siehst du als ⭐ Favorit oder nach dem Check-in bei einem Treffen.</div>` : ''}<div style="display:flex;gap:0.5rem;margin-bottom:0.5rem;">
+           ${s.location_hidden ? '' : `<button id="md-nav"  class="sc-btn navigate" style="flex:1;padding:0.8rem;border-radius:12px;">🧭 Route</button>`}
            <button id="md-prof" class="sc-btn"          style="flex:1;padding:0.8rem;border-radius:12px;">👤 Profil</button>
          </div>
          <button id="md-det" class="sc-btn primary" style="width:100%;padding:0.8rem;font-size:0.9rem;border-radius:12px;">📋 Details & Einladung</button>`
@@ -1274,7 +1292,7 @@ function openMarkerDrawer(s, isMine, isOnline) {
     document.getElementById('md-edit').addEventListener('click', () => { closeDrawer(); setTimeout(() => openSpotEdit(s), 300); });
     document.getElementById('md-del').addEventListener('click', () => { deleteSpot(s.id); closeDrawer(); });
   } else {
-    document.getElementById('md-nav').addEventListener('click', () => { navigateToSpot(s.lat, s.lng, s.name); closeDrawer(); });
+    document.getElementById('md-nav')?.addEventListener('click', () => { navigateToSpot(s.lat, s.lng, s.name); closeDrawer(); });
     document.getElementById('md-prof').addEventListener('click', () => { closeDrawer(); setTimeout(()=>showSpotOwnerProfile(s.code),300); });
     document.getElementById('md-det').addEventListener('click', () => { closeDrawer(); setTimeout(()=>openSpotDetail(s.id),300); });
   }
@@ -1406,7 +1424,7 @@ function openDrawer(type) {
               </div>
             </div>
             <div class="sc-actions">
-              <button class="sc-btn navigate" data-lat="${s.lat}" data-lng="${s.lng}">🧭</button>
+              ${s.location_hidden ? '' : `<button class="sc-btn navigate" data-lat="${s.lat}" data-lng="${s.lng}">🧭</button>`}
               <button class="sc-btn" data-edit="${s.id}"
                       style="background:rgba(245,158,11,0.08);
                              border-color:rgba(245,158,11,0.3);
@@ -1437,7 +1455,7 @@ function openDrawer(type) {
       b.addEventListener('click', async () => {
         const spotId = +b.dataset.edit;
         try {
-          const r = await fetch(`${API}/userspots/${CODE}`);
+          const r = await fetch(`${API}/userspots/${CODE}?token=${smTokQ()}`);
           if (r.ok) {
             const spots = await r.json();
             const spot  = spots.find(s => s.id === spotId);
@@ -1490,7 +1508,7 @@ function openDrawer(type) {
           ${onlineSet.has(s.code)?'<span style="font-size:0.65rem;color:#10b981;font-weight:600;">● Online</span>':''}
           ${spotAgeHtml(s.createdAt||s.created_at)}</div></div>
           <div class="sc-actions">
-            <button class="sc-btn navigate" data-lat="${s.lat}" data-lng="${s.lng}">🧭</button>
+            ${s.location_hidden ? '' : `<button class="sc-btn navigate" data-lat="${s.lat}" data-lng="${s.lng}">🧭</button>`}
             <button class="sc-btn primary" data-det="${s.id}">📋</button>
           </div></div>`).join('')
       : `<div class="empty-state"><div class="es-icon">🌐</div>Keine Platz Spots.</div>`;
@@ -1534,7 +1552,7 @@ async function loadInvitesIntoDrawer(body) {
   body.innerHTML = `<div class="empty-state"><div class="es-icon">⏳</div>Lädt…</div>`;
   let invites = [];
   try {
-    const r = await fetch(`${API}/spotcache/invites/${CODE}`);
+    const r = await fetch(`${API}/spotcache/invites/${CODE}?token=${smTokQ()}`);
     if (r.ok) invites = await r.json();
   } catch {}
 
@@ -1549,10 +1567,10 @@ async function loadInvitesIntoDrawer(body) {
 
   const now = Date.now();
   const active  = invites.filter(inv =>
-    inv.status !== 'expired' && (inv.time_end || 0) >= now
+    inv.status !== 'expired' && inv.status !== 'cancelled' && inv.status !== 'declined' && (inv.time_end || 0) >= now
   );
   const expired = invites.filter(inv =>
-    inv.status === 'expired' || (inv.time_end || 0) < now
+    inv.status === 'expired' || inv.status === 'cancelled' || inv.status === 'declined' || (inv.time_end || 0) < now
   );
 
   const renderInvite = (inv, isExpired = false) => {
@@ -1566,6 +1584,10 @@ async function loadInvitesIntoDrawer(body) {
         ? (timeStart <= now && timeEnd >= now
           ? `<span class="status-pill now">🟢 JETZT!</span>`
           : `<span class="status-pill accepted">✅ Akzeptiert</span>`)
+          : inv.status === 'completed'
+          ? `<span class="status-pill now">🟢 Beide eingecheckt</span>`
+          : inv.status === 'cancelled'
+          ? `<span class="status-pill" style="background:rgba(100,116,139,0.2);color:#64748b;border-color:rgba(100,116,139,0.3);">🛑 Beendet</span>`
           : inv.status === 'expired'
           ? `<span class="status-pill"
                    style="background:rgba(100,116,139,0.2);
@@ -1611,12 +1633,16 @@ async function loadInvitesIntoDrawer(body) {
              </div>`
           : ''}
 
-        ${inv.status === 'accepted' && !isExpired
-          ? `<div style="display:flex;gap:0.5rem;margin-top:0.75rem;">
-               <button class="sc-btn navigate" style="flex:1;padding:0.65rem;"
-                       data-nav-spot="${inv.spot_id || ''}">🧭 Route</button>
-               <button class="sc-btn primary" style="flex:1;padding:0.65rem;"
-                       data-ci="${inv.id}">📍 Check-in</button>
+        ${(inv.status === 'accepted' || inv.status === 'completed') && !isExpired
+          ? `${inv.location_hidden ? `<div style="font-size:0.7rem;color:var(--muted2);margin-top:0.6rem;line-height:1.5;">🔒 Der genaue Treffpunkt erscheint, sobald ihr <b>beide</b> eingecheckt seid. Einchecken geht im Umkreis von 100 m – schau dich erst in Ruhe um.</div>` : `<div style="font-size:0.7rem;color:var(--green);margin-top:0.6rem;">✅ Treffpunkt freigegeben – ihr seid beide da.</div>`}
+             <div style="display:flex;gap:0.5rem;margin-top:0.6rem;">
+               ${inv.location_hidden
+                 ? `<button class="sc-btn navigate" style="flex:1;padding:0.65rem;" data-area-spot="${inv.spot_id || ''}">🗺️ Bereich</button>`
+                 : `<button class="sc-btn navigate" style="flex:1;padding:0.65rem;" data-nav-spot="${inv.spot_id || ''}">🧭 Route</button>`}
+               ${inv.status === 'accepted' ? `<button class="sc-btn primary" style="flex:1;padding:0.65rem;"
+                       data-ci="${inv.id}">📍 Einchecken</button>` : ''}
+               <button class="sc-btn" style="padding:0.65rem 0.8rem;background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.3);color:var(--red);"
+                       data-cancel-inv="${inv.id}" title="Treffen beenden">🛑</button>
                <button class="sc-btn success" style="padding:0.65rem 0.9rem;"
                        data-chat="${inv.from_code === CODE ? inv.to_code : inv.from_code}"
                        data-chatname="${esc(inv.spot_name || '')}">💬</button>
@@ -1662,11 +1688,22 @@ async function loadInvitesIntoDrawer(body) {
   body.querySelectorAll('[data-nav-spot]').forEach(b =>
     b.addEventListener('click', () => {
       const s = allSpots.find(x => x.id == b.dataset.navSpot);
-      if (s) navigateToSpot(s.lat, s.lng);
+      if (s && !s.location_hidden) navigateToSpot(s.lat, s.lng);
+      else toast('🔒 Genauer Ort erst nach dem Check-in beider');
     })
   );
   body.querySelectorAll('[data-ci]').forEach(b =>
     b.addEventListener('click', () => checkIn(+b.dataset.ci))
+  );
+  body.querySelectorAll('[data-area-spot]').forEach(b =>
+    b.addEventListener('click', () => {
+      const sp = allSpots.find(x => x.id == b.dataset.areaSpot);
+      if (!sp) { toast('Bereich nicht geladen'); return; }
+      closeDrawer(); map.flyTo({ center: [sp.lng, sp.lat], zoom: 14.5 });
+    })
+  );
+  body.querySelectorAll('[data-cancel-inv]').forEach(b =>
+    b.addEventListener('click', () => cancelMeeting(+b.dataset.cancelInv))
   );
   body.querySelectorAll('[data-chat]').forEach(b =>
     b.addEventListener('click', () => {
@@ -1909,14 +1946,26 @@ async function checkIn(inviteId) {
   if (!navigator.geolocation) { toast('❌ Kein GPS'); return; }
   navigator.geolocation.getCurrentPosition(async pos=>{
     try {
-      const r=await fetch(`${API}/spotcache/checkin`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:inviteId,code:CODE,lat:pos.coords.latitude,lng:pos.coords.longitude})});
+      const r=await fetch(`${API}/spotcache/checkin`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:inviteId,code:CODE,token:localStorage.getItem('sm_token'),lat:pos.coords.latitude,lng:pos.coords.longitude})});
       const data=await r.json();
       if (data.error) { toast('⚠️ '+data.error); return; }
-      if (data.bothCheckedIn) showMatch('Match!','Du hast jemanden getroffen 🎉');
-      else toast('✅ Eingecheckt – warte auf Partner…');
-    } catch { toast('✅ Eingecheckt'); }
+      if (data.bothCheckedIn) { showMatch('Match!','Ihr seid beide da 🎉 – der Treffpunkt ist jetzt freigegeben'); loadAllSpots().catch(()=>{}); }
+      else toast('✅ Eingecheckt – der genaue Ort erscheint, sobald auch die andere Person eingecheckt ist');
+    } catch { toast('⚠️ Check-in nur mit Verbindung möglich'); }
     loadInvitesIntoDrawer(document.getElementById('drawerBody'));
-  },null,{enableHighAccuracy:true});
+  },()=>toast('❌ Standort nicht verfügbar'),{enableHighAccuracy:true});
+}
+
+// Treffen beenden (jederzeit möglich, auch nach dem Check-in). Die andere Person erfährt nur "Treffen beendet".
+async function cancelMeeting(inviteId) {
+  if (!confirm('Treffen beenden?\nDie andere Person erfährt nur, dass das Treffen beendet wurde.')) return;
+  try {
+    const r = await fetch(`${API}/spotcache/invite/${inviteId}/cancel`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code: CODE, token: localStorage.getItem('sm_token') }) });
+    const d = await r.json();
+    if (d.success) { toast('🛑 Treffen beendet'); loadAllSpots().catch(()=>{}); }
+    else toast('⚠️ ' + (d.error || 'Nicht möglich'));
+  } catch { toast('📴 Beenden nur mit Verbindung möglich'); }
+  loadInvitesIntoDrawer(document.getElementById('drawerBody'));
 }
 
 function startInvitePolling() {
@@ -1927,7 +1976,7 @@ function startInvitePolling() {
     invBusy = true;
     try {
       const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 10000);
-      let r; try { r = await fetch(`${API}/spotcache/invites/${CODE}`, { signal: ctl.signal }); } finally { clearTimeout(tm); }
+      let r; try { r = await fetch(`${API}/spotcache/invites/${CODE}?token=${smTokQ()}`, { signal: ctl.signal }); } finally { clearTimeout(tm); }
       if (!r.ok) return;
       const invites = await r.json();
       const count   = invites.length;
@@ -2240,7 +2289,7 @@ let favoritesLoaded  = false;
 
 async function loadFavoritesCache() {
   try {
-    const r = await fetch(`${API}/favorites/${CODE}`);
+    const r = await fetch(`${API}/favorites/${CODE}?token=${smTokQ()}`);
     if (!r.ok) return;
     const favs = await r.json();
     favoritesCache.clear();
@@ -2254,7 +2303,7 @@ async function loadFavoritesIntoDrawer(body) {
 
   let favs = [];
   try {
-    const r = await fetch(`${API}/favorites/${CODE}`);
+    const r = await fetch(`${API}/favorites/${CODE}?token=${smTokQ()}`);
     if (r.ok) favs = await r.json();
   } catch {}
 
@@ -2316,8 +2365,8 @@ async function loadFavoritesIntoDrawer(body) {
           <div class="fav-checkin">${lastCheckin}</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:0.35rem;">
-          <button class="sc-btn navigate" style="padding:0.5rem 0.6rem;"
-                  data-fav-lat="${f.lat}" data-fav-lng="${f.lng}">🧭</button>
+          ${f.location_hidden ? '' : `<button class="sc-btn navigate" style="padding:0.5rem 0.6rem;"
+                  data-fav-lat="${f.lat}" data-fav-lng="${f.lng}">🧭</button>`}
           <button class="sc-btn" style="padding:0.5rem 0.6rem;font-size:0.7rem;
                   background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.3);color:var(--red);"
                   data-unfav="${f.spot_id}">✕</button>
@@ -2455,18 +2504,20 @@ async function toggleFavorite(spotId, isFav) {
   const id = String(spotId);
   try {
     if (isFav) {
-      await fetch(`${API}/favorites`, {
+      const fr = await fetch(`${API}/favorites`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ code: CODE, spot_id: spotId })
+        body:    JSON.stringify({ code: CODE, token: localStorage.getItem('sm_token'), spot_id: spotId })
       });
+      if (!fr.ok) { let m = ''; try { m = (await fr.json()).error; } catch {} toast('⚠️ ' + (m || 'Favorit nicht gespeichert')); return false; }
       favoritesCache.add(id);
-      toast('⭐ Favorit gespeichert');
+      toast('⭐ Favorit gespeichert – du siehst den genauen Ort');
+      loadAllSpots().catch(() => {});
     } else {
       await fetch(`${API}/favorites/${spotId}`, {
         method:  'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ code: CODE })
+        body:    JSON.stringify({ code: CODE, token: localStorage.getItem('sm_token') })
       });
       favoritesCache.delete(id);
       toast('✕ Favorit entfernt');
@@ -2682,7 +2733,7 @@ async function openMeetingsModal() {
 
   let invites = [];
   try {
-    const r = await fetch(`${API}/spotcache/invites/${CODE}`);
+    const r = await fetch(`${API}/spotcache/invites/${CODE}?token=${smTokQ()}`);
     if (r.ok) invites = await r.json();
   } catch {}
 
@@ -2876,6 +2927,14 @@ async function openSpotDetail(spotId) {
     detailMiniMap.on('load', () => {
       const el = document.createElement('div');
       el.className = 'my-spot-marker';
+      if (spot.location_hidden) {
+        el.style.opacity = '0.7';
+        try {
+          detailMiniMap.addSource('approx', { type: 'geojson', data: circlePolyIdx(+spot.lat, +spot.lng, spot.approx_radius_m || 500) });
+          detailMiniMap.addLayer({ id: 'approx-fill', type: 'fill', source: 'approx', paint: { 'fill-color': '#f59e0b', 'fill-opacity': 0.18 } });
+          detailMiniMap.addLayer({ id: 'approx-line', type: 'line', source: 'approx', paint: { 'line-color': '#f59e0b', 'line-width': 2, 'line-dasharray': [2, 2] } });
+        } catch {}
+      }
       new maplibregl.Marker({ element: el }).setLngLat([spot.lng, spot.lat]).addTo(detailMiniMap);
       if (userPos) {
         const uel = document.createElement('div');
@@ -2941,11 +3000,12 @@ async function openSpotDetail(spotId) {
             ? '<span style="font-size:0.68rem;color:var(--green);font-weight:600;font-family:\'Space Mono\',monospace;">● Online</span>'
             : '<span style="font-size:0.68rem;color:var(--muted);font-family:\'Space Mono\',monospace;">○ Offline</span>'}
           ${spotAgeHtml(spot.createdAt || spot.created_at)}
-          ${dist ? `<span style="font-size:0.65rem;color:var(--muted);">📍 ${dist}</span>` : ''}
+          ${dist ? `<span style="font-size:0.65rem;color:var(--muted);">📍 ${spot.location_hidden ? '~' : ''}${dist}</span>` : ''}
         </div>
       </div>
     </div>
 
+    ${spot.location_hidden ? `<div style="font-size:0.74rem;color:var(--muted2);line-height:1.45;margin-bottom:0.6rem;padding:0.55rem 0.7rem;border:1px dashed var(--bord2);border-radius:10px;">🔒 Ungefährer Bereich. Den genauen Ort siehst du als ⭐ Favorit oder nach dem Check-in bei einem Treffen. Hinweis: Wer den Ort in die Beschreibung schreibt, macht ihn selbst sichtbar.</div>` : ''}
     <div id="spotWeatherBar"></div>
 
     ${profile?.bio
@@ -2984,7 +3044,8 @@ async function openSpotDetail(spotId) {
   favBtn.style.display = '';
   favBtn.onclick = async () => {
     const newFav = !favoritesCache.has(String(spot.id));
-    await toggleFavorite(spot.id, newFav);
+    const okFav = await toggleFavorite(spot.id, newFav);
+    if (okFav === false) return;
     favBtn.textContent = newFav ? '⭐' : '☆';
     favBtn.classList.toggle('active', newFav);
   };
@@ -2997,7 +3058,7 @@ async function openSpotDetail(spotId) {
   let existingInvite = null;
   const now = Date.now();
   try {
-    const ir = await fetch(`${API}/spotcache/invites/${CODE}`);
+    const ir = await fetch(`${API}/spotcache/invites/${CODE}?token=${smTokQ()}`);
     if (ir.ok) {
       const allInvites = await ir.json();
       existingInvite = allInvites.find(inv =>
@@ -3104,7 +3165,7 @@ function openNewSpots() {
           </div>
         </div>
         <div class="sc-actions">
-          <button class="sc-btn navigate" data-lat="${s.lat}" data-lng="${s.lng}">🧭</button>
+          ${s.location_hidden ? '' : `<button class="sc-btn navigate" data-lat="${s.lat}" data-lng="${s.lng}">🧭</button>`}
           <button class="sc-btn primary" data-det="${s.id}">📋</button>
         </div>
       </div>`;
@@ -3248,7 +3309,7 @@ async function openDrawerFiltered(allList, km) {
         </div>
       </div>
       <div class="sc-actions">
-        <button class="sc-btn navigate" data-lat="${s.lat}" data-lng="${s.lng}" title="Route">🧭</button>
+        ${s.location_hidden ? '' : `<button class="sc-btn navigate" data-lat="${s.lat}" data-lng="${s.lng}" title="Route">🧭</button>`}
         <button class="sc-btn primary" data-det="${s.id}" title="Details">📋</button>
       </div>
     </div>`;
@@ -3374,7 +3435,7 @@ async function loadWeeklyDrawer(body) {
         <span style="font-size:0.68rem;color:var(--muted2);">👥 ${s.checkin_count} Check-in${s.checkin_count !== 1 ? 's' : ''}</span>
       </div>
       <div class="weekly-card-actions">
-        <button class="sc-btn navigate" data-lat="${s.lat}" data-lng="${s.lng}" title="Route">🧭</button>
+        ${s.location_hidden ? '' : `<button class="sc-btn navigate" data-lat="${s.lat}" data-lng="${s.lng}" title="Route">🧭</button>`}
         <button class="sc-btn success" data-share-token="${s.token}" data-share-name="${esc(s.name)}" title="Teilen">🔗 Teilen</button>
         <button class="sc-btn danger" data-del-weekly="${s.token}" title="Löschen">🗑️</button>
       </div>
