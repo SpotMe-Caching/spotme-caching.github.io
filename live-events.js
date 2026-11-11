@@ -734,6 +734,11 @@ module.exports = function mountLiveEvents(app, deps) {
         is_owner: !!viewer && viewer === sp.owner_code,
       };
       if (viewer && !out.is_owner) out.owner_code = sp.owner_code;
+      // Genauer Ort nur für Besitzer, Favoriten und beidseitig Eingecheckte – sonst ungefährer Bereich
+      if (deps.spMask) {
+        const ex = deps.spExactIds ? await deps.spExactIds(viewer) : new Set();
+        deps.spMask(out, ex, sp.id);
+      }
       try {
         out.favorite_count = (
           await pool.query("SELECT COUNT(*)::int AS n FROM spot_favorites WHERE spot_id::text = $1::text", [String(id)])

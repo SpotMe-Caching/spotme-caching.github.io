@@ -650,6 +650,9 @@ setInterval(async () => {
     if (now - data.ts > 120000) locationCache.delete(key);
   }
 
+  // ── ALLE 2 MINUTEN: Einladungen ohne Check-in nach Ende des Zeitfensters bei beiden löschen
+  await purgeMissedInvites();
+
   // ── ALLE 2 MINUTEN: Einladungen im RAM bereinigen ───────────────────────
   // Einladungen älter als 2 Stunden aus dem RAM löschen (bereits vorhanden)
   for (const code of Object.keys(invites)) {
@@ -2010,6 +2013,7 @@ app.post("/api/invites/send", async (req, res) => {
 app.get("/api/spotcache/invites/:code", async (req, res) => {
   const { code } = req.params;
   try {
+    await purgeMissedInvites(code); // Zeitfenster ohne Check-in vorbei → bei beiden weg
     const { rows } = await pool.query(
       // Wir joinieren die profiles-Tabelle ZWEIMAL – einmal für den Sender (pf)
       // und einmal für den Empfänger (pt). LEFT JOIN statt INNER JOIN damit die
@@ -2032,6 +2036,9 @@ app.get("/api/spotcache/invites/:code", async (req, res) => {
 
     // Namen entschlüsseln bevor sie ans Frontend gehen –
     // decrypt() gibt null zurück wenn der Wert null/undefined ist, also sicher.
+    const invViewer = await spViewer(code, req.query.token);
+    const invExact = await spExactIds(invViewer);
+    rows.forEach((r) => spMask(r, invExact, r.spot_id));
     res.json(
       rows.map((row) => ({
         ...row,
@@ -2244,7 +2251,7 @@ app.get("/api/weekly-spots/:token", async (req, res) => {
   const { token } = req.params;
   try {
     const { rows } = await pool.query(
-      `SELECT token, name, category, description, lat, lng, meeting_at, expires_at, checkin_count
+      `SELECT token, code AS owner_code, name, category, description, lat, lng, meeting_at, expires_at, checkin_count
        FROM weekly_spots WHERE token = $1 AND expires_at > $2`,
       [token, Date.now()],
     );
@@ -2252,7 +2259,12 @@ app.get("/api/weekly-spots/:token", async (req, res) => {
       return res
         .status(404)
         .json({ error: "Spot nicht gefunden oder abgelaufen" });
-    res.json(rows[0]);
+    const w = rows[0];
+    // Genau nur für den Ersteller (Code + Token); alle anderen: ungefährer Bereich, bis sie vor Ort einchecken
+    const isOwner = !!(await spViewer(req.query.code, req.query.token)) && String(req.query.code) === String(w.owner_code);
+    delete w.owner_code;
+    if (!isOwner) spMask(w, new Set(), w.token); else w.location_hidden = false;
+    res.json(w);
   } catch (e) {
     console.error("GET /api/weekly-spots/:token:", e.message);
     res.status(500).json({ error: "Datenbankfehler" });
@@ -2261,7 +2273,23 @@ app.get("/api/weekly-spots/:token", async (req, res) => {
 
 app.post("/api/weekly-spots/:token/checkin", async (req, res) => {
   const { token } = req.params;
+  const { code, lat, lng } = req.body || {};
+  const vtoken = (req.body || {}).vtoken || (req.body || {}).userToken;
   try {
+    const cur = await pool.query(
+      `SELECT lat, lng FROM weekly_spots WHERE token = $1 AND expires_at > $2`,
+      [token, Date.now()],
+    );
+    if (!cur.rows.length)
+      return res
+        .status(404)
+        .json({ error: "Spot nicht gefunden oder abgelaufen" });
+    // Einchecken geht nur vor Ort (100 m, vom Server geprüft – der echte Punkt wird nicht verraten)
+    if (lat == null || lng == null || !isFinite(+lat) || !isFinite(+lng))
+      return res.status(400).json({ error: "Standort nötig zum Einchecken" });
+    if (spDistM(lat, lng, cur.rows[0].lat, cur.rows[0].lng) > SP_CHECKIN_RADIUS_M)
+      return res.status(400).json({ error: "Nicht nah genug am Spot (100 m)", near: false });
+
     const result = await pool.query(
       `UPDATE weekly_spots SET checkin_count = checkin_count + 1
        WHERE token = $1 AND expires_at > $2
@@ -2273,17 +2301,24 @@ app.post("/api/weekly-spots/:token/checkin", async (req, res) => {
         .status(404)
         .json({ error: "Spot nicht gefunden oder abgelaufen" });
 
-    const { checkin_count, name, code } = result.rows[0];
+    const { checkin_count, name, code: ownerCode } = result.rows[0];
     // Push an Wochen-Spot Ersteller (fire-and-forget)
     sendPushToCode(
-      code,
+      ownerCode,
       "🗓️ Neuer Check-in",
       `Jemand hat deinen Wochen-Spot „${name}" besucht`,
       `/spot-woche.html?token=${token}`,
       "weekly",
     );
 
-    res.json({ success: true, label: "anonym", count: checkin_count });
+    // Genauer Punkt nur für angemeldete Profile (keine Gäste) nach erfolgreichem Check-in
+    const out = { success: true, label: "anonym", count: checkin_count };
+    const v = await spViewer(code, vtoken);
+    if (v) {
+      const g = await pool.query("SELECT guest FROM profiles WHERE code = $1 AND spot = 'caching' LIMIT 1", [v]);
+      if (g.rows.length && !g.rows[0].guest) out.exact = { lat: +cur.rows[0].lat, lng: +cur.rows[0].lng };
+    }
+    res.json(out);
   } catch (e) {
     console.error("POST /api/weekly-spots/:token/checkin:", e.message);
     res.status(500).json({ error: "Datenbankfehler" });
@@ -2570,6 +2605,10 @@ app.get("/api/userspots/all", async (req, res) => {
        ORDER BY created_at DESC`,
       [ctry],
     );
+    // Genau nur für Berechtigte (Besitzer, Favoriten), sonst ungefährer Bereich
+    const viewer = await spViewer(req.query.code, req.query.token);
+    const exact = await spExactIds(viewer);
+    rows.forEach((r) => spMask(r, exact));
     res.json(rows);
   } catch (e) {
     console.error(e);
@@ -2598,6 +2637,9 @@ app.get("/api/userspots/:code", async (req, res) => {
        ORDER BY created_at DESC`,
       [code],
     );
+    // Eigene Spots nur mit gültigem Token genau – sonst ungefährer Bereich
+    const own = (await spViewer(code, req.query.token)) ? new Set(rows.map((r) => String(r.id))) : new Set();
+    rows.forEach((r) => spMask(r, own));
     res.json(rows);
   } catch (e) {
     console.error(e);
@@ -2912,6 +2954,8 @@ app.get("/api/userspots/common/:code1/:code2", async (req, res) => {
     `,
       [code1, code2],
     );
+    const comExact = await spExactIds(await spViewer(code1, req.query.token));
+    rows.forEach((r) => spMask(r, comExact, r.spot1Id));
     res.json(rows);
   } catch (e) {
     console.error(e);
@@ -3097,7 +3141,7 @@ app.patch("/api/spotcache/invite/:id/cancel", async (req, res) => {
     // Nur aktive Einladungen können storniert werden –
     // abgelaufene oder bereits abgelehnte brauchen keine Stornierung mehr
     if (
-      ["expired", "cancelled", "declined", "completed"].includes(invite.status)
+      ["expired", "cancelled", "declined"].includes(invite.status)
     ) {
       return res
         .status(400)
@@ -3109,6 +3153,17 @@ app.patch("/api/spotcache/invite/:id/cancel", async (req, res) => {
       `UPDATE spot_cache_invites SET status = 'cancelled' WHERE id = $1`,
       [id],
     );
+    // Abbruch NACH dem beidseitigen Check-in (jederzeit möglich): die gegenseitige
+    // Bestätigung ("Ihr habt euch gefunden") wird zurückgenommen, die andere Person
+    // erfährt nur "Das Treffen wurde beendet" – ohne Grund. Der genaue Ort ist ab jetzt wieder verborgen.
+    const afterCheckin = invite.status === "completed";
+    if (afterCheckin) {
+      await pool.query(
+        `DELETE FROM verifications WHERE type = 'personal' AND to_spot = 'caching'
+           AND ((to_code = $1 AND from_code = $2) OR (to_code = $2 AND from_code = $1))`,
+        [invite.from_code, invite.to_code],
+      );
+    }
 
     // Partner bestimmen: wenn ich der Sender bin, ist der Partner der Empfänger und umgekehrt
     const partnerCode =
@@ -3125,9 +3180,12 @@ app.patch("/api/spotcache/invite/:id/cancel", async (req, res) => {
         partnerCode,
         code,
         "System",
-        `❌ Das Treffen bei "${spotName}" wurde storniert.`,
+        afterCheckin
+          ? "Das Treffen wurde beendet."
+          : `❌ Das Treffen bei "${spotName}" wurde storniert.`,
       ],
     );
+    if (afterCheckin) sendPushToCode(partnerCode, "Treffen beendet", "Das Treffen wurde beendet.", "/", "invite");
 
     console.log(
       `❌ Einladung ${id} storniert von ${code} → Partner ${partnerCode} informiert`,
@@ -3145,10 +3203,16 @@ app.patch("/api/spotcache/invite/:id/cancel", async (req, res) => {
 
 // ⭐ Favorit hinzufügen
 app.post("/api/favorites", async (req, res) => {
-  const { code, spot_id } = req.body;
+  const { code, spot_id, token } = req.body;
   if (!code || !spot_id)
     return res.status(400).json({ error: "code und spot_id erforderlich" });
   try {
+    // Favoriten sehen den genauen Ort → nur angemeldete Profile, keine Gäste
+    if (!(await spViewer(code, token)))
+      return res.status(401).json({ error: "Bitte anmelden" });
+    const gq = await pool.query("SELECT guest FROM profiles WHERE code = $1 AND spot = 'caching' LIMIT 1", [code]);
+    if (!gq.rows.length || gq.rows[0].guest)
+      return res.status(403).json({ error: "Favoriten gibt es nur mit vollständigem Profil" });
     await pool.query(
       `INSERT INTO spot_favorites (code, spot_id, created_at)
        VALUES ($1, $2, $3)
@@ -3165,9 +3229,11 @@ app.post("/api/favorites", async (req, res) => {
 // ⭐ Favorit entfernen
 app.delete("/api/favorites/:spotId", async (req, res) => {
   const { spotId } = req.params;
-  const { code } = req.body;
+  const { code, token } = req.body;
   if (!code) return res.status(400).json({ error: "code erforderlich" });
   try {
+    if (!(await spViewer(code, token)))
+      return res.status(401).json({ error: "Bitte anmelden" });
     await pool.query(
       `DELETE FROM spot_favorites WHERE code = $1 AND spot_id = $2`,
       [code, spotId],
@@ -3209,6 +3275,9 @@ app.get("/api/favorites/:code", async (req, res) => {
        ORDER BY f.created_at DESC`,
       [code],
     );
+    const favViewer = await spViewer(code, req.query.token);
+    const favExact = await spExactIds(favViewer);
+    rows.forEach((r) => spMask(r, favExact, r.spot_id));
     res.json(
       rows.map((r) => ({
         ...r,
@@ -3238,13 +3307,39 @@ app.get("/api/favorites/:code/:spotId", async (req, res) => {
   }
 });
 
-// 📍 Einchecken am Treffpunkt
+// 📍 Nähe prüfen (ohne den Standort zu verraten): nur "ja/nein" – für die Taste "Einchecken"
+app.post("/api/spotcache/near", async (req, res) => {
+  const { id, code, token, lat, lng } = req.body || {};
+  if (!id || !code || lat == null || lng == null || !isFinite(+lat) || !isFinite(+lng))
+    return res.status(400).json({ error: "Fehlende Felder" });
+  try {
+    if (!(await spViewer(code, token))) return res.status(401).json({ error: "Bitte anmelden" });
+    if (!nearAllowed(id + ":" + code)) return res.status(429).json({ error: "Zu viele Anfragen" });
+    const inv = await pool.query("SELECT * FROM spot_cache_invites WHERE id = $1", [id]);
+    if (!inv.rows.length) return res.status(404).json({ error: "Nicht gefunden" });
+    const i = inv.rows[0];
+    if (i.from_code !== code && i.to_code !== code) return res.status(403).json({ error: "Keine Berechtigung" });
+    const now = Date.now();
+    const inWindow = now >= i.time_start && now <= i.time_end;
+    const sp = await pool.query("SELECT lat, lng FROM user_spots WHERE id = $1", [i.spot_id]);
+    if (!sp.rows.length) return res.status(404).json({ error: "Spot nicht gefunden" });
+    const near = spDistM(lat, lng, sp.rows[0].lat, sp.rows[0].lng) <= SP_CHECKIN_RADIUS_M;
+    res.json({ near, inWindow, status: i.status });
+  } catch (e) {
+    console.error("POST /api/spotcache/near:", e.message);
+    res.status(500).json({ error: "Fehler" });
+  }
+});
+
+// 📍 Einchecken am Treffpunkt (nur vor Ort: 100 m, vom Server geprüft)
 app.post("/api/spotcache/checkin", async (req, res) => {
-  const { id, code, lat, lng } = req.body;
-  if (!id || !code || lat == null || lng == null)
+  const { id, code, token, lat, lng } = req.body;
+  if (!id || !code || lat == null || lng == null || !isFinite(+lat) || !isFinite(+lng))
     return res.status(400).json({ error: "Fehlende Felder" });
 
   try {
+    if (!(await spViewer(code, token)))
+      return res.status(401).json({ error: "Bitte anmelden" });
     const invite = await pool.query(
       "SELECT * FROM spot_cache_invites WHERE id = $1",
       [id],
@@ -3261,18 +3356,15 @@ app.post("/api/spotcache/checkin", async (req, res) => {
     if (now < inv.time_start || now > inv.time_end)
       return res.status(400).json({ error: "Außerhalb des Zeitfensters" });
 
-    // 50m‑Radius prüfen
+    // 100 m-Radius prüfen (Haversine)
     const spot = await pool.query(
       "SELECT lat, lng FROM user_spots WHERE id = $1",
       [inv.spot_id],
     );
-    const dist =
-      Math.sqrt(
-        Math.pow(lat - spot.rows[0].lat, 2) +
-          Math.pow(lng - spot.rows[0].lng, 2),
-      ) * 111000;
-    if (dist > 50)
-      return res.status(400).json({ error: "Nicht nah genug am Spot (50m)" });
+    if (!spot.rows.length) return res.status(404).json({ error: "Spot nicht gefunden" });
+    const dist = spDistM(lat, lng, spot.rows[0].lat, spot.rows[0].lng);
+    if (dist > SP_CHECKIN_RADIUS_M)
+      return res.status(400).json({ error: "Nicht nah genug am Spot (100 m)" });
 
     const isFrom = inv.from_code === code;
     await pool.query(
@@ -4266,11 +4358,93 @@ async function authCheck(code, token) {
   return ok;
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// PRIVATSPHÄRE BEIM TREFFEN – genauer Standort nur für Berechtigte
+// Alle anderen (Gäste, Profile ohne Check-in/Favorit, nicht Angemeldete) sehen nur einen
+// ungefähren Bereich: fester Versatz pro Spot (kein Mitteln über mehrere Abrufe möglich),
+// der echte Punkt liegt IM Kreis, aber nie in der Mitte.
+// Genau sehen: Besitzer · Profile (keine Gäste), die den Spot als Favorit haben ·
+// beide Teilnehmer eines Treffens, sobald BEIDE eingecheckt sind (bis 6 h nach Zeitfenster-Ende).
+// ══════════════════════════════════════════════════════════════════════════════
+const SP_FUZZ_R = 500; // Meter – wie bei Live Spots
+const SP_FUZZ_SECRET = process.env.FUZZ_SECRET || process.env.ADMIN_KEY || "spotme-loc";
+const SP_CHECKIN_RADIUS_M = 100;
+const SP_REVEAL_GRACE_MS = 6 * 60 * 60 * 1000;
+function spFuzz(id, lat, lng) {
+  const h = require("crypto").createHmac("sha256", SP_FUZZ_SECRET).update("loc:" + id).digest();
+  const ang = (h.readUInt32BE(0) / 0xffffffff) * 2 * Math.PI;
+  const d = (0.3 + 0.45 * (h.readUInt32BE(4) / 0xffffffff)) * SP_FUZZ_R;
+  const dLat = (d * Math.cos(ang)) / 111320;
+  const dLng = (d * Math.sin(ang)) / (111320 * Math.max(0.05, Math.cos((+lat * Math.PI) / 180)));
+  const r5 = (x) => Math.round(x * 1e5) / 1e5;
+  return { lat: r5(+lat + dLat), lng: r5(+lng + dLng) };
+}
+// Geprüfter Betrachter (Code + Token) oder null
+async function spViewer(code, token) {
+  try { return (await authCheck(String(code || ""), String(token || ""))) ? String(code) : null; } catch { return null; }
+}
+// Menge der Spot-IDs (als Text), deren genauen Ort dieser geprüfte Betrachter sehen darf
+async function spExactIds(viewer) {
+  const out = new Set();
+  if (!viewer) return out;
+  try {
+    const own = await pool.query("SELECT id FROM user_spots WHERE code = $1", [viewer]);
+    own.rows.forEach((r) => out.add(String(r.id)));
+    const g = await pool.query("SELECT guest FROM profiles WHERE code = $1 AND spot = 'caching' LIMIT 1", [viewer]);
+    const isGuest = !g.rows.length || !!g.rows[0].guest;
+    if (!isGuest) {
+      const fav = await pool.query("SELECT spot_id FROM spot_favorites WHERE code = $1", [viewer]);
+      fav.rows.forEach((r) => out.add(String(r.spot_id)));
+      const inv = await pool.query(
+        `SELECT spot_id FROM spot_cache_invites
+         WHERE (from_code = $1 OR to_code = $1) AND status = 'completed' AND time_end + $2 >= $3`,
+        [viewer, SP_REVEAL_GRACE_MS, Date.now()],
+      );
+      inv.rows.forEach((r) => out.add(String(r.spot_id)));
+    }
+  } catch (e) { console.error("spExactIds:", e.message); }
+  return out;
+}
+// Zeile maskieren (lat/lng ersetzen), außer die ID ist freigegeben
+function spMask(row, exact, id) {
+  const key = String(id != null ? id : row.id);
+  if (exact && exact.has(key)) { row.location_hidden = false; return row; }
+  if (row.lat != null && row.lng != null && isFinite(+row.lat) && isFinite(+row.lng)) {
+    const f = spFuzz(key, row.lat, row.lng);
+    row.lat = f.lat; row.lng = f.lng;
+  }
+  row.location_hidden = true;
+  row.approx_radius_m = SP_FUZZ_R;
+  return row;
+}
+function spDistM(lat1, lng1, lat2, lng2) { return liveHaversineKm(+lat1, +lng1, +lat2, +lng2) * 1000; }
+// Einladungen, deren Zeitfenster ohne Check-in beider Seiten vorbei ist, bei beiden löschen
+async function purgeMissedInvites(code) {
+  try {
+    const now = Date.now();
+    const q = code
+      ? ["DELETE FROM spot_cache_invites WHERE (from_code = $1 OR to_code = $1) AND time_end < $2 AND status IN ('pending','accepted','cancelled')", [code, now]]
+      : ["DELETE FROM spot_cache_invites WHERE time_end < $1 AND status IN ('pending','accepted','cancelled')", [now]];
+    const r = await pool.query(q[0], q[1]);
+    if (r.rowCount > 0 && !code) console.log(`🧹 ${r.rowCount} nicht eingecheckte Einladungen storniert & gelöscht`);
+  } catch (e) { console.error("purgeMissedInvites:", e.message); }
+}
+// Nähe-Abfragen je Einladung begrenzen (verhindert Abtasten des Standorts)
+const nearHits = new Map();
+function nearAllowed(key) {
+  const now = Date.now(), h = nearHits.get(key) || [];
+  const rec = h.filter((t) => now - t < 3600e3);
+  if (rec.length >= 60) { nearHits.set(key, rec); return false; }
+  rec.push(now); nearHits.set(key, rec);
+  if (nearHits.size > 5000) nearHits.clear();
+  return true;
+}
+
 // ── Live-Events (Tickets / Teilnehmerlimit) – überschreibt die Live-Routen darunter ──
 const notify = require("./notify-prefs")(pool);
 notify.ensureSchema().catch((e) => console.error("notify Schema:", e.message));
 notify.mount(app, { authCheck, decrypt, sendPush: (c, t, b, u) => sendPushToCode(c, t, b, u) });
-const liveEvents = require("./live-events")(app, { pool, authCheck, decrypt, webpush, notify });
+const liveEvents = require("./live-events")(app, { pool, authCheck, decrypt, webpush, notify, spExactIds, spMask });
 
 // ── Live Spot erstellen ──────────────────────────────────────────────────────
 app.post("/api/live-spots", async (req, res) => {
