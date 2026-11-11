@@ -212,19 +212,18 @@ async function init() {
 
 async function loadMySpots() {
   try {
-    if (navigator.onLine === false) throw new Error('offline');
     const r = await fetch(`${API}/live-spots/mine?code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(TOK)}`);
-    if (r.ok) { mySpots = await r.json(); try { localStorage.setItem('sm_lsm_' + CODE, JSON.stringify({ list: mySpots, ts: Date.now() })); } catch {} }
+    if (r.ok) { mySpots = await r.json(); window.__lsmOffline = 0; try { localStorage.setItem('sm_lsm_' + CODE, JSON.stringify({ list: mySpots, ts: Date.now() })); } catch {} }
     else throw new Error('server');
   } catch {
-    try { const c = JSON.parse(localStorage.getItem('sm_lsm_' + CODE) || 'null'); if (c && c.list) { mySpots = c.list; window.__lsmOffline = c.ts || 1; } } catch {}
+    try { const c = JSON.parse(localStorage.getItem('sm_lsm_' + CODE) || 'null'); if (c && c.list) { mySpots = c.list; window.__lsmOffline = c.ts || 1; if (!window.__lsmRT) { window.__lsmRT = setInterval(async () => { if (document.hidden) return; try { const r = await fetch(`${API}/live-spots/mine?code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(TOK)}`); if (r.ok) { clearInterval(window.__lsmRT); window.__lsmRT = null; window.__lsmOffline = 0; mySpots = await r.json(); try { localStorage.setItem('sm_lsm_' + CODE, JSON.stringify({ list: mySpots, ts: Date.now() })); } catch {} renderPage(); } } catch {} }, 15000); } } } catch {}
   }
 }
 
 // ── HAUPT-RENDER ─────────────────────────────────────────────────────────────
 function renderPage() {
   const content = document.getElementById('content');
-  const offBanner = window.__lsmOffline ? `<div style="font-size:0.74rem;color:var(--muted2,#94a3b8);border:1px dashed var(--muted2,#94a3b8);border-radius:10px;padding:0.5rem 0.7rem;margin-bottom:0.6rem;">📴 Offline – gespeicherter Stand von ${new Date(window.__lsmOffline).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}. Ändern geht nur online.</div>` : '';
+  const offBanner = window.__lsmOffline ? `<div style="font-size:0.74rem;color:var(--muted2,#94a3b8);border:1px dashed var(--muted2,#94a3b8);border-radius:10px;padding:0.5rem 0.7rem;margin-bottom:0.6rem;">📴 Keine Verbindung – gespeicherter Stand von ${new Date(window.__lsmOffline).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}. Ändern geht nur online.</div>` : '';
 
   if (!mySpots.length) {
     // Noch kein Live Spot – direkt Erstell-Formular zeigen
