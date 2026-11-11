@@ -88,6 +88,7 @@ details summary{cursor:pointer;font-size:.76rem;color:var(--muted2);font-family:
 window.SM_CHAT_CFG = { api: 'https://spotme-chat-obom.onrender.com/api' };
 </script>
 <script src="sm-flow.js"></script>
+<script src="sm-store.js"></script>
 <script src="chat-core.js"></script>
 <script src="spot-outbox.js"></script>
 <script>
@@ -397,6 +398,7 @@ async function respond(id, action) {
 }
 async function cancelInvite(id) {
   if (!confirm('Treffen wirklich stornieren?\nDer andere wird automatisch benachrichtigt.')) return;
+  try { const iv = S.invites.find(i => String(i.id) === String(id)); if (iv && iv.spot_id) SMStore.forget('spot', iv.spot_id); } catch (e) {}
   try { const r = await post('/spotcache/invite/' + id + '/cancel', 'PATCH', { code: CODE, token: TOK }); toast(r.d.success ? '✅ Treffen storniert – Partner informiert' : '⚠️ ' + (r.d.error || 'Fehler beim Stornieren')); }
   catch (e) { toast(navigator.onLine === false ? '📴 Nur online möglich' : '⚠️ Server nicht erreichbar'); }
   await loadInvites(); render();
@@ -412,6 +414,7 @@ function checkIn(id) {
   }, () => toast('❌ Standort nicht verfügbar'), { enableHighAccuracy: true });
 }
 async function unfav(id) {
+  try { SMStore.forget('spot', id); } catch (e) {}
   try { await tfetch(API + '/favorites/' + id, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: CODE, token: TOK }) }, 10000); toast('✕ Favorit entfernt'); }
   catch (e) { toast(navigator.onLine === false ? '📴 Nur online möglich' : '⚠️ Fehler'); return; }
   await loadFavs(); render();

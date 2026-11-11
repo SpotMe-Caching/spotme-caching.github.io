@@ -10,6 +10,7 @@
 <link href="theme-vars.css" rel="stylesheet">
 <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
 <script src="nav.js"></script>
+<script src="sm-store.js"></script>
 <script src="chat-core.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -335,59 +336,49 @@ function fmtCheckin(ts) {
 }
 
 
-// Gespeicherter Stand angezeigt: sobald Verbindung da ist (online-Ereignis oder alle 15 s) neu laden
-let _smRT = null;
-function smRetry(fn) {
-  if (_smRT) return; _smRT = true;
-  const go = () => { window.removeEventListener('online', go); clearInterval(iv); _smRT = null; fn(); };
-  window.addEventListener('online', go);
-  const iv = setInterval(() => { if (!document.hidden) go(); }, 15000);
-}
 async function loadSpot(id) {
   const content = document.getElementById('content');
-  let spot, offlineTs = 0, notFound = false;
-  const KEY = 'sm_sp_' + id;
-  let cached = null;
-  try { cached = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch {}
-  try {
-    const ctl = new AbortController();
-    const tm = cached ? setTimeout(() => ctl.abort(), navigator.onLine === false ? 1500 : 6000) : null;
-    let r;
-    try { r = await fetch(`${API}/spots/${encodeURIComponent(id)}` + (CODE ? `?code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(TOK)}` : ''), { signal: ctl.signal }); } finally { if (tm) clearTimeout(tm); }
-    if (r.status === 404 || r.status === 410) { notFound = true; throw new Error('not_found'); }
-    if (!r.ok) throw new Error('server');
-    spot = await r.json();
-    try { localStorage.setItem(KEY, JSON.stringify({ spot, ts: Date.now() })); } catch {}
-  } catch {
-    if (notFound) { try { localStorage.removeItem(KEY); } catch {} }
-    else if (cached && cached.spot) { spot = cached.spot; offlineTs = cached.ts || 1; smRetry(() => loadSpot(id)); }
-    if (!spot) {
-      const msg = notFound ? '' : 'Kann gerade nicht geladen werden.<br>Bitte Verbindung prüfen.';
-      content.innerHTML = `<div class="loading"><div class="loading-icon">🔍</div>${notFound ? 'Platz Spot nicht gefunden.' : msg}<br><a href="/" style="color:var(--acc);margin-top:1rem;display:block;">← Zur App</a></div>`;
-      return;
+  const url = `${API}/spots/${encodeURIComponent(id)}` + (CODE ? `?code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(TOK)}` : '');
+  // Gemeinsamer Speicher: Server → sonst zuletzt gesehener Stand → sonst Eintrag aus der Karten-Liste
+  const res = await SMStore.get('spot', id, url, {
+    noCacheWait: 8000,
+    fallback: async () => {
+      const r = await SMStore.listSpot(id);
+      return r ? Object.assign({}, r, { owner_code: r.code, is_owner: !!CODE && r.code === CODE, favorite_count: 0, planned_checkins: [] }) : null;
     }
+  });
+  const spot = res.data, offlineTs = res.offlineTs;
+  if (!spot) {
+    content.innerHTML = `<div class="loading"><div class="loading-icon">🔍</div>${res.notFound ? 'Platz Spot nicht gefunden.' : 'Kann gerade nicht geladen werden.<br>Bitte Verbindung prüfen.'}<br><a href="/" style="color:var(--acc);margin-top:1rem;display:block;">← Zur App</a></div>`;
+    if (!res.notFound) SMStore.retry(() => loadSpot(id));
+    return;
   }
-  const offNote = offlineTs ? `<div style="font-size:0.74rem;color:var(--muted2,#94a3b8);border:1px dashed var(--muted2,#94a3b8);border-radius:10px;padding:0.5rem 0.7rem;margin-bottom:0.6rem;">📴 Keine Verbindung – gespeicherter Stand von ${new Date(offlineTs).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>` : '';
+  if (offlineTs) SMStore.retry(() => loadSpot(id));
+  const offNote = SMStore.banner(offlineTs);
   try { initMap(+spot.lat, +spot.lng, spot.location_hidden ? (spot.approx_radius_m || 500) : 0); } catch {}
   try { if (isFinite(+spot.lat) && isFinite(+spot.lng) && spot.lat != null) sessionStorage.setItem('sm_map_view', JSON.stringify({ lat: +spot.lat, lng: +spot.lng, zoom: 16, ts: Date.now() })); } catch {}
 
-  // Favorit-Status + Besitzer-Profil nur für angemeldete Betrachter
-  let isFav = false, owner = null, ownerAv = null;
-  if (CODE && !spot.is_owner) {
-    try {
-      const fr = await fetch(`${API}/favorites/${encodeURIComponent(CODE)}/${spot.id}`);
-      if (fr.ok) isFav = !!(await fr.json()).isFavorite;
-    } catch {}
-  }
-  if (CODE && spot.owner_code) {
-    try {
-      const [pr, ar] = await Promise.all([
-        fetch(`${API}/profile/${encodeURIComponent(spot.owner_code)}?spot=caching`),
-        fetch(`${API}/avatar/${encodeURIComponent(spot.owner_code)}?spot=caching`)
-      ]);
-      if (pr.ok) owner = await pr.json();
-      if (ar.ok) ownerAv = await ar.json();
-    } catch {}
+  // Favorit-Status + Besitzer-Profil nur für angemeldete Betrachter (zuletzt gesehener Stand bleibt erhalten)
+  const prev = spot._x || {};
+  let isFav = !!prev.isFav, owner = prev.owner || null, ownerAv = prev.ownerAv || null;
+  if (!offlineTs) {
+    if (CODE && !spot.is_owner) {
+      try {
+        const fr = await SMStore.tfetch(`${API}/favorites/${encodeURIComponent(CODE)}/${spot.id}`, {}, 6000);
+        if (fr.ok) isFav = !!(await fr.json()).isFavorite;
+      } catch {}
+    }
+    if (CODE && spot.owner_code) {
+      try {
+        const [pr, ar] = await Promise.all([
+          SMStore.tfetch(`${API}/profile/${encodeURIComponent(spot.owner_code)}?spot=caching`, {}, 6000),
+          SMStore.tfetch(`${API}/avatar/${encodeURIComponent(spot.owner_code)}?spot=caching`, {}, 6000)
+        ]);
+        if (pr.ok) owner = await pr.json();
+        if (ar.ok) ownerAv = await ar.json();
+      } catch {}
+    }
+    try { SMStore.save('spot', id, Object.assign({}, spot, { _x: { isFav, owner, ownerAv } })); } catch {}
   }
 
   const planned = (spot.planned_checkins || []);
@@ -475,6 +466,8 @@ async function toggleFav(id) {
       const n = parseInt((el.textContent.match(/\d+/) || [0])[0], 10) + (btn.classList.contains('following') ? 1 : -1);
       el.textContent = '⭐ ' + Math.max(0, n);
       showToast(btn.classList.contains('following') ? '⭐ Favorit gespeichert' : 'Favorit entfernt');
+      // Favorit ändert, ob der genaue Ort sichtbar ist → gespeicherten Stand verwerfen und neu laden
+      SMStore.forget('spot', id); setTimeout(() => loadSpot(id), 400);
     } else { let m = ''; try { m = (await r.json()).error; } catch {} showToast('⚠️ ' + (m || 'Fehler')); }
   } catch { showToast('⚠️ Verbindungsfehler'); }
   btn.disabled = false;

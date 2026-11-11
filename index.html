@@ -36,6 +36,7 @@
   <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
   <script src="nav.js"></script>
   <script src="sm-flow.js"></script>
+  <script src="sm-store.js"></script>
   <script src="chat-core.js"></script>
   <script src="spot-outbox.js"></script>
   <style>
@@ -2514,6 +2515,7 @@ async function toggleFavorite(spotId, isFav) {
       toast('⭐ Favorit gespeichert – du siehst den genauen Ort');
       loadAllSpots().catch(() => {});
     } else {
+      try { SMStore.forget('spot', spotId); } catch {}
       await fetch(`${API}/favorites/${spotId}`, {
         method:  'DELETE',
         headers: { 'Content-Type': 'application/json' },

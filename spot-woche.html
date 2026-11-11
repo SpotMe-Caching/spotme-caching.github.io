@@ -133,6 +133,7 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="sm-store.js"></script>
 <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
 <script>
 'use strict';
@@ -207,39 +208,20 @@ function initMap(lat, lng, approxR) {
 }
 
 
-// Gespeicherter Stand angezeigt: sobald Verbindung da ist (online-Ereignis oder alle 15 s) neu laden
-let _smRT = null;
-function smRetry(fn) {
-  if (_smRT) return; _smRT = true;
-  const go = () => { window.removeEventListener('online', go); clearInterval(iv); _smRT = null; fn(); };
-  window.addEventListener('online', go);
-  const iv = setInterval(() => { if (!document.hidden) go(); }, 15000);
-}
 async function loadSpot(token) {
   const content = document.getElementById('content');
-  let spot, offlineTs = 0, notFound = false;
-  const KEY = 'sm_ws_' + token;
-  let cached = null;
-  try { cached = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch {}
-  try {
-    const ctl = new AbortController();
-    const tm = cached ? setTimeout(() => ctl.abort(), navigator.onLine === false ? 1500 : 6000) : null;
-    let r;
-    try { r = await fetch(`${API}/weekly-spots/${encodeURIComponent(token)}` + (WCODE && WTOK ? `?code=${encodeURIComponent(WCODE)}&token=${encodeURIComponent(WTOK)}` : ''), { signal: ctl.signal }); } finally { if (tm) clearTimeout(tm); }
-    if (r.status === 404 || r.status === 410) { notFound = true; throw new Error('not_found'); }
-    if (!r.ok) throw new Error('server');
-    spot = await r.json();
-    try { localStorage.setItem(KEY, JSON.stringify({ spot, ts: Date.now() })); } catch {}
-  } catch {
-    if (notFound) { try { localStorage.removeItem(KEY); } catch {} }
-    else if (cached && cached.spot) { spot = cached.spot; offlineTs = cached.ts || 1; smRetry(() => loadSpot(token)); }
-    if (!spot) {
-      const msg = notFound ? 'NF' : 'Kann gerade nicht geladen werden.<br>Bitte Verbindung prüfen.';
-      content.innerHTML = notFound ? `<div class="error-state"><div class="state-icon">🔍</div><div class="state-title">Spot nicht gefunden</div><div class="state-sub">Der Link ist ungültig oder der Spot wurde gelöscht.</div><a href="/" style="margin-top:1.5rem;color:#f59e0b;font-weight:600;font-size:0.9rem;">← Zur App</a></div>` : `<div class="error-state"><div class="state-icon">📴</div><div class="state-title">Spot nicht geladen</div><div class="state-sub">Bitte Verbindung prüfen.</div><a href="/" style="margin-top:1.5rem;color:#f59e0b;font-weight:600;font-size:0.9rem;">← Zur App</a></div>`;
-      return;
-    }
+  const res = await SMStore.get('weekly', token, `${API}/weekly-spots/${encodeURIComponent(token)}`);
+  const spot = res.data, offlineTs = res.offlineTs;
+  if (!spot) {
+    content.innerHTML = res.notFound
+      ? `<div class="error-state"><div class="state-icon">🔍</div><div class="state-title">Spot nicht gefunden</div><div class="state-sub">Der Link ist ungültig oder der Spot wurde gelöscht.</div><a href="/" style="margin-top:1.5rem;color:#f59e0b;font-weight:600;font-size:0.9rem;">← Zur App</a></div>`
+      : `<div class="error-state"><div class="state-icon">📴</div><div class="state-title">Spot nicht geladen</div><div class="state-sub">Bitte Verbindung prüfen.</div><a href="/" style="margin-top:1.5rem;color:#f59e0b;font-weight:600;font-size:0.9rem;">← Zur App</a></div>`;
+    if (!res.notFound) SMStore.retry(() => loadSpot(token));
+    return;
   }
-  const offNote = offlineTs ? `<div style="font-size:0.74rem;color:var(--muted2,#94a3b8);border:1px dashed var(--muted2,#94a3b8);border-radius:10px;padding:0.5rem 0.7rem;margin-bottom:0.6rem;">📴 Keine Verbindung – gespeicherter Stand von ${new Date(offlineTs).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>` : '';
+  if (offlineTs) SMStore.retry(() => loadSpot(token));
+  const offNote = SMStore.banner(offlineTs);
+
   const now = Date.now();
   const meetingTime = spot.meeting_at ? new Date(spot.meeting_at).getTime() : null;
   const expiresTime = new Date(spot.expires_at).getTime();
