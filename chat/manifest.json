@@ -1,7 +1,7 @@
 {
-  "name": "Spot - Secure Messenger",
-  "short_name": "Spot",
-  "description": "Verschlüsselter P2P-Messenger für SpotMe – privat, mobil, offline-fähig.",
+  "name": "SpotMe - Messanger",
+  "short_name": "SpotMe",
+  "description": "Verschlüsselter P2P-Messanger  für SpotMe – privat, mobil, offline-fähig.",
   "start_url": "https://spotme-caching.github.io/chat/index.html",
   "scope": "https://spotme-caching.github.io/chat/",
   "display": "fullscreen",
@@ -48,5 +48,5 @@
     "window-controls-overlay",
     "fullscreen"
   ],
-  "id": "spotmessenger"
+  "id": "spotmessanger"
 }
