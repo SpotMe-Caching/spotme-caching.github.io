@@ -11,6 +11,7 @@
 <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
 <script src="nav.js"></script>
 <script src="sm-store.js"></script>
+<script src="spot-outbox.js"></script>
 <script src="chat-core.js"></script>
 <script src="live-events-client.js"></script>
 <style>
@@ -342,16 +343,20 @@ async function loadSpot(id) {
   try { if (!hidden && isFinite(+spot.lat) && isFinite(+spot.lng) && spot.lat != null) sessionStorage.setItem('sm_map_view', JSON.stringify({ lat: +spot.lat, lng: +spot.lng, zoom: 16, ts: Date.now() })); } catch {}
 
   // Follow-Status prüfen
-  let isFollowing = false;
-  if (CODE) {
+  let isFollowing = !!(spot._x && spot._x.isFollowing);
+  if (CODE && !offlineTs) {
     try {
-      const fr = await fetch(`${API}/live-spots/following?code=${CODE}&token=${TOK}`);
+      const fr = await SMStore.tfetch(`${API}/live-spots/following?code=${CODE}&token=${TOK}`, {}, 6000);
       if (fr.ok) {
         const list = await fr.json();
         isFollowing = list.some(s => s.id === spot.id);
+        try { SMStore.save('live', id, Object.assign({}, spot, { _x: { isFollowing } })); } catch {}
       }
     } catch {}
   }
+  // Vorgemerkte (noch nicht gesendete) Änderung gilt schon jetzt
+  try { const pa = (await SpotOutbox.acts()).find(a => a.cid === 'a_follow_' + spot.id); if (pa) isFollowing = pa.type === 'live-follow'; } catch {}
+  window.__liveId = id;
 
   const online = spot.status === 'online';
   const me = await LiveEvents.loadMe(spot.id);
@@ -437,18 +442,11 @@ async function toggleFollow(id) {
   const btn = document.getElementById('followBtn');
   const following = btn.classList.contains('following');
   btn.disabled = true;
-  try {
-    const r = await fetch(`${API}/live-spots/${id}/follow`, {
-      method: following ? 'DELETE' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: CODE, token: TOK })
-    });
-    if (r.ok) {
-      btn.classList.toggle('following');
-      btn.textContent = btn.classList.contains('following') ? '✓ Gefolgt' : '+ Folgen';
-      showToast(btn.classList.contains('following') ? '✅ Du folgst jetzt!' : '🔕 Entfolgt');
-    }
-  } catch { showToast('⚠️ Verbindungsfehler'); }
+  const r = await SpotOutbox.act(following ? 'live-unfollow' : 'live-follow', id);
+  if (r.error) { showToast('⚠️ ' + r.error); btn.disabled = false; return; }
+  btn.classList.toggle('following');
+  btn.textContent = btn.classList.contains('following') ? '✓ Gefolgt' : '+ Folgen';
+  showToast(r.queued ? '📴 Gespeichert – wird gesendet, sobald du wieder Netz hast' : (btn.classList.contains('following') ? '✅ Du folgst jetzt!' : '🔕 Entfolgt'));
   btn.disabled = false;
 }
 

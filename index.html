@@ -1096,7 +1096,8 @@ async function loadAllSpots() {
 
 window.addEventListener('spotoutbox', async (e) => {
   const d = e.detail || {};
-  if (d.sent) toast(`✅ ${d.sent} Spot${d.sent > 1 ? 's' : ''} synchronisiert`);
+  if (d.failedActs && d.failedActs.length) toast(`⚠️ ${d.failedActs.length} Änderung${d.failedActs.length > 1 ? 'en' : ''} nicht übernommen: ${d.failedActs[0].err || ''}`);
+  else if (d.sent) toast('✅ Offline-Änderungen synchronisiert');
   await loadAllSpots();
 });
 window.addEventListener('online', () => updateSyncBar(allSpots.filter(s => s.pending && !s.failed).length, allSpots.filter(s => s.pending && s.failed).length));
@@ -2503,30 +2504,13 @@ async function submitCheckinAnnouncement(spotId) {
 
 async function toggleFavorite(spotId, isFav) {
   const id = String(spotId);
-  try {
-    if (isFav) {
-      const fr = await fetch(`${API}/favorites`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ code: CODE, token: localStorage.getItem('sm_token'), spot_id: spotId })
-      });
-      if (!fr.ok) { let m = ''; try { m = (await fr.json()).error; } catch {} toast('⚠️ ' + (m || 'Favorit nicht gespeichert')); return false; }
-      favoritesCache.add(id);
-      toast('⭐ Favorit gespeichert – du siehst den genauen Ort');
-      loadAllSpots().catch(() => {});
-    } else {
-      try { SMStore.forget('spot', spotId); } catch {}
-      await fetch(`${API}/favorites/${spotId}`, {
-        method:  'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ code: CODE, token: localStorage.getItem('sm_token') })
-      });
-      favoritesCache.delete(id);
-      toast('✕ Favorit entfernt');
-    }
-  } catch {
-    toast('⚠️ Fehler beim Speichern');
-  }
+  try { SMStore.forget('spot', spotId); } catch {}
+  const r = await SpotOutbox.act(isFav ? 'fav-add' : 'fav-del', spotId);
+  if (r.error) { toast('⚠️ ' + r.error); return false; }
+  if (isFav) favoritesCache.add(id); else favoritesCache.delete(id);
+  if (r.queued) toast('📴 Gespeichert – wird gesendet, sobald du wieder Netz hast');
+  else if (isFav) { toast('⭐ Favorit gespeichert – du siehst den genauen Ort'); loadAllSpots().catch(() => {}); }
+  else toast('✕ Favorit entfernt');
 }
 
 async function checkFavoriteNotifications() {

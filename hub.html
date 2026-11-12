@@ -180,9 +180,10 @@ function setTab(t) {
 function staleBar() {
   const ts = Object.values(S.stale).filter(Boolean);
   const bar = $('stale');
-  if (!ts.length && navigator.onLine !== false) { bar.style.display = 'none'; return; }
+  const wait = PA.length ? ' · ⏳ ' + PA.length + (PA.length === 1 ? ' Änderung wartet' : ' Änderungen warten') + ' auf Netz' : '';
+  if (!ts.length && navigator.onLine !== false) { if (wait) { bar.textContent = '⏳ ' + PA.length + (PA.length === 1 ? ' Änderung wartet' : ' Änderungen warten') + ' auf Netz'; bar.style.display = 'block'; } else bar.style.display = 'none'; return; }
   const oldest = ts.length ? Math.min.apply(null, ts) : 0;
-  bar.textContent = (navigator.onLine === false ? '📴 Offline' : '⚠️ Server nicht erreichbar') + (oldest ? ' – letzter Stand vor ' + ago(oldest) : '');
+  bar.textContent = (navigator.onLine === false ? '📴 Offline' : '⚠️ Server nicht erreichbar') + (oldest ? ' – letzter Stand vor ' + ago(oldest) : '') + wait;
   bar.style.display = 'block';
 }
 
@@ -351,7 +352,7 @@ function panelMine() {
 }
 
 function render() {
-  renderTabs(); staleBar();
+  ovl(); renderTabs(); staleBar();
   const p = $('panel');
   const wasTab = tab;
   p.innerHTML = tab === 'einladungen' ? panelInvites() : tab === 'chats' ? panelChats() : tab === 'favoriten' ? panelFavs() : tab === 'meine' ? panelMine() : panelOverview();
@@ -413,27 +414,41 @@ function checkIn(id) {
     await loadInvites(); render();
   }, () => toast('❌ Standort nicht verfügbar'), { enableHighAccuracy: true });
 }
+/* ── Wartende Änderungen (Postausgang) ─────────────────── */
+let PA = [];
+async function refreshActs() { try { PA = await SpotOutbox.acts(); } catch (e) { PA = []; } }
+function hasAct(t, id) { return PA.find(a => a.type === t && String(a.target) === String(id)); }
+// Legt den vorgemerkten Wunsch über die Server-Daten: Favorit weg, Spot pausiert/gelöscht, Wochen-Spot weg
+function ovl() {
+  if (!PA.length) return;
+  S.favs = S.favs.filter(f => !hasAct('fav-del', f.spot_id));
+  S.mine = S.mine.filter(s => !hasAct('spot-del', s.id)).map(s => { const a = hasAct('spot-active', s.id); return a ? Object.assign({}, s, { active: !!a.val }) : s; });
+  S.weekly = S.weekly.filter(w => !hasAct('weekly-del', w.token));
+}
+function actToast(r, okMsg) {
+  if (r.error) { toast('⚠️ ' + r.error); return false; }
+  toast(r.sent ? okMsg : '📴 Gespeichert – wird gesendet, sobald du wieder Netz hast');
+  return true;
+}
+async function afterAct() { await refreshActs(); render(); }
 async function unfav(id) {
   try { SMStore.forget('spot', id); } catch (e) {}
-  try { await tfetch(API + '/favorites/' + id, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: CODE, token: TOK }) }, 10000); toast('✕ Favorit entfernt'); }
-  catch (e) { toast(navigator.onLine === false ? '📴 Nur online möglich' : '⚠️ Fehler'); return; }
-  await loadFavs(); render();
+  const r = await SpotOutbox.act('fav-del', id);
+  if (!actToast(r, '✕ Favorit entfernt')) return;
+  await refreshActs(); if (r.sent) await loadFavs(); render();
 }
 async function toggleSpot(id) {
-  try {
-    const r = await post('/userspots/' + id + '/toggle', 'PATCH', { code: CODE, token: TOK });
-    if (r.ok && r.d.success !== false) toast(r.d.active === false ? '⏸️ Pausiert – nicht mehr auf der Karte' : '▶️ Wieder aktiv');
-    else toast('⚠️ ' + (r.d.error || 'Fehler'));
-  } catch (e) { toast(navigator.onLine === false ? '📴 Nur online möglich' : '⚠️ Server nicht erreichbar'); return; }
-  await loadMine(); render();
+  const cur = S.mine.find(s => String(s.id) === String(id));
+  const want = !(cur && cur.active !== false); // aktuell aktiv → pausieren, sonst aktivieren
+  const r = await SpotOutbox.act('spot-active', id, want);
+  if (!actToast(r, want ? '▶️ Wieder aktiv' : '⏸️ Pausiert – nicht mehr auf der Karte')) return;
+  await refreshActs(); if (r.sent) await loadMine(); render();
 }
 async function delSpot(id, name) {
   if (!confirm('Platz Spot „' + name + '“ wirklich löschen?\nDas kann nicht rückgängig gemacht werden.')) return;
-  try {
-    const r = await post('/userspots/' + id, 'DELETE', { code: CODE, token: TOK });
-    toast(r.ok ? '🗑️ Platz Spot gelöscht' : '⚠️ ' + (r.d.error || 'Nicht gelöscht'));
-  } catch (e) { toast(navigator.onLine === false ? '📴 Löschen geht nur online' : '⚠️ Server nicht erreichbar'); return; }
-  await loadMine(); render();
+  const r = await SpotOutbox.act('spot-del', id);
+  if (!actToast(r, '🗑️ Platz Spot gelöscht')) return;
+  await refreshActs(); if (r.sent) await loadMine(); render();
 }
 async function shareWeekly(token, name) {
   const url = new URL('spot-woche.html?token=' + token, location.href).href;
@@ -442,9 +457,9 @@ async function shareWeekly(token, name) {
 }
 async function delWeekly(token) {
   if (!confirm('Wochen-Spot wirklich löschen?')) return;
-  try { const r = await post('/weekly-spots/' + token, 'DELETE', { code: CODE, token: TOK }); toast(r.ok ? '🗑️ Wochen-Spot gelöscht' : '⚠️ Nicht gelöscht'); }
-  catch (e) { toast(navigator.onLine === false ? '📴 Nur online möglich' : '⚠️ Fehler'); }
-  await loadWeekly(); render();
+  const r = await SpotOutbox.act('weekly-del', token);
+  if (!actToast(r, '🗑️ Wochen-Spot gelöscht')) return;
+  await refreshActs(); if (r.sent) await loadWeekly(); render();
 }
 
 /* ── Daten laden (Cache zuerst, dann Netz) ─────────────── */
@@ -465,7 +480,7 @@ const loadInvites = () => fetchList('invites', '/spotcache/invites/' + CODE + '?
 const loadFavs = () => fetchList('favs', '/favorites/' + CODE + '?token=' + encodeURIComponent(TOK), d => { S.favs = d; });
 const loadWeekly = () => fetchList('weekly', '/weekly-spots/mine?code=' + encodeURIComponent(CODE) + '&token=' + encodeURIComponent(TOK), d => { S.weekly = d; });
 async function loadMine() {
-  await fetchList('mine', '/userspots/' + CODE, d => { S.mine = d; });
+  await fetchList('mine', '/userspots/' + CODE + '?token=' + encodeURIComponent(TOK), d => { S.mine = d; });
   if (!S.mine.length) { // Offline ohne Hub-Cache: Karten-Cache (IndexedDB) nutzen
     try {
       const all = await new Promise(res => { const q = indexedDB.open('SpotMeDB'); q.onerror = () => res([]); q.onupgradeneeded = () => { q.transaction.abort(); res([]); }; q.onsuccess = () => { const d = q.result; if (!d.objectStoreNames.contains('spots')) { d.close(); return res([]); } const g = d.transaction('spots').objectStore('spots').getAll(); g.onsuccess = () => { d.close(); res(g.result || []); }; g.onerror = () => { d.close(); res([]); }; }; });
@@ -497,13 +512,21 @@ async function poll() {
 async function init() {
   if (!CODE) { $('panel').innerHTML = '<div class="empty"><div class="i">👤</div>Bitte zuerst auf der Karte anmelden.</div>'; return; }
   S.invites = (cget('invites') || { d: [] }).d; S.favs = (cget('favs') || { d: [] }).d; S.mine = (cget('mine') || { d: [] }).d; S.weekly = (cget('weekly') || { d: [] }).d;
-  await loadPending(); render();
+  await loadPending(); await refreshActs(); render();
   await Promise.all([loadInvites(), loadFavs(), loadMine(), loadWeekly(), loadPending()]);
   render();
   if (tab === 'favoriten') loadCheckins();
   poll();
 }
-window.addEventListener('spotoutbox', async () => { await loadPending(); await loadMine(); render(); });
+window.addEventListener('spotoutbox', async (e) => {
+  const d = (e && e.detail) || {};
+  await refreshActs();
+  if (d.failedActs && d.failedActs.length) toast('⚠️ ' + d.failedActs.length + (d.failedActs.length === 1 ? ' Änderung' : ' Änderungen') + ' nicht übernommen: ' + (d.failedActs[0].err || ''));
+  else if (d.sent && !d.left) toast('✅ Änderungen synchronisiert');
+  await loadPending();
+  if (d.sent || (d.failedActs && d.failedActs.length)) await Promise.all([loadMine(), loadFavs(), loadWeekly()]);
+  render();
+});
 window.addEventListener('online', () => { init(); });
 window.addEventListener('offline', () => { staleBar(); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { poll(); render(); } });

@@ -11,6 +11,7 @@
 <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
 <script src="nav.js"></script>
 <script src="sm-store.js"></script>
+<script src="spot-outbox.js"></script>
 <script src="chat-core.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -336,6 +337,8 @@ function fmtCheckin(ts) {
 }
 
 
+// Nach erfolgreichem Senden wartender Änderungen frisch laden (genauer Ort kann sich geändert haben)
+window.addEventListener('spotoutbox', (e) => { if (e.detail && e.detail.sent && window.__spotId) { SMStore.forget('spot', window.__spotId); loadSpot(window.__spotId); } });
 async function loadSpot(id) {
   const content = document.getElementById('content');
   const url = `${API}/spots/${encodeURIComponent(id)}` + (CODE ? `?code=${encodeURIComponent(CODE)}&token=${encodeURIComponent(TOK)}` : '');
@@ -380,6 +383,9 @@ async function loadSpot(id) {
     }
     try { SMStore.save('spot', id, Object.assign({}, spot, { _x: { isFav, owner, ownerAv } })); } catch {}
   }
+  // Vorgemerkte (noch nicht gesendete) Favorit-Änderung gilt schon jetzt
+  try { const pa = (await SpotOutbox.acts()).find(a => a.cid === 'a_fav_' + spot.id); if (pa) isFav = pa.type === 'fav-add'; } catch {}
+  window.__spotId = id;
 
   const planned = (spot.planned_checkins || []);
   const wishes = ((owner && (owner.wishTags || owner.wishes)) || []).filter(Boolean);
@@ -453,23 +459,19 @@ async function toggleFav(id) {
   const btn = document.getElementById('favBtn');
   const isFav = btn.classList.contains('following');
   btn.disabled = true;
-  try {
-    const r = await fetch(isFav ? `${API}/favorites/${id}` : `${API}/favorites`, {
-      method: isFav ? 'DELETE' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(isFav ? { code: CODE, token: TOK } : { code: CODE, token: TOK, spot_id: id })
-    });
-    if (r.ok) {
-      btn.classList.toggle('following');
-      btn.textContent = btn.classList.contains('following') ? '⭐ Favorit' : '☆ Favorit';
-      const el = document.getElementById('favCount');
-      const n = parseInt((el.textContent.match(/\d+/) || [0])[0], 10) + (btn.classList.contains('following') ? 1 : -1);
-      el.textContent = '⭐ ' + Math.max(0, n);
-      showToast(btn.classList.contains('following') ? '⭐ Favorit gespeichert' : 'Favorit entfernt');
-      // Favorit ändert, ob der genaue Ort sichtbar ist → gespeicherten Stand verwerfen und neu laden
-      SMStore.forget('spot', id); setTimeout(() => loadSpot(id), 400);
-    } else { let m = ''; try { m = (await r.json()).error; } catch {} showToast('⚠️ ' + (m || 'Fehler')); }
-  } catch { showToast('⚠️ Verbindungsfehler'); }
+  const r = await SpotOutbox.act(isFav ? 'fav-del' : 'fav-add', id);
+  if (r.error) { showToast('⚠️ ' + r.error); btn.disabled = false; return; }
+  btn.classList.toggle('following');
+  btn.textContent = btn.classList.contains('following') ? '⭐ Favorit' : '☆ Favorit';
+  const el = document.getElementById('favCount');
+  const n = parseInt((el.textContent.match(/\d+/) || [0])[0], 10) + (btn.classList.contains('following') ? 1 : -1);
+  el.textContent = '⭐ ' + Math.max(0, n);
+  if (r.queued) showToast('📴 Gespeichert – wird gesendet, sobald du wieder Netz hast');
+  else {
+    showToast(btn.classList.contains('following') ? '⭐ Favorit gespeichert' : 'Favorit entfernt');
+    // Favorit ändert, ob der genaue Ort sichtbar ist → gespeicherten Stand verwerfen und neu laden
+    SMStore.forget('spot', id); setTimeout(() => loadSpot(id), 400);
+  }
   btn.disabled = false;
 }
 

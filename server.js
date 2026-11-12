@@ -2915,14 +2915,15 @@ app.patch("/api/userspots/:id/toggle", async (req, res) => {
       return res.status(403).json({ error: "Ungültiger Token" });
     }
 
-    // Status umkehren: true → false, false → true
-    // Das NOT in SQL funktioniert wie das ! in JavaScript
+    // Mit explizitem active (true/false) wird genau dieser Zustand gesetzt – so ist
+    // Wiederholen aus der Offline-Warteschlange harmlos. Ohne: Status umkehren wie bisher.
+    const want = typeof req.body.active === "boolean" ? req.body.active : null;
     const result = await pool.query(
       `UPDATE user_spots
-       SET active = NOT active
+       SET active = COALESCE($3::boolean, NOT active)
        WHERE id = $1 AND code = $2
        RETURNING active`,
-      [id, code],
+      [id, code, want],
     );
 
     const newStatus = result.rows[0].active;
