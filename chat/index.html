@@ -58,7 +58,7 @@
   <div id="settingsLayer" class="hidden overlay">
     <div class="overlay-card">
       <h2>👤 Dein Profil</h2>
-      <p style="font-size:0.7rem;color:#7a98aa;margin:-0.4rem 0 0.6rem;">Chat-Version 1.0.3</p>
+      <p style="font-size:0.7rem;color:#7a98aa;margin:-0.4rem 0 0.6rem;">Chat-Version 1.0.4</p>
       <label>Deine ID (gib sie weiter, damit dich andere hinzufügen)</label>
       <div class="copy-row">
         <input type="text" id="setId" readonly>
@@ -1057,9 +1057,12 @@ function fitChatToViewport() {
   const el = document.getElementById('chatDetailScreen');
   if (!el || el.style.display !== 'flex') return;
   const vv = window.visualViewport;
-  const h = vv ? vv.height : window.innerHeight;
-  el.style.height = h + 'px';
-  el.style.top = (vv ? vv.offsetTop : 0) + 'px';
+  // Oben und unten am Layout-Fenster verankern; unten so viel Platz lassen, wie die Tastatur verdeckt
+  let bottom = 0;
+  if (vv) bottom = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+  el.style.top = '0px';
+  el.style.height = 'auto';
+  el.style.bottom = bottom + 'px';
   const m = document.getElementById('messages');
   if (m) m.scrollTop = m.scrollHeight;
 }

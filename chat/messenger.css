@@ -742,5 +742,5 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
 }
 
 /* Tastatur: Chat-Fenster liegt fest am oberen Rand, Höhe setzt das Script (visualViewport) */
-#chatDetailScreen { position: fixed; top: 0; left: 0; right: 0; overflow: hidden; }
+#chatDetailScreen { position: fixed; top: 0; left: 0; right: 0; bottom: 0; height: auto; min-height: 0; overflow: hidden; }
 .input-bar { position: relative; }
