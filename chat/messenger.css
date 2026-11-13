@@ -740,3 +740,7 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
   color: #080b10;
   font-size: 1.1rem; font-weight: 700;
 }
+
+/* Tastatur: Chat-Fenster liegt fest am oberen Rand, Höhe setzt das Script (visualViewport) */
+#chatDetailScreen { position: fixed; top: 0; left: 0; right: 0; overflow: hidden; }
+.input-bar { position: relative; }

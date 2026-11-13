@@ -704,6 +704,7 @@ async function openChat(room, partnerCode, partnerName) {
 
   document.getElementById('chatListScreen').style.display = 'none';
   document.getElementById('chatDetailScreen').style.display = 'flex';
+  fitChatToViewport();
 
   document.getElementById('headerName').textContent = partnerName;
   document.getElementById('headerCode').textContent = fmtId(partnerCode);
@@ -1050,27 +1051,26 @@ async function initPolling() {
 
 
 // ── MOBILE KEYBOARD DETECTION ─────────────────────────────────────────────
-function detectKeyboard() {
-  const threshold = window.innerHeight * 0.4; // Wenn Viewport < 60% = Tastatur
-  
-  if (window.innerHeight < threshold) {
-    console.log('[Chat] Keyboard detected');
-    document.body.style.overflow = 'hidden';
-    document.getElementById('messages').style.paddingBottom = '50px';
-  } else {
-    console.log('[Chat] Keyboard hidden');
-    document.body.style.overflow = '';
-    document.getElementById('messages').style.paddingBottom = '';
-  }
+// Tastatur: Chat-Fenster passt sich der sichtbaren Fläche an → Eingabefeld bleibt über der Tastatur
+function fitChatToViewport() {
+  const el = document.getElementById('chatDetailScreen');
+  if (!el || el.style.display !== 'flex') return;
+  const vv = window.visualViewport;
+  const h = vv ? vv.height : window.innerHeight;
+  el.style.height = h + 'px';
+  el.style.top = (vv ? vv.offsetTop : 0) + 'px';
+  const m = document.getElementById('messages');
+  if (m) m.scrollTop = m.scrollHeight;
 }
-
-// Resize-Event Listener (wird ausgelöst wenn Keyboard erscheint)
-window.addEventListener('resize', () => {
-  setTimeout(detectKeyboard, 200); // Kurz warten bis Animation fertig
+function detectKeyboard() { fitChatToViewport(); }
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', fitChatToViewport);
+  window.visualViewport.addEventListener('scroll', fitChatToViewport);
+}
+window.addEventListener('resize', fitChatToViewport);
+document.addEventListener('focusin', (e) => {
+  if (e.target && e.target.id === 'msgInput') { setTimeout(fitChatToViewport, 150); setTimeout(fitChatToViewport, 450); }
 });
-
-// Direkt nach Login aufrufen
-detectKeyboard();
 
 // ── HELPERS ───────────────────────────────────────────────────────────────
 function escapeHtml(s) {
