@@ -11,7 +11,7 @@
 //   • Externe Ressourcen      → Stale-While-Revalidate
 // ══════════════════════════════════════════════════════════════════════════════
 
-const CACHE_VERSION = "spot-v29.0;
+const CACHE_VERSION = "chat-v1.0.0";
 const CACHE_STATIC = `spot-static-${CACHE_VERSION}`;
 const CACHE_API = `spot-api-${CACHE_VERSION}`;
 const CACHE_RUNTIME = `spot-runtime-${CACHE_VERSION}`;
@@ -19,15 +19,24 @@ const CACHE_RUNTIME = `spot-runtime-${CACHE_VERSION}`;
 // ── STATISCHE ASSETS – werden bei Installation gecacht ──────────────────────
 const STATIC_ASSETS = [
   "/chat/",
-  "/chat/icons/",
+  "/chat/index.html",
   "/chat/messenger.css",
   "/chat/webrtc.js",
-  "/chat/index.html",
+  "/chat/peerjs.min.js",
   "/chat/manifest.json",
-  // Fonts (optional – falls du Google Fonts nutzt)
-  "https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap",
-  // Lucide Icons (falls im Chat genutzt)
-  "https://unpkg.com/lucide@0.383.0/dist/umd/lucide.min.js",
+  "/chat/icons/spot_72.png",
+  "/chat/icons/spot_192.png",
+  "/chat/icons/spot_512.png",
+  // Schriften (selbst gehostet, siehe /fonts.css)
+  "/fonts.css",
+  "/fonts/outfit-latin.woff2",
+  "/fonts/outfit-latin-ext.woff2",
+  "/fonts/space-mono-latin-400.woff2",
+  "/fonts/space-mono-latin-700.woff2",
+  "/fonts/space-mono-latin-ext-400.woff2",
+  "/fonts/space-mono-latin-ext-700.woff2",
+  "/fonts/space-mono-latin-400-italic.woff2",
+  "/fonts/space-mono-latin-ext-400-italic.woff2",
 ];
 
 // API-Cache maximales Alter in Sekunden
@@ -103,58 +112,16 @@ self.addEventListener("fetch", (event) => {
   // Nur GET cachen – POST/PUT/DELETE immer ans Netz
   if (request.method !== "GET") return;
 
-  // ── 1. API-CALLS: Network First (mit Cache-Fallback) ──────────────────────
-  // Chat-API muss möglichst frisch sein, aber offline nicht komplett tot.
-  if (url.pathname.startsWith("/api/")) {
+  // API-Aufrufe (Nachrichten, Token) werden nie zwischengespeichert.
+  if (url.pathname.startsWith("/api/")) return;
+
+  // /fonts.css und /fonts/* (gemeinsam mit SpotMe Caching): Cache First
+  if (url.origin === self.location.origin && (url.pathname === "/fonts.css" || url.pathname.startsWith("/fonts/"))) {
     event.respondWith(
-      fetch(request.clone())
-        .then((response) => {
-          if (!response.ok) return response;
-
-          // Erfolgreiche Antwort cachen
-          const clone = response.clone();
-          caches.open(CACHE_API).then((cache) => {
-            const headers = new Headers(clone.headers);
-            headers.append("sw-cached-at", Date.now().toString());
-            clone.blob().then((body) =>
-              cache.put(
-                request,
-                new Response(body, {
-                  status: clone.status,
-                  statusText: clone.statusText,
-                  headers,
-                }),
-              ),
-            );
-          });
-
-          return response;
-        })
-        .catch(async () => {
-          // Offline → Cache versuchen
-          const cached = await caches.match(request);
-          if (cached) {
-            const cachedAt = parseInt(
-              cached.headers.get("sw-cached-at") || "0",
-            );
-            const ageSeconds = (Date.now() - cachedAt) / 1000;
-
-            // Zu alter Cache → trotzdem liefern aber mit Warn-Header
-            if (ageSeconds > API_CACHE_MAX_AGE) {
-              console.warn(`[Chat SW] Cache veraltet für ${url.pathname}`);
-            }
-            return cached;
-          }
-
-          // Gar kein Cache
-          return new Response(
-            JSON.stringify({ error: "Offline – keine gecachten Daten" }),
-            {
-              status: 503,
-              headers: { "Content-Type": "application/json" },
-            },
-          );
-        }),
+      caches.match(request).then((c) => c || fetch(request).then((r) => {
+        if (r.ok) { const cl = r.clone(); caches.open(CACHE_STATIC).then((ch) => ch.put(request, cl)); }
+        return r;
+      })),
     );
     return;
   }
@@ -264,8 +231,8 @@ self.addEventListener("push", (event) => {
 
   const options = {
     body: data.body || "",
-    icon: "/chat/icons/pwa_192.png",
-    badge: "/chat/icons/pwa_72.png",
+    icon: "/chat/icons/spot_192.png",
+    badge: "/chat/icons/spot_72.png",
     data: { url: data.url || "/chat/" },
     vibrate: [200, 100, 200],
     tag: data.tag || "spotme-chat",

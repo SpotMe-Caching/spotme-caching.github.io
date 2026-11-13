@@ -4,7 +4,7 @@
 <!-- External CSS -->
 <link rel="stylesheet" href="messenger.css">
 
-<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"> </script>
+<script src="peerjs.min.js"></script>
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
@@ -17,52 +17,17 @@
 
 <script src="webrtc.js"></script>
 
-  <!-- Login Screen -->
-  <div id="loginScreen">
+  <!-- Erster Aufruf: nur Name eingeben, Profil wird automatisch angelegt -->
+  <div id="loginScreen" class="hidden">
     <div class="logo">🐱</div>
     <h1>Spot - Chat</h1>
-    <p class="subtitle">Eigenständiger Messenger mit P2P</p>
-
-    <div id="loginForm">
-      <input type="text" id="loginCode" maxlength="6" placeholder="6-stelliger Code">
-      <input type="password" id="loginToken" placeholder="Token">
-      <button onclick="handleLogin()">Anmelden</button>
-      <p id="loginError" class="error"></p>
-      <button type="button" class="link-btn" onclick="showRegisterForm()">Neu hier? Jetzt registrieren</button>
-    </div>
-
-    <div id="registerForm" class="hidden">
-      <input type="text" id="registerName" maxlength="40" placeholder="Dein Anzeigename">
-      <button onclick="handleRegister()">Code erstellen</button>
+    <p class="subtitle">Privater Messenger – ohne Standort, ohne Anmeldung</p>
+    <div id="registerForm">
+      <input type="text" id="registerName" maxlength="40" placeholder="Dein Name (echt oder Fantasie)" autocomplete="off">
+      <button id="setupBtn" onclick="createProfile()">Los geht's</button>
       <p id="registerError" class="error"></p>
-      <button type="button" class="link-btn" onclick="showLoginForm()">Ich habe schon einen Code</button>
     </div>
-
     <a href="/" style="margin-top:1rem; color:#ff4f7b; font-size:0.85rem;">← Zurück zu SpotME Caching</a>
-  </div>
-
-  <!-- Credentials Layer: einmalige Anzeige nach Registrierung -->
-  <div id="credentialsLayer" class="hidden overlay">
-    <div class="overlay-card">
-      <h2>🔐 Dein Zugang</h2>
-      <p>Speichere Code und Token jetzt an einem sicheren Ort. Ohne sie kommst du auf einem anderen Gerät nicht mehr rein!</p>
-
-      <label>Code</label>
-      <div class="copy-row">
-        <input type="text" id="credCode" readonly>
-        <button onclick="copyField('credCode')">Kopieren</button>
-      </div>
-
-      <label>Token</label>
-      <div class="copy-row">
-        <input type="text" id="credToken" readonly>
-        <button onclick="copyField('credToken')">Kopieren</button>
-      </div>
-
-      <p id="copyFeedback" class="copy-feedback"></p>
-
-      <button class="primary-btn" onclick="dismissCredentialsLayer()">Gespeichert, weiter zum Chat</button>
-    </div>
   </div>
 
   <!-- Chat List -->
@@ -70,7 +35,7 @@
     <div class="chat-list-header">
       <h2>💬 Chats</h2>
       <button class="new-chat-btn" onclick="showNewChatLayer()" title="Neuer Chat">+</button>
-      <button class="logout-btn" onclick="handleLogout()" style="background:none;border:none;color:#ff4f7b;cursor:pointer;font-size:0.85rem;flex-shrink:0;">Abmelden</button>
+      <button class="logout-btn" onclick="showSettings()" style="background:none;border:none;color:#ff4f7b;cursor:pointer;font-size:0.85rem;flex-shrink:0;">⚙︎ Profil</button>
     </div>
     <div id="chatList" class="chat-list"></div>
   </div>
@@ -79,11 +44,38 @@
   <div id="newChatLayer" class="hidden overlay">
     <div class="overlay-card">
       <h2>💬 Neuer Chat</h2>
-      <p>Gib den 6-stelligen Code deines Chatpartners ein.</p>
-      <input type="text" id="newChatCode" maxlength="6" placeholder="6-stelliger Code" style="width:100%;padding:0.6rem 0.75rem;border:1px solid #333;border-radius:8px;background:#1a1f26;color:#fff;font-size:1rem;text-align:center;margin-bottom:0.75rem;">
+      <p>Gib die ID deines Chatpartners ein, z. B. <b>abc-def</b>.</p>
+      <input type="text" id="newChatCode" maxlength="8" placeholder="abc-def" autocapitalize="off" autocomplete="off" style="width:100%;padding:0.6rem 0.75rem;border:1px solid #333;border-radius:8px;background:#1a1f26;color:#fff;font-size:1rem;text-align:center;margin-bottom:0.75rem;">
       <p id="newChatError" class="error"></p>
       <button class="primary-btn" onclick="startNewChat()">Chat starten</button>
       <button type="button" class="link-btn" onclick="hideNewChatLayer()" style="width:100%;text-align:center;">Abbrechen</button>
+    </div>
+  </div>
+
+<!-- Profil / Einstellungen -->
+  <div id="settingsLayer" class="hidden overlay">
+    <div class="overlay-card">
+      <h2>👤 Dein Profil</h2>
+      <label>Deine ID (gib sie weiter, damit dich andere hinzufügen)</label>
+      <div class="copy-row">
+        <input type="text" id="setId" readonly>
+        <button onclick="copyId()">Kopieren</button>
+      </div>
+      <button class="link-btn" style="width:100%;text-align:center;" onclick="shareId()">🔗 Link teilen</button>
+      <label>Dein Name (die ID bleibt gleich)</label>
+      <div class="copy-row">
+        <input type="text" id="setName" maxlength="40">
+        <button onclick="saveName()">Speichern</button>
+      </div>
+      <p id="setMsg" class="copy-feedback"></p>
+      <label>Sicherung (Chats + Zugang) – für Gerätewechsel</label>
+      <div class="copy-row">
+        <button onclick="exportBackup()">Sichern</button>
+        <button onclick="document.getElementById('restoreFile').click()">Wiederherstellen</button>
+        <input type="file" id="restoreFile" accept=".json,application/json" class="hidden" onchange="importBackup(this)">
+      </div>
+      <button class="link-btn" style="width:100%;text-align:center;color:#ff4f7b;" onclick="deleteEverything()">🗑 Alles von mir löschen</button>
+      <button class="primary-btn" onclick="hideSettings()">Schließen</button>
     </div>
   </div>
 
@@ -124,7 +116,7 @@ let CODE = null, TOKEN = null, PROFILE = null;
 let CURRENT_ROOM = null, PARTNER_CODE = null, PARTNER_NAME = null;
 let RENDERED_MSG_COUNT = 0; // FIX: für inkrementelles Rendern in renderMessages()
 let POLL_TIMER = null;
-const CHAT_PREFIX = 'sm_local_msg_';
+const CHAT_PREFIX = 'sm_chat_msg_'; // eigener Speicher – getrennt vom Caching-Chat (sm_local_msg_)
 
 // ══════════════════════════════════════════════════════════════════════════
 // LOKALE VERSCHLÜSSELUNG (AES-GCM, Web Crypto API)
@@ -227,231 +219,222 @@ let webrtc = null;
 let isP2PConnected = false;
 let p2pConnectionTime = null;
 
-// ── AUTH ──────────────────────────────────────────────────────────────────
-// ── REGISTRIERUNG (neuer Nutzer, eigenständiger Messenger) ────────────────
-function showRegisterForm() {
-  document.getElementById('loginForm').classList.add('hidden');
-  document.getElementById('registerForm').classList.remove('hidden');
-  document.getElementById('loginError').textContent = '';
+// ── PROFIL (automatisch, nur Name) ─────────────────────────────────────────
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+function fmtId(c) { c = String(c || ''); return c.length === 6 ? c.slice(0, 3) + '-' + c.slice(3) : c; }
+function normId(v) { return String(v || '').toLowerCase().replace(/[^a-z]/g, ''); }
+function tfetch(url, opts, ms) {
+  const ctl = new AbortController();
+  const tm = setTimeout(() => ctl.abort(), ms || 10000);
+  return fetch(url, Object.assign({}, opts || {}, { signal: ctl.signal })).finally(() => clearTimeout(tm));
+}
+function getContacts() { try { return JSON.parse(lsGet('sm_chat_contacts') || '{}') || {}; } catch (e) { return {}; } }
+function addContact(code, name) {
+  if (!code) return;
+  const c = getContacts();
+  if (c[code] === (name || c[code] || code)) return;
+  c[code] = name || c[code] || code;
+  lsSet('sm_chat_contacts', JSON.stringify(c));
 }
 
-function showLoginForm() {
-  document.getElementById('registerForm').classList.add('hidden');
-  document.getElementById('loginForm').classList.remove('hidden');
-  document.getElementById('registerError').textContent = '';
-}
-
-async function handleRegister() {
-  const name = document.getElementById('registerName').value.trim();
-  const errEl = document.getElementById('registerError');
-  errEl.textContent = '';
-
-  if (!name) {
-    errEl.textContent = 'Bitte einen Anzeigenamen eingeben';
-    return;
-  }
-
-  try {
-    const res = await fetch(`${API}/messenger/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name })
-    });
-
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || 'Registrierung fehlgeschlagen');
-    }
-
-    const { code, token, name: registeredName } = await res.json();
-
-    // Automatisch "eingeloggt" – Code+Token lokal hinterlegen
-    CODE = code;
-    TOKEN = token;
-    PROFILE = { code, name: registeredName };
-
-    localStorage.setItem('sm_chat_code', code);
-    localStorage.setItem('sm_chat_token', token);
-    localStorage.setItem('sm_chat_profile', JSON.stringify(PROFILE));
-
-    // Zugangsdaten-Layer zeigen, BEVOR es in den Chat geht
-    document.getElementById('credCode').value = code;
-    document.getElementById('credToken').value = token;
-    document.getElementById('copyFeedback').textContent = '';
-    document.getElementById('credentialsLayer').classList.remove('hidden');
-  } catch (e) {
-    console.error('[Register]', e);
-    errEl.textContent = e.message || 'Registrierung fehlgeschlagen';
-  }
-}
-
-async function copyField(fieldId) {
-  const el = document.getElementById(fieldId);
-  const feedback = document.getElementById('copyFeedback');
-  try {
-    await navigator.clipboard.writeText(el.value);
-    feedback.textContent = '✅ Kopiert!';
-  } catch (e) {
-    // Fallback für ältere WebViews ohne Clipboard-API
-    el.select();
-    el.setSelectionRange(0, 99999);
-    document.execCommand('copy');
-    feedback.textContent = '✅ Kopiert!';
-  }
-  setTimeout(() => { feedback.textContent = ''; }, 2000);
-}
-
-function dismissCredentialsLayer() {
-  document.getElementById('credentialsLayer').classList.add('hidden');
-  document.getElementById('loginScreen').classList.add('hidden');
-  document.getElementById('chatListScreen').style.display = 'block';
-
-  initWebRTC();
-  initPolling();
-  initPushNotifications();
-  renderChatList();
-}
-
-async function handleLogin() {
-  const code = document.getElementById('loginCode').value.trim();
-  const token = document.getElementById('loginToken').value.trim();
-  
-  if (!code || code.length !== 6) {
-    document.getElementById('loginError').textContent = 'Bitte 6-stelligen Code eingeben';
-    return;
-  }
-
-  // Spot Messenger läuft hier als eigenständige App (kein Trust-Kontext
-  // von SpotMe Caching, das seinen eigenen Chat-Layer separat implementiert) →
-  // Token ist Pflicht, sonst könnte jeder mit fremdem Code rein.
-  if (!token) {
-    document.getElementById('loginError').textContent = 'Token erforderlich (siehe SpotMe Caching Profil)';
-    return;
-  }
-  
-  try {
-    // Echte Server-Verifikation (code + token müssen zusammenpassen)
-    const res = await fetch(`${API}/auth/verify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, token })
-    });
-    if (!res.ok) {
-      throw new Error('Profil nicht gefunden oder ungültiger Token');
-    }
-    
-    const profile = await res.json();
-    
-    CODE = code;
-    TOKEN = token;
-    PROFILE = profile;
-    
-    // localStorage persistieren (im chat Namespace)
-    localStorage.setItem('sm_chat_code', code);
-    if (token) localStorage.setItem('sm_chat_token', token);
-    localStorage.setItem('sm_chat_profile', JSON.stringify(profile));
-    
-    // UI umschalten
-    document.getElementById('loginScreen').classList.add('hidden');
-    document.getElementById('chatListScreen').style.display = 'block';
-    
-    // WebRTC initialisieren (PeerJS Setup)
-    initWebRTC();
-    
-    // Polling für Server-Nachrichten starten
-    initPolling();
-
-    // Web Push registrieren (eigene Subscription für /chat/ Scope)
-    initPushNotifications();
-    
-    // Chat Liste rendern
-    renderChatList();
-
-  } catch (e) {
-    document.getElementById('loginError').textContent = e.message;
-  }
-}
-
-function handleLogout() {
-  // Cleanup WebRTC Verbindung
-  if (webrtc) {
-    webrtc.destroy();
-    webrtc = null;
-  }
-  isP2PConnected = false;
-  p2pConnectionTime = null;
-  
-  // Cleanup Polling
-  if (POLL_TIMER) clearInterval(POLL_TIMER);
-  POLL_TIMER = null;
-  
-  // localStorage bereinigen
-  localStorage.removeItem('sm_chat_code');
-  localStorage.removeItem('sm_chat_token');
-  localStorage.removeItem('sm_chat_profile');
-  
-  // Reset globals
-  CODE = null; TOKEN = null; PROFILE = null;
-  CURRENT_ROOM = null; PARTNER_CODE = null; PARTNER_NAME = null;
-  clearLocalCryptoKey(); // Schlüssel war nur aus CODE+TOKEN abgeleitet, jetzt ungültig
-  
-  // UI zurücksetzen
+function showSetup(prefill, msg) {
   document.getElementById('chatListScreen').style.display = 'none';
   document.getElementById('chatDetailScreen').style.display = 'none';
   document.getElementById('loginScreen').classList.remove('hidden');
-  document.getElementById('loginCode').value = '';
-  document.getElementById('loginToken').value = '';
-  document.getElementById('loginError').textContent = '';
-  showLoginForm(); // falls noch auf Registrieren-Ansicht: zurück zu Login
-  
-  // P2P UI resetten
-  const banner = document.getElementById('p2pBanner');
-  const bannerText = document.getElementById('p2pBannerText');
-  if (banner) {
-    banner.className = 'p2p-banner server';
-    bannerText.textContent = 'Verbindung wird hergestellt...';
-  }
-  }
+  const n = document.getElementById('registerName');
+  if (prefill) n.value = prefill;
+  document.getElementById('registerError').textContent = msg || '';
+}
 
-// Autologin versuchen wenn gespeichert
-async function autoLogin() {
-  const savedCode = localStorage.getItem('sm_chat_code');
-  const savedToken = localStorage.getItem('sm_chat_token');
-  
-  if (!savedCode) return false;
-
-  // Alte Session ohne Token (aus Zeit vor dem Pflicht-Token) → verwerfen,
-  // Nutzer muss sich einmalig mit Token neu einloggen.
-  if (!savedToken) {
-    localStorage.removeItem('sm_chat_code');
-    localStorage.removeItem('sm_chat_profile');
-    return false;
-  }
-  
+async function createProfile() {
+  const name = document.getElementById('registerName').value.trim();
+  const errEl = document.getElementById('registerError');
+  const btn = document.getElementById('setupBtn');
+  errEl.textContent = '';
+  if (!name) { errEl.textContent = 'Bitte einen Namen eingeben'; return; }
+  btn.disabled = true;
   try {
-    const res = await fetch(`${API}/auth/verify`, {
+    const res = await tfetch(`${API}/messenger/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: savedCode, token: savedToken })
-    });
-    if (res.ok) {
-      CODE = savedCode;
-      TOKEN = savedToken;
-      PROFILE = await res.json();
-      
-      document.getElementById('loginScreen').classList.add('hidden');
-      document.getElementById('chatListScreen').style.display = 'block';
-      
-      initWebRTC();
-      initPolling();
-      initPushNotifications();
-      renderChatList();
-      return true;
+      body: JSON.stringify({ name })
+    }, 20000);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Anlegen fehlgeschlagen');
     }
+    const { code, token, name: n } = await res.json();
+    CODE = code; TOKEN = token; PROFILE = { code, name: n };
+    lsSet('sm_chat_code', code);
+    lsSet('sm_chat_token', token);
+    lsSet('sm_chat_profile', JSON.stringify(PROFILE));
+    startApp();
   } catch (e) {
-    console.error('Autologin failed:', e);
+    errEl.textContent = (e && e.name === 'AbortError') ? 'Keine Verbindung – bitte erneut versuchen' : (e.message || 'Anlegen fehlgeschlagen');
+  } finally { btn.disabled = false; }
+}
+
+function startApp() {
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('chatListScreen').style.display = 'block';
+  try { initWebRTC(); } catch (e) { console.warn('[P2P]', e); }
+  initPolling();
+  initPushNotifications();
+  renderChatList();
+  pingVisit();
+  const add = new URLSearchParams(location.search).get('add');
+  if (add) {
+    try { history.replaceState(null, '', location.pathname); } catch (e) {}
+    showNewChatLayer();
+    document.getElementById('newChatCode').value = fmtId(normId(add));
   }
-  return false;
+}
+
+// Besuch melden – hält das Profil am Leben (Aufräumen nach 30 Tagen ohne Besuch)
+let LAST_VISIT_PING = 0;
+function pingVisit() {
+  if (!CODE || !TOKEN || Date.now() - LAST_VISIT_PING < 6 * 3600 * 1000) return;
+  LAST_VISIT_PING = Date.now();
+  tfetch(`${API}/profile/visit`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: CODE, token: TOKEN })
+  }).catch(() => { LAST_VISIT_PING = 0; });
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) pingVisit(); });
+
+// Start: gespeichertes Profil sofort nutzen (auch offline), Server prüft im Hintergrund
+async function autoLogin() {
+  const savedCode = lsGet('sm_chat_code');
+  const savedToken = lsGet('sm_chat_token');
+  if (!savedCode || !savedToken) { showSetup(); return false; }
+  CODE = savedCode; TOKEN = savedToken;
+  try { PROFILE = JSON.parse(lsGet('sm_chat_profile') || 'null'); } catch (e) { PROFILE = null; }
+  if (!PROFILE || !PROFILE.name) PROFILE = { code: CODE, name: CODE };
+  startApp();
+  verifyProfile();
+  return true;
+}
+
+async function verifyProfile() {
+  try {
+    const res = await tfetch(`${API}/auth/verify`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: CODE, token: TOKEN })
+    });
+    if (res.status === 403) return profileLost();
+    if (res.ok) {
+      const p = await res.json();
+      if (p && p.name) { PROFILE = { code: CODE, name: p.name }; lsSet('sm_chat_profile', JSON.stringify(PROFILE)); }
+    }
+  } catch (e) { /* offline – egal */ }
+}
+
+// Profil gibt es auf dem Server nicht mehr (z. B. 30 Tage ohne Besuch) → neu anlegen lassen
+function profileLost() {
+  const oldName = PROFILE && PROFILE.name;
+  stopRuntime();
+  wipeLocal();
+  showSetup(oldName, 'Dein altes Profil ist abgelaufen. Lege es kurz neu an – du bekommst eine neue ID.');
+}
+
+function stopRuntime() {
+  if (webrtc) { try { webrtc.destroy(); } catch (e) {} webrtc = null; }
+  isP2PConnected = false; p2pConnectionTime = null;
+  if (POLL_TIMER) clearInterval(POLL_TIMER);
+  POLL_TIMER = null;
+}
+
+function wipeLocal() {
+  try {
+    Object.keys(localStorage).filter(k => k.startsWith('sm_chat_')).forEach(k => localStorage.removeItem(k));
+  } catch (e) {}
+  CODE = null; TOKEN = null; PROFILE = null;
+  CURRENT_ROOM = null; PARTNER_CODE = null; PARTNER_NAME = null;
+  clearLocalCryptoKey();
+}
+
+// ── PROFIL-EINSTELLUNGEN ──────────────────────────────────────────────────
+function showSettings() {
+  document.getElementById('setId').value = fmtId(CODE);
+  document.getElementById('setName').value = (PROFILE && PROFILE.name) || '';
+  document.getElementById('setMsg').textContent = '';
+  document.getElementById('settingsLayer').classList.remove('hidden');
+}
+function hideSettings() { document.getElementById('settingsLayer').classList.add('hidden'); }
+function setMsg(t) { const el = document.getElementById('setMsg'); el.textContent = t; setTimeout(() => { if (el.textContent === t) el.textContent = ''; }, 3000); }
+
+async function copyId() {
+  const el = document.getElementById('setId');
+  try { await navigator.clipboard.writeText(el.value); } catch (e) { el.select(); try { document.execCommand('copy'); } catch (e2) {} }
+  setMsg('✅ Kopiert');
+}
+async function shareId() {
+  const url = `${location.origin}/chat/?add=${CODE}`;
+  const text = `Schreib mir im Spot-Chat – meine ID: ${fmtId(CODE)}`;
+  try {
+    if (navigator.share) { await navigator.share({ title: 'Spot-Chat', text, url }); return; }
+    await navigator.clipboard.writeText(`${text}\n${url}`);
+    setMsg('✅ Link kopiert');
+  } catch (e) {}
+}
+
+async function saveName() {
+  const name = document.getElementById('setName').value.trim();
+  if (!name) return setMsg('Bitte einen Namen eingeben');
+  try {
+    const res = await tfetch(`${API}/messenger/rename`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: CODE, token: TOKEN, name })
+    });
+    if (!res.ok) throw new Error();
+    PROFILE = { code: CODE, name };
+    lsSet('sm_chat_profile', JSON.stringify(PROFILE));
+    setMsg('✅ Name gespeichert');
+  } catch (e) { setMsg('Keine Verbindung – bitte später erneut versuchen'); }
+}
+
+function exportBackup() {
+  const data = { app: 'spot-chat', v: 1, items: {} };
+  Object.keys(localStorage).filter(k => k.startsWith('sm_chat_')).forEach(k => { data.items[k] = localStorage.getItem(k); });
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `spot-chat-sicherung-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  setMsg('✅ Sicherung erstellt – sicher aufbewahren, sie enthält deinen Zugang');
+}
+
+async function importBackup(input) {
+  const f = input.files && input.files[0];
+  input.value = '';
+  if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    const items = data && data.app === 'spot-chat' && data.items;
+    if (!items || !items.sm_chat_code || !items.sm_chat_token) throw new Error();
+    if (!confirm('Aktuelles Profil auf diesem Gerät durch die Sicherung ersetzen?')) return;
+    stopRuntime(); wipeLocal();
+    Object.keys(items).forEach(k => { if (k.startsWith('sm_chat_')) lsSet(k, String(items[k])); });
+    location.reload();
+  } catch (e) { setMsg('Datei nicht lesbar'); }
+}
+
+async function deleteEverything() {
+  if (!confirm('Wirklich ALLES löschen? Profil, ID, Chats auf diesem Gerät und alle Daten auf dem Server. Das geht nicht rückgängig.')) return;
+  try {
+    const res = await tfetch(`${API}/account/${CODE}`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: TOKEN })
+    });
+    if (!res.ok && res.status !== 403) throw new Error();
+  } catch (e) { return setMsg('Keine Verbindung – Server-Daten konnten nicht gelöscht werden. Bitte später erneut.'); }
+  stopRuntime(); wipeLocal();
+  hideSettings();
+  try { const regs = await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r => r.unregister())); } catch (e) {}
+  location.reload();
 }
 
 // ── WEB PUSH SETUP ────────────────────────────────────────────────────────
@@ -626,91 +609,88 @@ function hideNewChatLayer() {
 }
 
 async function startNewChat() {
-  const partnerCode = document.getElementById('newChatCode').value.trim();
+  const partnerCode = normId(document.getElementById('newChatCode').value);
   const errEl = document.getElementById('newChatError');
   errEl.textContent = '';
 
-  if (!/^\d{6}$/.test(partnerCode)) {
-    errEl.textContent = 'Bitte 6-stelligen Code eingeben';
+  if (!/^[a-z]{6}$/.test(partnerCode)) {
+    errEl.textContent = 'Bitte eine ID wie abc-def eingeben';
     return;
   }
   if (partnerCode === CODE) {
-    errEl.textContent = 'Das ist dein eigener Code';
+    errEl.textContent = 'Das ist deine eigene ID';
     return;
   }
 
   try {
     // Öffentlicher Profil-Check – existiert der Code überhaupt?
-    const res = await fetch(`${API}/profile/${partnerCode}?spot=caching`);
+    const res = await tfetch(`${API}/profile/${partnerCode}?spot=messenger`);
     if (!res.ok) {
-      errEl.textContent = 'Kein Nutzer mit diesem Code gefunden';
+      errEl.textContent = res.status === 404 ? 'Keine Person mit dieser ID gefunden' : 'Server gerade nicht erreichbar';
       return;
     }
     const profile = await res.json();
     const partnerName = profile.name || partnerCode;
 
     hideNewChatLayer();
+    addContact(partnerCode, partnerName);
 
     const room = [CODE, partnerCode].sort().join('-');
     await openChat(room, partnerCode, partnerName);
   } catch (e) {
     console.error('[NewChat]', e);
-    errEl.textContent = 'Fehler beim Prüfen des Codes';
+    errEl.textContent = 'Keine Verbindung – ID konnte nicht geprüft werden';
   }
 }
 
 // ── CHAT LIST ─────────────────────────────────────────────────────────────
 async function renderChatList() {
   const container = document.getElementById('chatList');
-  if (!CODE) { 
-    container.innerHTML = '<p class="text-center" style="padding:2rem;color:var(--muted2);">Keine Chats</p>'; 
-    return; 
+  if (!CODE) {
+    container.innerHTML = '<p class="text-center" style="padding:2rem;color:var(--muted2);">Keine Chats</p>';
+    return;
   }
-  
-  // Alle Chats aus localStorage finden
-  const chats = [];
+  const contacts = getContacts();
+  const byRoom = {};
+  for (const [code, name] of Object.entries(contacts)) {
+    byRoom[[CODE, code].sort().join('-')] = { partnerCode: code, partnerName: name, lastText: 'Noch keine Nachricht', lastTs: 0, timeStr: '' };
+  }
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (!key.startsWith(CHAT_PREFIX)) continue;
-    
-    const room = key.replace(CHAT_PREFIX, '');
+    if (!key || !key.startsWith(CHAT_PREFIX)) continue;
+    const room = key.slice(CHAT_PREFIX.length);
     const codes = room.split('-');
     if (!codes.includes(CODE)) continue;
-    
     const partnerCode = codes.find(c => c !== CODE);
     if (!partnerCode) continue;
-    
     let msgs = [];
     try { msgs = await decryptLocalData(localStorage.getItem(key)); } catch (e) { msgs = []; }
     if (!Array.isArray(msgs) || !msgs.length) continue;
-    
-    const lastMsg = msgs[msgs.length - 1];
-    const time = new Date(lastMsg.ts);
-    const timeStr = time.toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'});
-    const preview = lastMsg.text.length > 30 ? lastMsg.text.slice(0, 30) + '…' : lastMsg.text;
-    
-    chats.push({
-      room, partnerCode, partnerName: lastMsg.fromName || partnerCode,
-      lastText: preview, lastTs: lastMsg.ts, timeStr, unread: 0
-    });
+    const last = msgs[msgs.length - 1];
+    const prev = last.text.length > 30 ? last.text.slice(0, 30) + '…' : last.text;
+    const other = [...msgs].reverse().find(m => m.from !== CODE);
+    byRoom[room] = {
+      partnerCode,
+      partnerName: contacts[partnerCode] || (other && other.fromName) || fmtId(partnerCode),
+      lastText: prev, lastTs: last.ts,
+      timeStr: new Date(last.ts).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+    };
   }
-  
-  chats.sort((a, b) => b.lastTs - a.lastTs);
-  
-  container.innerHTML = chats.map(chat => `
-    <div class="chat-item" onclick="openChat('${chat.room}', '${chat.partnerCode}', '${chat.partnerName}')">
-      <div class="avatar">${(chat.partnerName[0] || '?').toUpperCase()}</div>
+  const chats = Object.entries(byRoom).map(([room, c]) => Object.assign({ room }, c)).sort((a, b) => b.lastTs - a.lastTs);
+  container.innerHTML = chats.map(c => `
+    <div class="chat-item" data-room="${escapeHtml(c.room)}" data-code="${escapeHtml(c.partnerCode)}" data-name="${escapeHtml(c.partnerName)}">
+      <div class="avatar">${escapeHtml((c.partnerName[0] || '?').toUpperCase())}</div>
       <div class="chat-info">
-        <div class="chat-name">${escapeHtml(chat.partnerName)}</div>
-        <div class="chat-preview">${chat.lastTs === Date.now() ? '🟢 Online' : escapeHtml(chat.lastText)}</div>
+        <div class="chat-name">${escapeHtml(c.partnerName)}</div>
+        <div class="chat-preview">${escapeHtml(c.lastText)}</div>
       </div>
-      <div class="chat-meta">
-        <div class="chat-time">${chat.timeStr}</div>
-        ${chat.unread > 0 ? `<div class="unread-badge">${chat.unread}</div>` : ''}
-      </div>
-    </div>
-  `).join('') || '<p class="text-center" style="padding:2rem;color:var(--muted2);">Noch keine Chats</p>';
+      <div class="chat-meta"><div class="chat-time">${c.timeStr}</div></div>
+    </div>`).join('') || `<p class="text-center" style="padding:2rem;color:var(--muted2);">Noch keine Chats.<br>Tippe auf + und gib eine ID ein.<br><br>Deine ID: <b>${fmtId(CODE)}</b></p>`;
 }
+document.addEventListener('click', (e) => {
+  const it = e.target.closest && e.target.closest('.chat-item');
+  if (it && it.dataset.room) openChat(it.dataset.room, it.dataset.code, it.dataset.name);
+});
 
 // ── OPEN CHAT & P2P CONNECTION ────────────────────────────────────────────
 async function openChat(room, partnerCode, partnerName) {
@@ -945,7 +925,7 @@ async function sendMessage() {
         sender_code: CODE,
         sender_name: myName,
         message: text,
-        spot_type: 'caching_chat',
+        spot_type: 'messenger_chat',
         token: TOKEN
         })
     });
@@ -993,7 +973,7 @@ async function initPolling() {
 
     try {
       // ── 1. Nachrichten abholen (wie bisher) ──
-      const res = await fetch(`${API}/messages/${CODE}?spot_type=caching_chat&token=${encodeURIComponent(TOKEN)}`);
+      const res = await tfetch(`${API}/messages/${CODE}?spot_type=messenger_chat&token=${encodeURIComponent(TOKEN)}`);
       if (res.ok) {
         const newMsgs = await res.json();
         if (newMsgs.length) {
@@ -1005,16 +985,17 @@ async function initPolling() {
 
             const msgs = await loadRoomMessages(room);
 
-            const exists = msgs.some(e =>
-              e.from === m.sender_code &&
-              e.text === m.message
+            const exists = msgs.some(e => e.sid === m.id) || msgs.some(e =>
+              !e.sid && e.from === m.sender_code && e.text === m.message
             );
+            if (m.sender_name) addContact(m.sender_code, m.sender_name);
 
             if (!exists) {
               msgs.push({
                 from: m.sender_code,
                 fromName: m.sender_name,
                 text: m.message,
+                sid: m.id,
                 ts: new Date(m.created_at).getTime()
               });
               await saveRoomMessages(room, msgs);
@@ -1027,6 +1008,11 @@ async function initPolling() {
             }
           }
 
+          // Empfang bestätigen – erst dann löscht der Server die Nachrichten
+          fetch(`${API}/messages/${CODE}/ack`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: TOKEN, ids: newMsgs.map(x => x.id) })
+          }).catch(() => {});
           if (renderedAny) {
             updateP2PUI('Server-Modus (Polling)', false);
           }
