@@ -154,7 +154,7 @@ app.post("/api/peer-ticket", async (req, res) => {
   }
   try {
     const { rows } = await pool.query(
-      `SELECT token FROM profiles WHERE code = $1 AND spot = 'caching' LIMIT 1`,
+      `SELECT token FROM profiles WHERE code = $1 AND spot IN ('caching','messenger') LIMIT 1`,
       [code],
     );
     if (!rows.length || rows[0].token !== token) {
@@ -999,7 +999,7 @@ app.delete("/api/profile/:code", async (req, res) => {
 });
 
 app.get("/api/profile/:code", async (req, res) => {
-  const { code } = req.params;
+  const code = normCode(req.params.code);
   const spot = req.query.spot || "gay";
   try {
     const { rows } = await pool.query(
@@ -1029,50 +1029,59 @@ app.get("/api/profile/:code", async (req, res) => {
 // Caching Profil) zum ersten Mal öffnen. Erzeugt Code+Token automatisch,
 // legt einen minimalen Profil-Eintrag an (nur name Pflicht, Rest bleibt
 // leer/ungenutzt) – reicht damit /api/auth/verify & Co. normal funktionieren.
-function generateSixDigitCode() {
-  return String(Math.floor(100000 + Math.random() * 900000));
+// Messenger-IDs: 6 gut lesbare Buchstaben, angezeigt als "abc-def" (gespeichert ohne Bindestrich).
+// Caching-Codes sind Ziffern → keine Überschneidung, Messenger und Caching bleiben getrennte Profile.
+const MSG_ALPHABET = "abcdefghjkmnpqrstuvwxyz";
+function generateMessengerCode() {
+  let c = "";
+  for (let i = 0; i < 6; i++) c += MSG_ALPHABET[crypto.randomInt(MSG_ALPHABET.length)];
+  return c;
 }
+// "ABC-def", " abc def " → "abcdef"; Ziffern-Codes bleiben unverändert
+function normCode(v) {
+  const t = String(v == null ? "" : v).trim();
+  const m = t.toLowerCase().replace(/[\s-]/g, "");
+  return /^[a-z]{6}$/.test(m) ? m : t;
+}
+const isMsgCode = (c) => /^[a-z]{6}$/.test(String(c || ""));
 
+// Messenger-Profil automatisch anlegen: nur Name (echt oder Fantasie), kein GPS, kein Ort.
 app.post("/api/messenger/register", async (req, res) => {
-  const name = String(req.body?.name || "")
-    .trim()
-    .slice(0, 40);
-  if (!name) {
-    return res.status(400).json({ error: "Name erforderlich" });
-  }
-
+  const name = String(req.body?.name || "").trim().slice(0, 40);
+  if (!name) return res.status(400).json({ error: "Name erforderlich" });
   try {
-    // Freien 6-stelligen Code suchen (max. 20 Versuche)
     let code = null;
-    for (let i = 0; i < 20; i++) {
-      const candidate = generateSixDigitCode();
-      const exists = await pool.query(
-        `SELECT 1 FROM profiles WHERE code = $1 AND spot = 'caching' LIMIT 1`,
-        [candidate],
-      );
-      if (!exists.rows.length) {
-        code = candidate;
-        break;
-      }
+    for (let i = 0; i < 30; i++) {
+      const candidate = generateMessengerCode();
+      const exists = await pool.query("SELECT 1 FROM profiles WHERE code = $1 LIMIT 1", [candidate]);
+      if (!exists.rows.length) { code = candidate; break; }
     }
-    if (!code) {
-      return res
-        .status(503)
-        .json({ error: "Kein freier Code verfügbar, bitte erneut versuchen" });
-    }
-
+    if (!code) return res.status(503).json({ error: "Kein freier Code verfügbar, bitte erneut versuchen" });
     const token = crypto.randomBytes(24).toString("hex");
     const now = Date.now();
-
     await pool.query(
-      `INSERT INTO profiles (code, spot, name, region, token, updated_at, visible_until)
-       VALUES ($1, 'caching', $2, '', $3, $4, 0)`,
+      `INSERT INTO profiles (code, spot, name, region, token, updated_at, visible_until, last_visit)
+       VALUES ($1, 'messenger', $2, '', $3, $4, 0, $4)`,
       [code, encrypt(name), token, now],
     );
-
     res.json({ code, token, name });
   } catch (e) {
     console.error("POST /api/messenger/register:", e.message);
+    res.status(500).json({ error: "Datenbankfehler" });
+  }
+});
+
+// Name ändern (die interne ID bleibt gleich)
+app.post("/api/messenger/rename", async (req, res) => {
+  const code = normCode(req.body?.code);
+  const token = String(req.body?.token || "");
+  const name = String(req.body?.name || "").trim().slice(0, 40);
+  if (!isMsgCode(code) || !token || !name) return res.status(400).json({ error: "code, token und name erforderlich" });
+  try {
+    if (!(await authCheck(code, token))) return res.status(403).json({ error: "Ungültiger Token" });
+    await pool.query("UPDATE profiles SET name = $1, updated_at = $2 WHERE code = $3 AND spot = 'messenger'", [encrypt(name), Date.now(), code]);
+    res.json({ success: true, name });
+  } catch (e) {
     res.status(500).json({ error: "Datenbankfehler" });
   }
 });
@@ -1090,7 +1099,7 @@ app.post("/api/auth/verify", async (req, res) => {
               category, bio,
               wish_tags, offer_tags,
               updated_at AS ts, visible_until, token
-       FROM profiles WHERE code = $1 AND spot = 'caching'`,
+       FROM profiles WHERE code = $1 AND spot IN ('caching','messenger')`,
       [code],
     );
     if (!rows.length || rows[0].token !== token) {
@@ -1604,26 +1613,32 @@ app.get("/api/offline-messages/:code", async (req, res) => {
 // Jeder der ein Profil hat kann eine Nachricht schicken.
 // Das verhindert anonymen Spam ohne einen Login zu erzwingen.
 app.post("/api/message", async (req, res) => {
-  const { recipient, sender_code, sender_name, message, spot_type, token } =
+  const { recipient: recipientRaw, sender_code, sender_name, message, spot_type, token } =
     req.body || {};
   const clientId =
     typeof req.body?.client_id === "string" && /^[\w-]{6,64}$/.test(req.body.client_id)
       ? req.body.client_id
       : null;
 
-  if (!recipient || !sender_code || !message || !token) {
+  if (!recipientRaw || !sender_code || !message || !token) {
     return res.status(400).json({
       error: "recipient, sender_code, message und token sind Pflicht",
     });
   }
-  if (typeof recipient !== "string" || typeof sender_code !== "string" || typeof token !== "string") {
+  if (typeof recipientRaw !== "string" || typeof sender_code !== "string" || typeof token !== "string") {
     return res.status(400).json({ error: "Ungültige Eingabe" });
   }
+  const recipient = normCode(recipientRaw);
   if (sender_code === recipient) {
     return res
       .status(400)
       .json({ error: "Nachrichten an sich selbst nicht erlaubt" });
   }
+  // Kanal ergibt sich aus dem Profil-Typ: Messenger-IDs (Buchstaben) ↔ Caching-Codes (Ziffern) bleiben getrennt
+  if (isMsgCode(sender_code) !== isMsgCode(recipient)) {
+    return res.status(404).json({ error: "Empfänger nicht gefunden" });
+  }
+  const chatType = isMsgCode(sender_code) ? "messenger_chat" : "caching_chat";
 
   const clean = sanitizeMessage(message);
   if (!clean.length) {
@@ -1657,8 +1672,8 @@ app.post("/api/message", async (req, res) => {
 
     const countCheck = await pool.query(
       `SELECT COUNT(*) AS cnt FROM offline_messages
-       WHERE recipient = $1 AND spot_type = 'caching_chat' AND read = FALSE`,
-      [recipient],
+       WHERE recipient = $1 AND spot_type = $2 AND read = FALSE`,
+      [recipient, chatType],
     );
     if (Number(countCheck.rows[0].cnt) >= 100) {
       return res.status(429).json({ error: "Postfach des Empfängers voll" });
@@ -1673,7 +1688,7 @@ app.post("/api/message", async (req, res) => {
         sender_code,
         encrypt(String(sender_name || sender_code).slice(0, 50)),
         encrypt(clean),
-        "caching_chat",
+        chatType,
         clientId,
       ],
     );
@@ -1707,8 +1722,8 @@ app.post("/api/message", async (req, res) => {
 // Nach dem Abrufen werden die Nachrichten als "gelesen" markiert –
 // wie ein Briefkasten der geleert wird wenn man die Post holt.
 app.get("/api/messages/:code", async (req, res) => {
-  const { code } = req.params;
-  const spot_type = String(req.query.spot_type || "caching_chat");
+  const code = normCode(req.params.code);
+  const spot_type = String(req.query.spot_type || (isMsgCode(code) ? "messenger_chat" : "caching_chat"));
   const token = req.query.token || req.headers["x-spotme-token"];
 
   if (!token) return res.status(401).json({ error: "Token fehlt" });
