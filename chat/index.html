@@ -12,6 +12,8 @@
   <link rel="manifest" href="/chat/manifest.json">
   <meta name="theme-color" content="#0a0d12">
   <link rel="stylesheet" href="../fonts.css">
+  <link rel="stylesheet" href="../theme-vars.css">
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('sm_theme')==='light'?'light':'dark')}catch(e){}</script>
 </head>
 <body>
 
@@ -88,9 +90,10 @@
   </div>
   
   <div class="chat-header">
-    <button class="back-btn" onclick="goBackToList()">←</button>
+    <div class="hd-avatar" id="headerAvatar">?</div>
     <div class="header-info">
       <div class="header-name" id="headerName">...</div>
+      <div class="header-code" id="headerCode"></div>
       <div class="header-status" id="headerStatus">
         <span class="p2p-indicator p2p-inactive" id="p2pIndicator">
           <span class="p2p-dot"></span>
@@ -98,6 +101,7 @@
         </span>
       </div>
     </div>
+    <button class="back-btn" onclick="goBackToList()" aria-label="Zurück" title="Zurück">✕</button>
   </div>
   
   <div id="messages" class="messages-container"></div>
@@ -702,6 +706,8 @@ async function openChat(room, partnerCode, partnerName) {
   document.getElementById('chatDetailScreen').style.display = 'flex';
 
   document.getElementById('headerName').textContent = partnerName;
+  document.getElementById('headerCode').textContent = fmtId(partnerCode);
+  document.getElementById('headerAvatar').textContent = (partnerName[0] || '?').toUpperCase();
   updateP2PUI(false, 'Verbinde...');
 
   await renderMessages();
@@ -828,13 +834,8 @@ async function renderMessages(appendOnly = false) {
           ? '<span class="msg-status delivered" title="Zugestellt">✓✓</span>'
           : '<span class="msg-status sent" title="Gesendet">✓</span>')
       : '';
-    return `
-      <div class="message ${isMine ? 'mine' : 'other'}">
-        <div class="msg-author">${escapeHtml(m.fromName || m.from)}</div>
-        ${escapeHtml(m.text)}
-        <div class="msg-time">${new Date(m.ts).toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'})}${statusTick}</div>
-      </div>
-    `;
+    const time = new Date(m.ts).toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'});
+    return `<div class="message ${isMine ? 'mine' : 'other'}">${escapeHtml(m.text)}<div class="msg-time">${time}${statusTick}</div></div>`;
   };
 
   // FIX: Bei jeder eingehenden Nachricht wurde vorher die komplette Liste
@@ -1014,7 +1015,7 @@ async function initPolling() {
             body: JSON.stringify({ token: TOKEN, ids: newMsgs.map(x => x.id) })
           }).catch(() => {});
           if (renderedAny) {
-            updateP2PUI('Server-Modus (Polling)', false);
+            updateP2PUI(false, 'Server-Modus (Polling)');
           }
           if (listNeedsUpdate && !renderedAny) {
             renderChatList();

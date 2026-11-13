@@ -11,7 +11,7 @@
 //   • Externe Ressourcen      → Stale-While-Revalidate
 // ══════════════════════════════════════════════════════════════════════════════
 
-const CACHE_VERSION = "chat-v1.0.0";
+const CACHE_VERSION = "chat-v1.0.1";
 const CACHE_STATIC = `spot-static-${CACHE_VERSION}`;
 const CACHE_API = `spot-api-${CACHE_VERSION}`;
 const CACHE_RUNTIME = `spot-runtime-${CACHE_VERSION}`;
@@ -29,6 +29,7 @@ const STATIC_ASSETS = [
   "/chat/icons/spot_512.png",
   // Schriften (selbst gehostet, siehe /fonts.css)
   "/fonts.css",
+  "/theme-vars.css",
   "/fonts/outfit-latin.woff2",
   "/fonts/outfit-latin-ext.woff2",
   "/fonts/space-mono-latin-400.woff2",
@@ -116,7 +117,7 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/")) return;
 
   // /fonts.css und /fonts/* (gemeinsam mit SpotMe Caching): Cache First
-  if (url.origin === self.location.origin && (url.pathname === "/fonts.css" || url.pathname.startsWith("/fonts/"))) {
+  if (url.origin === self.location.origin && (url.pathname === "/fonts.css" || url.pathname === "/theme-vars.css" || url.pathname.startsWith("/fonts/"))) {
     event.respondWith(
       caches.match(request).then((c) => c || fetch(request).then((r) => {
         if (r.ok) { const cl = r.clone(); caches.open(CACHE_STATIC).then((ch) => ch.put(request, cl)); }
