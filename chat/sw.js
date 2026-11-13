@@ -11,7 +11,7 @@
 //   • Externe Ressourcen      → Stale-While-Revalidate
 // ══════════════════════════════════════════════════════════════════════════════
 
-const CACHE_VERSION = "chat-v1.0.2";
+const CACHE_VERSION = "chat-v1.0.3";
 const CACHE_STATIC = `spot-static-${CACHE_VERSION}`;
 const CACHE_API = `spot-api-${CACHE_VERSION}`;
 const CACHE_RUNTIME = `spot-runtime-${CACHE_VERSION}`;
@@ -127,40 +127,18 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // ── 2. EIGENE CHAT-DATEIEN: Cache First ───────────────────────────────────
-  // /chat/* Pfade → sofort aus Cache, Background-Revalidate
-  if (url.pathname.startsWith("/chat/") || url.pathname === "/chat") {
+  // ── 2. EIGENE CHAT-DATEIEN: Netz zuerst (immer neuester Stand), Cache als Offline-Fallback ──
+  if (url.origin === self.location.origin && (url.pathname.startsWith("/chat/") || url.pathname === "/chat")) {
     event.respondWith(
-      caches.match(request).then((cached) => {
-        if (cached) {
-          // Stale-While-Revalidate: Cache sofort liefern, im Hintergrund updaten
-          fetch(request)
-            .then((response) => {
-              if (response.ok) {
-                caches
-                  .open(CACHE_STATIC)
-                  .then((cache) => cache.put(request, response.clone()));
-              }
-            })
-            .catch(() => {});
-          return cached;
-        }
-
-        // Nicht im Cache → vom Netz holen
-        return fetch(request)
-          .then((response) => {
-            if (response.ok) {
-              caches
-                .open(CACHE_STATIC)
-                .then((cache) => cache.put(request, response.clone()));
-            }
-            return response;
-          })
-          .catch(() => {
-            // Fallback zur index.html (SPA-Verhalten)
-            return caches.match("/chat/index.html");
-          });
-      }),
+      fetch(request, { cache: "no-cache" })
+        .then((response) => {
+          if (response.ok) {
+            const cl = response.clone();
+            caches.open(CACHE_STATIC).then((cache) => cache.put(request, cl));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request).then((c) => c || caches.match("/chat/index.html"))),
     );
     return;
   }

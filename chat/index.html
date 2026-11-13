@@ -7,7 +7,7 @@
 <script src="peerjs.min.js"></script>
 
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
   <title>Spot Chat</title>
   <link rel="manifest" href="/chat/manifest.json">
   <meta name="theme-color" content="#0a0d12">
@@ -58,6 +58,7 @@
   <div id="settingsLayer" class="hidden overlay">
     <div class="overlay-card">
       <h2>👤 Dein Profil</h2>
+      <p style="font-size:0.7rem;color:#7a98aa;margin:-0.4rem 0 0.6rem;">Chat-Version 1.0.3</p>
       <label>Deine ID (gib sie weiter, damit dich andere hinzufügen)</label>
       <div class="copy-row">
         <input type="text" id="setId" readonly>
@@ -1068,8 +1069,19 @@ if (window.visualViewport) {
   window.visualViewport.addEventListener('scroll', fitChatToViewport);
 }
 window.addEventListener('resize', fitChatToViewport);
+let KB_TIMER = null;
 document.addEventListener('focusin', (e) => {
-  if (e.target && e.target.id === 'msgInput') { setTimeout(fitChatToViewport, 150); setTimeout(fitChatToViewport, 450); }
+  if (e.target && e.target.id === 'msgInput') {
+    fitChatToViewport();
+    if (KB_TIMER) clearInterval(KB_TIMER);
+    KB_TIMER = setInterval(fitChatToViewport, 250); // Fallback, falls der Browser keine Ereignisse schickt
+    window.scrollTo(0, 0);
+  }
+});
+document.addEventListener('focusout', (e) => {
+  if (e.target && e.target.id === 'msgInput') {
+    setTimeout(() => { if (document.activeElement && document.activeElement.id === 'msgInput') return; if (KB_TIMER) clearInterval(KB_TIMER); KB_TIMER = null; fitChatToViewport(); }, 400);
+  }
 });
 
 // ── HELPERS ───────────────────────────────────────────────────────────────
