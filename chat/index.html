@@ -72,7 +72,7 @@
   <div id="settingsLayer" class="hidden overlay">
     <div class="overlay-card">
       <h2>👤 Dein Profil</h2>
-      <p style="font-size:0.7rem;color:#7a98aa;margin:-0.4rem 0 0.6rem;">Chat-Version <span id="chatVer">…</span></p>
+      <p style="font-size:0.7rem;color:#7a98aa;margin:-0.4rem 0 0.6rem;">Chat-Version <span id="chatVer">…</span><br><span id="diagInfo"></span></p>
       <label>Deine ID (gib sie weiter, damit dich andere hinzufügen)</label>
       <div class="copy-row">
         <input type="text" id="setId" readonly>
@@ -532,8 +532,16 @@ async function showVersion() {
     el.textContent = k ? k.replace('spot-static-chat-v', '') : 'unbekannt';
   } catch (e) { el.textContent = 'unbekannt'; }
 }
+function showDiag() {
+  const el = document.getElementById('diagInfo');
+  if (!el) return;
+  if (!webrtc) { el.textContent = 'Direktverbindung: nicht verfügbar'; return; }
+  const ready = webrtc.isPeerReady();
+  el.textContent = 'Direktverbindung: ' + (ready ? '✅ bereit' : '⏳ meldet sich an') + (webrtc.lastError ? ' · letzter Fehler: ' + webrtc.lastError : '');
+}
 function showSettings() {
   showVersion();
+  showDiag();
   document.getElementById('setId').value = fmtId(CODE);
   document.getElementById('setName').value = (PROFILE && PROFILE.name) || '';
   document.getElementById('setMsg').textContent = '';
@@ -758,7 +766,7 @@ async function initWebRTC() {
     console.log('[Chat] P2P Verbindung getrennt:', peerId);
     isP2PConnected = false;
     p2pConnectionTime = null;
-    updateP2PUI(false, 'Verbindung getrennt');
+    updateP2PUI(false, 'Server-Modus');
     refreshImageState();
   };
 
@@ -766,13 +774,9 @@ async function initWebRTC() {
 
   // ── Fehler ──
   webrtc.onError = (err) => {
-    console.error('[Chat] WebRTC Error:', err);
-    // peer-unavailable ist nicht kritisch — Partner vielleicht noch nicht online
-    if (err.type === 'peer-unavailable') {
-      updateP2PUI(false, 'Partner nicht online');
-      return;
-    }
-    updateP2PUI(false, 'Fehler: ' + (err.type || 'unknown'));
+    // Technische Fehler gehören ins Log, nicht in die Anzeige – der Text-Chat läuft über den Server weiter.
+    // (peer-unavailable = Partner gerade nicht im Chat, völlig normal)
+    console.warn('[Chat] WebRTC:', err && (err.type || err.message || err));
   };
 
   // ── NEU: Peer SOFORT beim Login registrieren ──
@@ -909,7 +913,7 @@ async function openChat(room, partnerCode, partnerName) {
   document.getElementById('headerName').textContent = partnerName;
   document.getElementById('headerCode').textContent = fmtId(partnerCode);
   document.getElementById('headerAvatar').textContent = (partnerName[0] || '?').toUpperCase();
-  updateP2PUI(false, 'Verbinde...');
+  updateP2PUI(canSendImage(), canSendImage() ? 'P2P Aktiv' : 'Server-Modus');
   refreshImageState();
 
   await renderMessages();
@@ -922,47 +926,30 @@ async function attemptP2PConnection(partnerCode) {
   // Safety Checks
   if (!webrtc) {
     console.warn('[Chat] WebRTC nicht initialisiert');
-    updateP2PUI(false, 'Fehler: WebRTC missing');
+    updateP2PUI(false, 'Server-Modus');
     return;
   }
 
   if (!CODE || !PARTNER_CODE) {
     console.error('[Chat] Missing CODE or PARTNER_CODE:', { CODE, PARTNER_CODE });
-    updateP2PUI(false, 'Fehler: Invalid State');
+    updateP2PUI(false, 'Server-Modus');
     return;
   }
 
   try {
     console.log('[Chat] Starte P2P-Verbindung zu:', partnerCode);
 
-    // 1. Bereit-Invite an Partner senden (Signal über Server)
-    await sendReadinessInvite(PARTNER_CODE);
-    console.log('[Chat] Invite gesendet');
+    // Eigene Anmeldung sicherstellen (kein Warten – Versuche laufen unten wiederholt)
+    webrtc.ensureRegistered();
 
-    // 2. Auf eigene Peer-Bereitschaft warten (falls noch nicht registriert)
-    await webrtc.connect(PARTNER_CODE, (peerId) => {
-      console.log('[Chat] Eigener Peer bereit:', peerId);
-    });
+    // 3. Verbindung zum Partner aufbauen – mit Wiederholung (Partner meldet sich evtl. erst später an).
+    // Die Seite mit dem kleineren Code startet sofort, die andere erst nach ~8 s als Nachzügler,
+    // damit nicht beide gleichzeitig verbinden.
+    startP2PAttempts(partnerCode);
 
-    // 3. Verbindung zum Partner initiieren
-    // Partner muss ebenfalls registriert sein (Login → register())
-    // FIX: Nur die Seite mit dem "kleineren" Code initiiert aktiv.
-    // Öffnen beide Seiten den Chat gleichzeitig, entstehen sonst zwei
-    // parallele Connections und this.conn wird inkonsistent überschrieben —
-    // das war der Grund für "Nachricht kommt erst beim Verlassen des Chats".
-    if (CODE < PARTNER_CODE) {
-      webrtc.initiateConnection(PARTNER_CODE);
-      console.log('[Chat] Verbindung initiert (wir sind Initiator)');
-    } else {
-      console.log('[Chat] Warte auf eingehende Verbindung von', PARTNER_CODE);
-    }
-
-    // Timeout: Nach 3 Sek kein P2P → Server-Modus anzeigen
+    // Nach 3 s ohne P2P ruhig "Server-Modus" anzeigen
     setTimeout(() => {
-      if (!isP2PConnected) {
-        console.log('[Chat] P2P Timeout, bleibe im Server-Modus');
-        updateP2PUI(false, 'Server-Modus (Timeout)');
-      }
+      if (!canSendImage()) updateP2PUI(false, 'Server-Modus');
     }, 3000);
 
   } catch (err) {
@@ -976,6 +963,27 @@ async function attemptP2PConnection(partnerCode) {
     }
   }
         }
+
+let P2P_ATTEMPT_TIMER = null;
+function startP2PAttempts(partnerCode) {
+  if (P2P_ATTEMPT_TIMER) clearInterval(P2P_ATTEMPT_TIMER);
+  let n = 0;
+  const step = () => {
+    // Chat zu oder anderer Chat offen → aufhören
+    if (!webrtc || PARTNER_CODE !== partnerCode) { clearInterval(P2P_ATTEMPT_TIMER); P2P_ATTEMPT_TIMER = null; return; }
+    if (webrtc.isConnectedTo(partnerCode)) { clearInterval(P2P_ATTEMPT_TIMER); P2P_ATTEMPT_TIMER = null; return; }
+    webrtc.ensureRegistered();
+    if (webrtc.isPeerReady() && (CODE < partnerCode || n >= 2)) {
+      try { webrtc.initiateConnection(partnerCode); } catch (e) { console.warn('[Chat] connect:', e); }
+    }
+    if (++n >= 12) { clearInterval(P2P_ATTEMPT_TIMER); P2P_ATTEMPT_TIMER = null; }
+  };
+  P2P_ATTEMPT_TIMER = setInterval(step, 4000);
+  step();
+}
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && webrtc) { webrtc.ensureRegistered(); if (PARTNER_CODE && !webrtc.isConnectedTo(PARTNER_CODE)) startP2PAttempts(PARTNER_CODE); }
+});
 
 async function sendReadinessInvite(partnerCode) {
   try {
@@ -1000,6 +1008,7 @@ async function sendReadinessInvite(partnerCode) {
 }
 
 function goBackToList() {
+  if (P2P_ATTEMPT_TIMER) { clearInterval(P2P_ATTEMPT_TIMER); P2P_ATTEMPT_TIMER = null; }
   markSeen(CURRENT_ROOM);
   CURRENT_ROOM = null;
   PARTNER_CODE = null;
@@ -1231,8 +1240,8 @@ async function pollOnce() {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ token: TOKEN, ids: newMsgs.map(x => x.id) })
           }).catch(() => {});
-          if (renderedAny) {
-            updateP2PUI(false, 'Server-Modus (Polling)');
+          if (renderedAny && !canSendImage()) {
+            updateP2PUI(false, 'Server-Modus');
           }
           if (listNeedsUpdate && !renderedAny) {
             renderChatList();
@@ -1240,24 +1249,8 @@ async function pollOnce() {
         }
       }
 
-      // ── 2. NEU: Invites abholen ──
-      // Wenn jemand uns chatten will, stellen wir sicher dass unser Peer ready ist
-      const invRes = await fetch(`${API}/invites/pending/${CODE}`);
-      if (invRes.ok) {
-        const invites = await invRes.json();
-        if (invites && invites.length > 0) {
-          invites.forEach(inv => {
-            console.log('[Chat] Pending Invite von:', inv.from || inv.sender_code);
-
-            // Unser Peer sollte bereits registriert sein (Login)
-            // Nur sicherstellen, falls etwas schiefgegangen ist
-            if (webrtc && !webrtc.isPeerReady()) {
-              console.log('[Chat] Peer nicht ready, registriere erneut...');
-              webrtc.register();
-            }
-          });
-        }
-      }
+      // Peer bei Bedarf wieder anmelden (selbst gebremst: höchstens alle 15 s, nie parallel)
+      if (webrtc) webrtc.ensureRegistered();
 
     } catch (e) {
       console.error('Polling-Fehler:', e);

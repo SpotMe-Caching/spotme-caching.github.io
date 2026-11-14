@@ -24,9 +24,24 @@ window.SpotMeWebRTC = class SpotMeWebRTC {
     this.reconnectAttempts = 0;
     this.MAX_RECONNECT = 5;
     this.isDestroyed = false; // Sicherheitsflag
+    this._registering = false;
+    this._lastRegister = 0;
+    this.lastError = null; // nur zur Anzeige im Profil (Diagnose)
+  }
+
+  // Meldet den Peer nur an, wenn nicht schon einer läuft/angemeldet ist (kein Dauer-Neustart)
+  ensureRegistered() {
+    if (this.isDestroyed || this.peerReady || this._registering) return;
+    if (Date.now() - this._lastRegister < 15000) return;
+    this.register();
   }
 
   async register() {
+    if (this._registering) return;
+    this._registering = true;
+    this._lastRegister = Date.now();
+    // Hängt die Anmeldung (z. B. Netz weg), nach 20 s freigeben, damit ein neuer Versuch möglich ist
+    setTimeout(() => { this._registering = false; }, 20000);
     console.log("[WebRTC] Registriere Peer mit ID:", this.code);
     this.isDestroyed = false;
 
@@ -52,12 +67,14 @@ window.SpotMeWebRTC = class SpotMeWebRTC {
       );
       if (!ticketRes.ok) {
         console.error("[WebRTC] Ticket-Anforderung fehlgeschlagen:", ticketRes.status);
-        if (this.onError) this.onError({ type: "ticket-failed" });
-        return;
+        this.lastError = "ticket " + ticketRes.status;
+        this._registering = false;
+        return; // ensureRegistered() versucht es später erneut
       }
     } catch (e) {
       console.error("[WebRTC] Ticket-Anforderung fehlgeschlagen:", e);
-      if (this.onError) this.onError({ type: "ticket-failed" });
+      this.lastError = "ticket offline";
+      this._registering = false;
       return;
     }
 
@@ -74,6 +91,8 @@ window.SpotMeWebRTC = class SpotMeWebRTC {
     this.peer.on("open", (id) => {
       console.log("[WebRTC] Peer erfolgreich registriert, ID:", id);
       this.peerReady = true;
+      this._registering = false;
+      this.lastError = null;
       this.reconnectAttempts = 0;
       if (this.onPeerReady) this.onPeerReady(id);
     });
@@ -83,87 +102,51 @@ window.SpotMeWebRTC = class SpotMeWebRTC {
       this.handleConnection(conn);
     });
 
-    // ── FEHLERBEHANDLUNG FIX ──────────────────────────────────────────────
+    // ── FEHLERBEHANDLUNG ──────────────────────────────────────────
+    // Wichtig: Jede Anmeldung braucht ein frisches, einmaliges Ticket. Ein einfaches
+    // peer.reconnect() hat keins und wird vom Server sofort gekappt → Dauerschleife.
+    // Darum immer komplett neu anmelden (ensureRegistered), aber höchstens alle 15 s.
+    const lost = () => {
+      this.peerReady = false;
+      this._registering = false;
+      if (this.peer && !this.peer.destroyed) { try { this.peer.destroy(); } catch (e) {} }
+      this.peer = null;
+      setTimeout(() => this.ensureRegistered(), 3000);
+    };
+
     this.peer.on("error", (err) => {
       console.error("[WebRTC] Peer Error:", err.type, err);
+      this.lastError = err.type || "unbekannt";
 
-      // 1. ID bereits vergeben → Abwarten, bis der alte Eintrag auf dem Server stirbt
-      if (err.type === "unavailable-id") {
-        console.warn(
-          "[WebRTC] ID bereits vergeben. Warte 5s für Server-Cleanup...",
-        );
-        this.peerReady = false;
+      // ID noch vom alten Eintrag belegt → später neu
+      if (err.type === "unavailable-id") { lost(); return; }
 
-        // Alten Peer hart zerstören
-        if (this.peer && !this.peer.destroyed) this.peer.destroy();
-        this.peer = null;
+      // Signalserver weg / Socket zu → neu anmelden
+      if (["network", "server-error", "socket-error", "socket-closed"].includes(err.type)) { lost(); return; }
 
-        setTimeout(() => {
-          if (!this.isDestroyed) {
-            console.log("[WebRTC] Führe erneute Registrierung durch...");
-            this.register();
-          }
-        }, 5000); // ⬅️ 5 Sekunden warten (lässt den Server die alte Socket-ID vergessen)
-        return;
-      }
-
-      // 2. Server nicht erreichbar → Reconnect-Logik
-      if (err.type === "network" || err.type === "server-error") {
-        console.warn("[WebRTC] Server nicht erreichbar. Versuche Reconnect...");
-        this.tryReconnect();
-        return;
-      }
-
-      // 3. Partner nicht online (kein Fehler, einfach ignorieren)
+      // Partner (noch) nicht online: normal, kein Fehler
       if (err.type === "peer-unavailable") {
         if (this.onError) this.onError(err);
         return;
       }
-
-      // Alle anderen Fehler weiterreichen
       if (this.onError) this.onError(err);
     });
 
     this.peer.on("disconnected", () => {
       console.warn("[WebRTC] Peer disconnected vom Server");
-      this.peerReady = false;
-      if (!this.peer.destroyed) {
-        this.peer.reconnect();
-      }
+      lost();
     });
 
     this.peer.on("close", () => {
       console.log("[WebRTC] Peer geschlossen");
       this.peerReady = false;
+      this._registering = false;
     });
   }
 
   tryReconnect() {
-    if (this.isDestroyed) return;
-    if (this.reconnectAttempts >= this.MAX_RECONNECT) {
-      console.error("[WebRTC] Max Reconnect-Versuche erreicht");
-      if (this.onError) {
-        this.onError(
-          new Error(
-            "Maximale Reconnect-Versuche erreicht. Bitte Seite neu laden.",
-          ),
-        );
-      }
-      return;
-    }
-
-    this.reconnectAttempts++;
-    const delay = 2000 * this.reconnectAttempts;
-
-    console.log(
-      `[WebRTC] Reconnect in ${delay}ms (Versuch ${this.reconnectAttempts}/${this.MAX_RECONNECT})`,
-    );
-
-    setTimeout(() => {
-      if (!this.isDestroyed) {
-        this.register();
-      }
-    }, delay);
+    this._lastRegister = 0;
+    this.ensureRegistered();
   }
 
   async waitForReady() {
@@ -313,6 +296,12 @@ window.SpotMeWebRTC = class SpotMeWebRTC {
       console.error("[WebRTC] Peer nicht bereit für initiateConnection");
       return null;
     }
+
+    if (this.conn && this.conn.open && this.conn.peer === partnerCode) return this.conn;
+    // Läuft schon ein Verbindungsversuch zu diesem Partner (< 10 s)? Dann nicht noch einen starten.
+    if (this._connAt && this._connTo === partnerCode && Date.now() - this._connAt < 10000) return null;
+    this._connAt = Date.now();
+    this._connTo = partnerCode;
 
     const conn = this.peer.connect(partnerCode, {
       metadata: { from: this.code, fromName: this.userName },
