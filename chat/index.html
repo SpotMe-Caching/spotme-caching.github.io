@@ -433,19 +433,24 @@ function refreshImageState() {
   const on = canSendImage();
   btn.classList.toggle('on', on);
   hint.className = 'img-hint ' + (on ? 'on' : 'off');
+  // Nach 25 s ohne P2P: häufigster Grund ist die Energiesparfunktion des Browsers (friert Hintergrund-Apps ein)
+  const slow = !on && CHAT_OPENED_AT && (Date.now() - CHAT_OPENED_AT > 25000);
   hint.textContent = on
     ? '📷 Ihr seid beide online – Bilder möglich'
-    : '📷 Bilder nur, wenn ihr beide online seid (grünes P2P)';
+    : slow
+      ? '📷 Noch kein P2P. Beide müssen den Chat offen haben. Tipp: Akku-/Energiespar-Einstellung des Browsers auf „Keine Beschränkungen“ stellen.'
+      : '📷 Bilder nur, wenn ihr beide online seid (grünes P2P)';
 }
+let CHAT_OPENED_AT = 0;
 setInterval(refreshImageState, 1500);
 
 let PICKED_IMG = null;
 function pickImage() {
   if (!canSendImage()) {
     const h = document.getElementById('imgHint');
-    h.textContent = '⚠️ Gerade nicht möglich: Bilder gehen nur direkt, wenn ihr BEIDE im Chat online seid.';
+    h.textContent = '⚠️ Gerade nicht möglich: Bilder gehen nur direkt, wenn ihr BEIDE im Chat online seid. Bleibt es so: Akku-Einstellung des Browsers auf „Keine Beschränkungen“.';
     h.className = 'img-hint warn';
-    setTimeout(refreshImageState, 3500);
+    setTimeout(refreshImageState, 6000);
     return;
   }
   document.getElementById('imgFile').click();
@@ -908,6 +913,7 @@ document.addEventListener('click', (e) => {
 
 // ── OPEN CHAT & P2P CONNECTION ────────────────────────────────────────────
 async function openChat(room, partnerCode, partnerName) {
+  CHAT_OPENED_AT = Date.now();
   CURRENT_ROOM = room;
   PARTNER_CODE = partnerCode;
   PARTNER_NAME = partnerName;
