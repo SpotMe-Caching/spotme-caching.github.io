@@ -11,7 +11,7 @@
 //   • Externe Ressourcen      → Stale-While-Revalidate
 // ══════════════════════════════════════════════════════════════════════════════
 
-const CACHE_VERSION = "chat-v1.0.4";
+const CACHE_VERSION = "chat-v1.0.5";
 const CACHE_STATIC = `spot-static-${CACHE_VERSION}`;
 const CACHE_API = `spot-api-${CACHE_VERSION}`;
 const CACHE_RUNTIME = `spot-runtime-${CACHE_VERSION}`;
@@ -208,13 +208,14 @@ self.addEventListener("push", (event) => {
     data = { title: "SpotMe Chat", body: event.data?.text() || "" };
   }
 
+  const tag = data.tag || "spotme-chat";
   const options = {
     body: data.body || "",
     icon: "/chat/icons/spot_192.png",
     badge: "/chat/icons/spot_72.png",
-    data: { url: data.url || "/chat/" },
+    data: { url: data.url || "/chat/", count: 1 },
     vibrate: [200, 100, 200],
-    tag: data.tag || "spotme-chat",
+    tag,
     renotify: true,
     silent: false,
     actions: [
@@ -232,7 +233,18 @@ self.addEventListener("push", (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || "SpotMe Chat", options),
+    (async () => {
+      // Mehrere Pushes mit gleichem Tag werden zu EINER Benachrichtigung zusammengefasst
+      try {
+        const old = await self.registration.getNotifications({ tag });
+        if (old.length) {
+          const n = ((old[0].data && old[0].data.count) || 1) + 1;
+          options.data.count = n;
+          options.body = tag.startsWith("chat-") ? `${n} neue Nachrichten – tippe zum Öffnen` : `${n} neue Mitteilungen – tippe zum Öffnen`;
+        }
+      } catch (e) {}
+      await self.registration.showNotification(data.title || "SpotMe Chat", options);
+    })(),
   );
 });
 
