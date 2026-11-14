@@ -58,7 +58,7 @@
   <div id="settingsLayer" class="hidden overlay">
     <div class="overlay-card">
       <h2>👤 Dein Profil</h2>
-      <p style="font-size:0.7rem;color:#7a98aa;margin:-0.4rem 0 0.6rem;">Chat-Version 1.0.4</p>
+      <p style="font-size:0.7rem;color:#7a98aa;margin:-0.4rem 0 0.6rem;">Chat-Version <span id="chatVer">…</span></p>
       <label>Deine ID (gib sie weiter, damit dich andere hinzufügen)</label>
       <div class="copy-row">
         <input type="text" id="setId" readonly>
@@ -361,7 +361,16 @@ function wipeLocal() {
 }
 
 // ── PROFIL-EINSTELLUNGEN ──────────────────────────────────────────────────
+async function showVersion() {
+  const el = document.getElementById('chatVer');
+  try {
+    const keys = await caches.keys();
+    const k = keys.filter(x => /^spot-static-chat-v/.test(x)).sort().pop();
+    el.textContent = k ? k.replace('spot-static-chat-v', '') : 'unbekannt';
+  } catch (e) { el.textContent = 'unbekannt'; }
+}
 function showSettings() {
+  showVersion();
   document.getElementById('setId').value = fmtId(CODE);
   document.getElementById('setName').value = (PROFILE && PROFILE.name) || '';
   document.getElementById('setMsg').textContent = '';
