@@ -235,6 +235,12 @@ function tfetch(url, opts, ms) {
   const tm = setTimeout(() => ctl.abort(), ms || 10000);
   return fetch(url, Object.assign({}, opts || {}, { signal: ctl.signal })).finally(() => clearTimeout(tm));
 }
+function getSeen() { try { return JSON.parse(lsGet('sm_chat_seen') || '{}') || {}; } catch (e) { return {}; } }
+function markSeen(room) {
+  if (!room) return;
+  const m = getSeen(); m[room] = Date.now();
+  lsSet('sm_chat_seen', JSON.stringify(m));
+}
 function getContacts() { try { return JSON.parse(lsGet('sm_chat_contacts') || '{}') || {}; } catch (e) { return {}; } }
 function addContact(code, name) {
   if (!code) return;
@@ -546,6 +552,7 @@ async function initWebRTC() {
     // WICHTIG: Room aus Absender-Code berechnen, nicht CURRENT_ROOM nutzen
     // (Nachricht kann ankommen, wenn Chat gar nicht geöffnet ist)
     const room = [CODE, msg.from].sort().join('-');
+    if (msg.fromName) addContact(msg.from, msg.fromName);
 
     const msgs = await loadRoomMessages(room);
 
@@ -568,6 +575,7 @@ async function initWebRTC() {
 
     // UI aktualisieren
     if (room === CURRENT_ROOM) {
+      markSeen(room);
       renderMessages(true);
     }
     renderChatList();
@@ -665,9 +673,10 @@ async function renderChatList() {
     return;
   }
   const contacts = getContacts();
+  const seen = getSeen();
   const byRoom = {};
   for (const [code, name] of Object.entries(contacts)) {
-    byRoom[[CODE, code].sort().join('-')] = { partnerCode: code, partnerName: name, lastText: 'Noch keine Nachricht', lastTs: 0, timeStr: '' };
+    byRoom[[CODE, code].sort().join('-')] = { partnerCode: code, partnerName: name, lastText: 'Noch keine Nachricht', lastTs: 0, timeStr: '', unread: 0 };
   }
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
@@ -687,6 +696,7 @@ async function renderChatList() {
       partnerCode,
       partnerName: contacts[partnerCode] || (other && other.fromName) || fmtId(partnerCode),
       lastText: prev, lastTs: last.ts,
+      unread: msgs.filter(m => m.from !== CODE && (m.ts || 0) > (seen[room] || 0)).length,
       timeStr: new Date(last.ts).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
     };
   }
@@ -698,10 +708,27 @@ async function renderChatList() {
         <div class="chat-name">${escapeHtml(c.partnerName)}</div>
         <div class="chat-preview">${escapeHtml(c.lastText)}</div>
       </div>
-      <div class="chat-meta"><div class="chat-time">${c.timeStr}</div></div>
+      <div class="chat-meta"><div class="chat-time">${c.timeStr}</div>${c.unread ? `<div class="unread-badge">${c.unread}</div>` : ''}</div>
+      <button class="chat-del" data-del="${escapeHtml(c.room)}" aria-label="Chat löschen" title="Chat löschen">🗑</button>
     </div>`).join('') || `<p class="text-center" style="padding:2rem;color:var(--muted2);">Noch keine Chats.<br>Tippe auf + und gib eine ID ein.<br><br>Deine ID: <b>${fmtId(CODE)}</b></p>`;
 }
+// Chat löschen (Nachrichten auf diesem Gerät + Kontakt)
+function deleteChat(room, name) {
+  if (!confirm(`Chat mit ${name || 'diesem Kontakt'} löschen? Alle Nachrichten auf diesem Gerät werden entfernt.`)) return;
+  const partner = room.split('-').find(c => c !== CODE);
+  lsDel(CHAT_PREFIX + room);
+  const c = getContacts(); delete c[partner]; lsSet('sm_chat_contacts', JSON.stringify(c));
+  const sn = getSeen(); delete sn[room]; lsSet('sm_chat_seen', JSON.stringify(sn));
+  renderChatList();
+}
 document.addEventListener('click', (e) => {
+  const del = e.target.closest && e.target.closest('.chat-del');
+  if (del) {
+    e.stopPropagation();
+    const it = del.closest('.chat-item');
+    deleteChat(del.dataset.del, it && it.dataset.name);
+    return;
+  }
   const it = e.target.closest && e.target.closest('.chat-item');
   if (it && it.dataset.room) openChat(it.dataset.room, it.dataset.code, it.dataset.name);
 });
@@ -711,6 +738,7 @@ async function openChat(room, partnerCode, partnerName) {
   CURRENT_ROOM = room;
   PARTNER_CODE = partnerCode;
   PARTNER_NAME = partnerName;
+  markSeen(room);
 
   document.getElementById('chatListScreen').style.display = 'none';
   document.getElementById('chatDetailScreen').style.display = 'flex';
@@ -809,6 +837,7 @@ async function sendReadinessInvite(partnerCode) {
 }
 
 function goBackToList() {
+  markSeen(CURRENT_ROOM);
   CURRENT_ROOM = null;
   PARTNER_CODE = null;
   PARTNER_NAME = null;
@@ -977,11 +1006,20 @@ function updateHeaderStatus(status, isP2P) {
 }
 
 // ── POLLING ───────────────────────────────────────────────────────────────
+let POLLING = false;
 async function initPolling() {
   if (POLL_TIMER) clearInterval(POLL_TIMER);
+  POLL_TIMER = setInterval(pollOnce, 5000); // alle 5 Sekunden
+  pollOnce();                                // und sofort beim Start
+}
+// sofort neu abholen, sobald die App wieder sichtbar ist oder Netz zurückkehrt
+document.addEventListener('visibilitychange', () => { if (!document.hidden) pollOnce(); });
+window.addEventListener('online', () => pollOnce());
+window.addEventListener('focus', () => pollOnce());
 
-  POLL_TIMER = setInterval(async () => {
-    if (!CODE) return;
+async function pollOnce() {
+    if (!CODE || POLLING) return;
+    POLLING = true;
 
     try {
       // ── 1. Nachrichten abholen (wie bisher) ──
@@ -1014,6 +1052,7 @@ async function initPolling() {
               listNeedsUpdate = true;
 
               if (room === CURRENT_ROOM) {
+                markSeen(room);
                 await renderMessages(true);
                 renderedAny = true;
               }
@@ -1055,8 +1094,9 @@ async function initPolling() {
 
     } catch (e) {
       console.error('Polling-Fehler:', e);
+    } finally {
+      POLLING = false;
     }
-  }, 5000); // Alle 5 Sekunden
 }
 
 
