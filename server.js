@@ -1702,8 +1702,9 @@ app.post("/api/message", async (req, res) => {
           recipient,
           "💬 Neue Nachricht",
           `${String(sender_name || sender_code).slice(0, 50)}: ${clean.slice(0, 80)}`,
-          "/",
+          isMsgCode(sender_code) ? "/chat/" : "/",
           "chat",
+          `chat-${sender_code}`,
         ),
         new Promise((r) => setTimeout(() => r(false), 4000)),
       ]);
@@ -3749,7 +3750,7 @@ app.delete("/api/bluesky/disconnect", async (req, res) => {
 // Helper – sendet Push an alle Geräte eines Nutzers.
 // Fire-and-forget (kein await nötig), blockiert den Request-Handler nicht.
 // Abgelaufene Subscriptions (410/404) werden automatisch aus der DB gelöscht.
-async function sendPushToCode(code, title, body, url = "/", category = null) {
+async function sendPushToCode(code, title, body, url = "/", category = null, tag = null) {
   // Nutzer-Einstellungen: Silent / „nur Browser“ / aus → kein Push aufs Gerät
   if (category) {
     try {
@@ -3768,7 +3769,8 @@ async function sendPushToCode(code, title, body, url = "/", category = null) {
       title,
       body,
       url,
-      tag: `spotme-${Date.now()}`,
+      // Gleicher Tag = Benachrichtigung wird ersetzt/zusammengefasst statt gestapelt
+      tag: tag || (category ? `spotme-${category}` : `spotme-${Date.now()}`),
     });
 
     // Awaiten statt fire-and-forget: Aufrufer braucht das Ergebnis für den

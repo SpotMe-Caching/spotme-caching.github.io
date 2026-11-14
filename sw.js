@@ -5,7 +5,7 @@
 // Der Browser erkennt den neuen SW, löscht den alten Cache
 // und installiert die neuen Dateien automatisch.
 // ════════════════════════════════════════════════════════════
-const CACHE_VERSION = "v399.16"; // Erhöht für SW-Update
+const CACHE_VERSION = "v399.18"; // Erhöht für SW-Update
 const CACHE_STATIC = `spotme-caching-${CACHE_VERSION}`;
 const CACHE_API = `spotme-api-${CACHE_VERSION}`;
 // Karten-Cache: FESTER Name – überlebt Updates (kein Versions-Suffix!).
@@ -340,19 +340,31 @@ self.addEventListener("push", (event) => {
     data = { title: "SpotMe", body: event.data?.text() || "" };
   }
 
+  const tag = data.tag || "spotme";
   const options = {
     body: data.body || "",
     icon: "/icons/pwa_192.png",
     badge: "/icons/pwa_72.png",
-    data: { url: data.url || "/" },
+    data: { url: data.url || "/", count: 1 },
     vibrate: [200, 100, 200],
-    tag: data.tag || "spotme",
+    tag,
     renotify: true,
     silent: false,
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || "SpotMe", options),
+    (async () => {
+      // Mehrere Pushes mit gleichem Tag werden zu EINER Benachrichtigung zusammengefasst
+      try {
+        const old = await self.registration.getNotifications({ tag });
+        if (old.length) {
+          const n = ((old[0].data && old[0].data.count) || 1) + 1;
+          options.data.count = n;
+          options.body = tag.startsWith("chat-") ? `${n} neue Nachrichten – tippe zum Öffnen` : `${n} neue Mitteilungen – tippe zum Öffnen`;
+        }
+      } catch (e) {}
+      await self.registration.showNotification(data.title || "SpotMe", options);
+    })(),
   );
 });
 
