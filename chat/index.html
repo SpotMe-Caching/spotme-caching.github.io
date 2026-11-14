@@ -54,7 +54,21 @@
     </div>
   </div>
 
-<!-- Profil / Einstellungen -->
+<!-- Bild-Vorschau vor dem Senden -->
+  <div id="imgPreviewLayer" class="hidden overlay">
+    <div class="overlay-card">
+      <h2>📷 Bild senden?</h2>
+      <img id="imgPreview" class="img-preview" alt="Vorschau">
+      <p style="font-size:0.78rem;">Geht direkt an dein Gegenüber (P2P), nicht über den Server. Standortdaten im Foto werden entfernt.</p>
+      <p id="imgPreviewMsg" class="error"></p>
+      <button class="primary-btn" id="imgSendBtn" onclick="sendPickedImage()">Senden</button>
+      <button class="link-btn" style="width:100%;text-align:center;" onclick="closeImgPreview()">Abbrechen</button>
+    </div>
+  </div>
+  <!-- Bild groß ansehen -->
+  <div id="imgViewLayer" class="hidden overlay" onclick="this.classList.add('hidden')"><img id="imgView" class="img-view" alt=""></div>
+
+  <!-- Profil / Einstellungen -->
   <div id="settingsLayer" class="hidden overlay">
     <div class="overlay-card">
       <h2>👤 Dein Profil</h2>
@@ -107,7 +121,10 @@
   
   <div id="messages" class="messages-container"></div>
   
+  <div id="imgHint" class="img-hint off">📷 Bilder nur, wenn ihr beide online seid</div>
   <div class="input-bar">
+    <button id="imgBtn" class="img-btn" onclick="pickImage()" aria-label="Bild senden" title="Bild senden">📷</button>
+    <input type="file" id="imgFile" accept="image/*" class="hidden" onchange="onImagePicked(this)">
     <textarea id="msgInput" placeholder="Nachricht..." rows="1"></textarea>
     <button onclick="sendMessage()">➤</button>
   </div>
@@ -346,6 +363,7 @@ async function verifyProfile() {
 function profileLost() {
   const oldName = PROFILE && PROFILE.name;
   stopRuntime();
+  imgDeleteAll();
   wipeLocal();
   showSetup(oldName, 'Dein altes Profil ist abgelaufen. Lege es kurz neu an – du bekommst eine neue ID.');
 }
@@ -365,6 +383,145 @@ function wipeLocal() {
   CURRENT_ROOM = null; PARTNER_CODE = null; PARTNER_NAME = null;
   clearLocalCryptoKey();
 }
+
+// ── BILDER (nur P2P, nur wenn beide online) ──────────────────────────────
+const IMG_DB = 'SpotChatImg';
+function imgDb() {
+  return new Promise((res, rej) => {
+    const q = indexedDB.open(IMG_DB, 1);
+    q.onupgradeneeded = () => q.result.createObjectStore('img');
+    q.onsuccess = () => res(q.result);
+    q.onerror = () => rej(q.error);
+  });
+}
+function imgKey(room, iid) { return `${CODE}|${room}|${iid}`; }
+async function imgPut(room, iid, dataUrl) {
+  const enc = await encryptLocalData(dataUrl);
+  const db = await imgDb();
+  await new Promise((res, rej) => { const t = db.transaction('img', 'readwrite'); t.objectStore('img').put(enc, imgKey(room, iid)); t.oncomplete = res; t.onerror = () => rej(t.error); });
+  db.close();
+}
+async function imgGet(room, iid) {
+  try {
+    const db = await imgDb();
+    const enc = await new Promise((res) => { const g = db.transaction('img').objectStore('img').get(imgKey(room, iid)); g.onsuccess = () => res(g.result); g.onerror = () => res(null); });
+    db.close();
+    return enc ? await decryptLocalData(enc) : null;
+  } catch (e) { return null; }
+}
+async function imgDeleteRoom(room) {
+  try {
+    const db = await imgDb(); const prefix = `${CODE}|${room}|`;
+    await new Promise((res) => {
+      const t = db.transaction('img', 'readwrite'), st = t.objectStore('img');
+      st.openKeyCursor().onsuccess = (e) => { const c = e.target.result; if (c) { if (String(c.key).startsWith(prefix)) st.delete(c.key); c.continue(); } };
+      t.oncomplete = res; t.onerror = res;
+    });
+    db.close();
+  } catch (e) {}
+}
+function imgDeleteAll() { try { indexedDB.deleteDatabase(IMG_DB); } catch (e) {} }
+
+// Kanal zum aktuellen Gegenüber offen? → beide sind online und direkt verbunden
+function canSendImage() {
+  return !!(webrtc && PARTNER_CODE && typeof webrtc.isConnectedTo === 'function' && webrtc.isConnectedTo(PARTNER_CODE));
+}
+function refreshImageState() {
+  const btn = document.getElementById('imgBtn'), hint = document.getElementById('imgHint');
+  if (!btn || !hint) return;
+  const on = canSendImage();
+  btn.classList.toggle('on', on);
+  hint.className = 'img-hint ' + (on ? 'on' : 'off');
+  hint.textContent = on
+    ? '📷 Ihr seid beide online – Bilder möglich'
+    : '📷 Bilder nur, wenn ihr beide online seid (grünes P2P)';
+}
+setInterval(refreshImageState, 1500);
+
+let PICKED_IMG = null;
+function pickImage() {
+  if (!canSendImage()) {
+    const h = document.getElementById('imgHint');
+    h.textContent = '⚠️ Gerade nicht möglich: Bilder gehen nur direkt, wenn ihr BEIDE im Chat online seid.';
+    h.className = 'img-hint warn';
+    setTimeout(refreshImageState, 3500);
+    return;
+  }
+  document.getElementById('imgFile').click();
+}
+// Bild verkleinern: längste Seite 1280 px, JPEG – das Neuzeichnen entfernt alle Foto-Metadaten (z. B. GPS)
+async function shrinkImage(file) {
+  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const k = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
+  const cv = document.createElement('canvas');
+  cv.width = Math.max(1, Math.round(bmp.width * k)); cv.height = Math.max(1, Math.round(bmp.height * k));
+  cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+  if (bmp.close) bmp.close();
+  let q = 0.82, url = cv.toDataURL('image/jpeg', q);
+  while (url.length > 420000 && q > 0.35) { q -= 0.1; url = cv.toDataURL('image/jpeg', q); }
+  return url;
+}
+async function onImagePicked(input) {
+  const f = input.files && input.files[0];
+  input.value = '';
+  if (!f) return;
+  try {
+    PICKED_IMG = await shrinkImage(f);
+    document.getElementById('imgPreview').src = PICKED_IMG;
+    document.getElementById('imgPreviewMsg').textContent = '';
+    document.getElementById('imgSendBtn').disabled = false;
+    document.getElementById('imgPreviewLayer').classList.remove('hidden');
+  } catch (e) { alert('Dieses Bild konnte nicht gelesen werden.'); }
+}
+function closeImgPreview() { PICKED_IMG = null; document.getElementById('imgPreviewLayer').classList.add('hidden'); }
+
+async function sendPickedImage() {
+  const dataUrl = PICKED_IMG, room = CURRENT_ROOM, partner = PARTNER_CODE;
+  if (!dataUrl || !room) return;
+  const msgEl = document.getElementById('imgPreviewMsg'), btn = document.getElementById('imgSendBtn');
+  if (!canSendImage()) { msgEl.textContent = 'Dein Gegenüber ist nicht mehr direkt verbunden – Bild nicht gesendet.'; return; }
+  btn.disabled = true; msgEl.textContent = 'Sende …';
+  const ts = Date.now(), iid = 'i' + ts.toString(36) + Math.random().toString(36).slice(2, 7);
+  const ok = await webrtc.sendImage(dataUrl, ts, iid);
+  if (!ok) { msgEl.textContent = 'Nicht gesendet – die Verbindung ist weg. Bitte später erneut versuchen.'; btn.disabled = false; return; }
+  await imgPut(room, iid, dataUrl);
+  const msgs = await loadRoomMessages(room);
+  msgs.push({ from: CODE, fromName: PROFILE?.name || CODE, kind: 'image', iid, text: '📷 Bild', ts, status: 'sent' });
+  await saveRoomMessages(room, msgs);
+  closeImgPreview();
+  if (room === CURRENT_ROOM) await renderMessages(true);
+}
+
+// Bild per P2P angekommen
+async function onImageReceived(img) {
+  const room = [CODE, img.from].sort().join('-');
+  if (img.fromName) addContact(img.from, img.fromName);
+  await imgPut(room, img.id, img.dataUrl);
+  const msgs = await loadRoomMessages(room);
+  if (!msgs.some(m => m.iid === img.id)) {
+    msgs.push({ from: img.from, fromName: img.fromName, kind: 'image', iid: img.id, text: '📷 Bild', ts: img.ts || Date.now() });
+    await saveRoomMessages(room, msgs);
+  }
+  if (room === CURRENT_ROOM) { markSeen(room); await renderMessages(true); }
+  renderChatList();
+}
+
+// Bilder in den Blasen nachladen (empfangene erst unscharf, Tippen zeigt sie)
+async function hydrateImages(container) {
+  const nodes = container.querySelectorAll('img[data-iid]:not([data-done])');
+  for (const el of nodes) {
+    el.dataset.done = '1';
+    const url = await imgGet(container.dataset.room, el.dataset.iid);
+    if (url) el.src = url; else el.replaceWith(Object.assign(document.createElement('span'), { textContent: '🖼 Bild nicht mehr vorhanden', className: 'img-gone' }));
+  }
+}
+document.addEventListener('click', (e) => {
+  const im = e.target.closest && e.target.closest('img.chat-img');
+  if (!im || !im.src) return;
+  if (im.classList.contains('blur')) { im.classList.remove('blur'); return; }
+  document.getElementById('imgView').src = im.src;
+  document.getElementById('imgViewLayer').classList.remove('hidden');
+});
 
 // ── PROFIL-EINSTELLUNGEN ──────────────────────────────────────────────────
 async function showVersion() {
@@ -451,7 +608,7 @@ async function deleteEverything() {
     });
     if (!res.ok && res.status !== 403) throw new Error();
   } catch (e) { return setMsg('Keine Verbindung – Server-Daten konnten nicht gelöscht werden. Bitte später erneut.'); }
-  stopRuntime(); wipeLocal();
+  stopRuntime(); imgDeleteAll(); wipeLocal();
   hideSettings();
   try { const regs = await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r => r.unregister())); } catch (e) {}
   location.reload();
@@ -543,6 +700,7 @@ async function initWebRTC() {
     isP2PConnected = true;
     p2pConnectionTime = new Date();
     updateP2PUI(true, 'P2P Aktiv');
+    refreshImageState();
   };
 
   // ── Nachricht via P2P empfangen ──
@@ -601,7 +759,10 @@ async function initWebRTC() {
     isP2PConnected = false;
     p2pConnectionTime = null;
     updateP2PUI(false, 'Verbindung getrennt');
+    refreshImageState();
   };
+
+  webrtc.onImage = (img) => { onImageReceived(img).catch(e => console.warn('[Chat] Bild speichern:', e)); };
 
   // ── Fehler ──
   webrtc.onError = (err) => {
@@ -717,6 +878,7 @@ function deleteChat(room, name) {
   if (!confirm(`Chat mit ${name || 'diesem Kontakt'} löschen? Alle Nachrichten auf diesem Gerät werden entfernt.`)) return;
   const partner = room.split('-').find(c => c !== CODE);
   lsDel(CHAT_PREFIX + room);
+  imgDeleteRoom(room);
   const c = getContacts(); delete c[partner]; lsSet('sm_chat_contacts', JSON.stringify(c));
   const sn = getSeen(); delete sn[room]; lsSet('sm_chat_seen', JSON.stringify(sn));
   renderChatList();
@@ -748,6 +910,7 @@ async function openChat(room, partnerCode, partnerName) {
   document.getElementById('headerCode').textContent = fmtId(partnerCode);
   document.getElementById('headerAvatar').textContent = (partnerName[0] || '?').toUpperCase();
   updateP2PUI(false, 'Verbinde...');
+  refreshImageState();
 
   await renderMessages();
 
@@ -875,7 +1038,10 @@ async function renderMessages(appendOnly = false) {
           : '<span class="msg-status sent" title="Gesendet">✓</span>')
       : '';
     const time = new Date(m.ts).toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'});
-    return `<div class="message ${isMine ? 'mine' : 'other'}">${escapeHtml(m.text)}<div class="msg-time">${time}${statusTick}</div></div>`;
+    const body = m.kind === 'image'
+      ? `<img class="chat-img ${isMine ? '' : 'blur'}" data-iid="${escapeHtml(m.iid)}" alt="Bild">${isMine ? '' : '<div class="img-tap">Tippen zum Anzeigen</div>'}`
+      : escapeHtml(m.text);
+    return `<div class="message ${isMine ? 'mine' : 'other'}${m.kind === 'image' ? ' has-img' : ''}">${body}<div class="msg-time">${time}${statusTick}</div></div>`;
   };
 
   // FIX: Bei jeder eingehenden Nachricht wurde vorher die komplette Liste
@@ -891,6 +1057,7 @@ async function renderMessages(appendOnly = false) {
 
   RENDERED_MSG_COUNT = msgs.length;
   container.scrollTop = container.scrollHeight;
+  hydrateImages(container).then(() => { container.scrollTop = container.scrollHeight; });
 }
 
 // ── SEND MESSAGE (P2P Priority + Fallback) ────────────────────────────────

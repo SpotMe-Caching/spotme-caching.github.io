@@ -18,6 +18,8 @@ window.SpotMeWebRTC = class SpotMeWebRTC {
     this.onDisconnect = null;
     this.onError = null;
     this.onPeerReady = null;
+    this.onImage = null; // komplettes Bild per P2P empfangen
+    this._rx = {};      // laufende Bild-Empfänge je Partner
 
     this.reconnectAttempts = 0;
     this.MAX_RECONNECT = 5;
@@ -210,6 +212,8 @@ window.SpotMeWebRTC = class SpotMeWebRTC {
     });
 
     conn.on("data", (data) => {
+      if (data && data.type === "IMG_START") { this._imgStart(conn, data); return; }
+      if (data && data.type === "IMG_CHUNK") { this._imgChunk(conn, data); return; }
       if (this.onMessage && data.type === "MESSAGE") {
         this.onMessage({
           text: data.text,
@@ -242,6 +246,66 @@ window.SpotMeWebRTC = class SpotMeWebRTC {
       console.error("[WebRTC] Connection Error:", err);
       if (this.onError) this.onError(err);
     });
+  }
+
+  // ── Bilder: nur direkt per P2P, in Stücken, nie über den Server ──
+  _imgStart(conn, d) {
+    const ok = d && typeof d.id === "string" && d.id.length <= 40 &&
+      Number.isInteger(d.n) && d.n >= 1 && d.n <= 60 &&
+      d.mime === "image/jpeg" && Number.isFinite(d.ts);
+    if (!ok) return;
+    const prev = this._rx[conn.peer];
+    if (prev && prev.timer) clearTimeout(prev.timer);
+    const rx = { id: d.id, n: d.n, parts: [], bytes: 0, ts: d.ts, fromName: String(d.fromName || "").slice(0, 40) };
+    rx.timer = setTimeout(() => { if (this._rx[conn.peer] === rx) delete this._rx[conn.peer]; }, 60000);
+    this._rx[conn.peer] = rx;
+  }
+
+  _imgChunk(conn, d) {
+    const rx = this._rx[conn.peer];
+    if (!rx || !d || d.id !== rx.id || d.i !== rx.parts.length || typeof d.d !== "string" || d.d.length > 40000) return;
+    rx.bytes += d.d.length;
+    if (rx.bytes > 2200000) { clearTimeout(rx.timer); delete this._rx[conn.peer]; return; }
+    rx.parts.push(d.d);
+    if (rx.parts.length < rx.n) return;
+    clearTimeout(rx.timer);
+    delete this._rx[conn.peer];
+    const b64 = rx.parts.join("");
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(b64)) return;
+    if (this.onImage) {
+      this.onImage({ id: rx.id, from: conn.peer, fromName: rx.fromName, ts: rx.ts, dataUrl: "data:image/jpeg;base64," + b64 });
+    }
+    try { conn.send({ type: "ACK", ackTs: rx.ts }); } catch (e) {}
+  }
+
+  async sendImage(dataUrl, ts, id) {
+    const conn = this.conn;
+    if (!conn || !conn.open) return false;
+    const m = /^data:image\/jpeg;base64,(.+)$/.exec(dataUrl || "");
+    if (!m) return false;
+    const b64 = m[1], SIZE = 30000, n = Math.ceil(b64.length / SIZE);
+    if (n > 60) return false;
+    try {
+      conn.send({ type: "IMG_START", id, n, mime: "image/jpeg", ts, fromName: this.userName });
+      for (let i = 0; i < n; i++) {
+        if (!conn.open) return false;
+        // nicht schneller senden, als der Kanal abtransportiert
+        let guard = 0;
+        while (conn.dataChannel && conn.dataChannel.bufferedAmount > 512 * 1024 && guard++ < 200) {
+          await new Promise((r) => setTimeout(r, 50));
+        }
+        conn.send({ type: "IMG_CHUNK", id, i, d: b64.slice(i * SIZE, (i + 1) * SIZE) });
+      }
+      return true;
+    } catch (e) {
+      console.warn("[WebRTC] Bild senden fehlgeschlagen:", e);
+      return false;
+    }
+  }
+
+  // Direkter Kanal genau zu diesem Partner offen?
+  isConnectedTo(partnerCode) {
+    return !!(this.conn && this.conn.open && this.conn.peer === partnerCode);
   }
 
   initiateConnection(partnerCode) {
