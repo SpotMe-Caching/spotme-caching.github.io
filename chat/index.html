@@ -73,6 +73,7 @@
     <div class="overlay-card">
       <h2>👤 Dein Profil</h2>
       <p style="font-size:0.7rem;color:#7a98aa;margin:-0.4rem 0 0.6rem;">Chat-Version <span id="chatVer">…</span><br><span id="diagInfo"></span></p>
+      <details style="margin:-0.2rem 0 0.8rem;"><summary style="font-size:0.72rem;color:#7a98aa;cursor:pointer;">Verbindungsprotokoll</summary><pre id="diagLog" style="font-size:0.62rem;white-space:pre-wrap;color:#7a98aa;max-height:160px;overflow:auto;margin:0.4rem 0;"></pre><button class="link-btn" style="width:100%;text-align:center;" onclick="copyDiag()">Protokoll kopieren</button></details>
       <label>Deine ID (gib sie weiter, damit dich andere hinzufügen)</label>
       <div class="copy-row">
         <input type="text" id="setId" readonly>
@@ -539,9 +540,15 @@ function showDiag() {
   const ready = webrtc.isPeerReady();
   el.textContent = 'Direktverbindung: ' + (ready ? '✅ bereit' : '⏳ meldet sich an') + (webrtc.lastError ? ' · letzter Fehler: ' + webrtc.lastError : '');
 }
+function diagText() {
+  const l = (webrtc && webrtc.log) ? webrtc.log.slice() : [];
+  return ['Chat ' + (document.getElementById('chatVer').textContent), 'Sichtbar: ' + document.visibilityState, 'Online: ' + navigator.onLine, 'Partner: ' + (PARTNER_CODE || '-')].concat(l).join('\n');
+}
+async function copyDiag() { try { await navigator.clipboard.writeText(diagText()); setMsg('✅ Protokoll kopiert'); } catch (e) { setMsg('Kopieren nicht möglich'); } }
 function showSettings() {
   showVersion();
   showDiag();
+  setTimeout(() => { const p = document.getElementById('diagLog'); if (p) p.textContent = diagText(); }, 200);
   document.getElementById('setId').value = fmtId(CODE);
   document.getElementById('setName').value = (PROFILE && PROFILE.name) || '';
   document.getElementById('setMsg').textContent = '';

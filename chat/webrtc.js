@@ -27,6 +27,13 @@ window.SpotMeWebRTC = class SpotMeWebRTC {
     this._registering = false;
     this._lastRegister = 0;
     this.lastError = null; // nur zur Anzeige im Profil (Diagnose)
+    this.log = [];         // Verbindungsprotokoll (letzte 40 Ereignisse) für die Diagnose im Profil
+  }
+
+  _log(msg) {
+    const t = new Date().toLocaleTimeString("de-DE");
+    this.log.push(t + " " + msg);
+    if (this.log.length > 40) this.log.shift();
   }
 
   // Meldet den Peer nur an, wenn nicht schon einer läuft/angemeldet ist (kein Dauer-Neustart)
@@ -43,6 +50,7 @@ window.SpotMeWebRTC = class SpotMeWebRTC {
     // Hängt die Anmeldung (z. B. Netz weg), nach 20 s freigeben, damit ein neuer Versuch möglich ist
     setTimeout(() => { this._registering = false; }, 20000);
     console.log("[WebRTC] Registriere Peer mit ID:", this.code);
+    this._log("Anmeldung gestartet");
     this.isDestroyed = false;
 
     // Falls noch ein Peer existiert, hart zerstören
@@ -68,27 +76,32 @@ window.SpotMeWebRTC = class SpotMeWebRTC {
       if (!ticketRes.ok) {
         console.error("[WebRTC] Ticket-Anforderung fehlgeschlagen:", ticketRes.status);
         this.lastError = "ticket " + ticketRes.status;
+        this._log("Ticket abgelehnt (" + ticketRes.status + ")");
         this._registering = false;
         return; // ensureRegistered() versucht es später erneut
       }
     } catch (e) {
       console.error("[WebRTC] Ticket-Anforderung fehlgeschlagen:", e);
       this.lastError = "ticket offline";
+      this._log("Ticket: kein Netz zum Server");
       this._registering = false;
       return;
     }
 
     if (this.isDestroyed) return; // Zwischenzeitlich zerstört (z.B. Logout)
 
-    this.peer = new Peer(this.code, {
+    const me = new Peer(this.code, {
       debug: 2,
       host: "spotme-chat-obom.onrender.com",
       port: 443,
       path: "/peerjs",
       secure: true,
     });
+    this.peer = me;
 
-    this.peer.on("open", (id) => {
+    me.on("open", (id) => {
+      if (this.peer !== me) return;
+      this._log("Beim Signalserver angemeldet ✅");
       console.log("[WebRTC] Peer erfolgreich registriert, ID:", id);
       this.peerReady = true;
       this._registering = false;
@@ -97,7 +110,9 @@ window.SpotMeWebRTC = class SpotMeWebRTC {
       if (this.onPeerReady) this.onPeerReady(id);
     });
 
-    this.peer.on("connection", (conn) => {
+    me.on("connection", (conn) => {
+      if (this.peer !== me) return;
+      this._log("Eingehende Verbindung von " + conn.peer);
       console.log("[WebRTC] Eingehende Verbindung von:", conn.peer);
       this.handleConnection(conn);
     });
@@ -107,6 +122,7 @@ window.SpotMeWebRTC = class SpotMeWebRTC {
     // peer.reconnect() hat keins und wird vom Server sofort gekappt → Dauerschleife.
     // Darum immer komplett neu anmelden (ensureRegistered), aber höchstens alle 15 s.
     const lost = () => {
+      if (this.peer !== me) return; // altes, schon ersetztes Objekt – ignorieren
       this.peerReady = false;
       this._registering = false;
       if (this.peer && !this.peer.destroyed) { try { this.peer.destroy(); } catch (e) {} }
@@ -114,9 +130,11 @@ window.SpotMeWebRTC = class SpotMeWebRTC {
       setTimeout(() => this.ensureRegistered(), 3000);
     };
 
-    this.peer.on("error", (err) => {
+    me.on("error", (err) => {
       console.error("[WebRTC] Peer Error:", err.type, err);
+      if (this.peer !== me) return;
       this.lastError = err.type || "unbekannt";
+      this._log("Fehler: " + (err.type || err.message || "unbekannt"));
 
       // ID noch vom alten Eintrag belegt → später neu
       if (err.type === "unavailable-id") { lost(); return; }
@@ -132,12 +150,13 @@ window.SpotMeWebRTC = class SpotMeWebRTC {
       if (this.onError) this.onError(err);
     });
 
-    this.peer.on("disconnected", () => {
+    me.on("disconnected", () => {
       console.warn("[WebRTC] Peer disconnected vom Server");
+      if (this.peer === me) this._log("Signalserver getrennt");
       lost();
     });
 
-    this.peer.on("close", () => {
+    me.on("close", () => {
       console.log("[WebRTC] Peer geschlossen");
       this.peerReady = false;
       this._registering = false;
@@ -189,7 +208,9 @@ window.SpotMeWebRTC = class SpotMeWebRTC {
 
     this.conn = conn;
 
+    conn.on("iceStateChanged", (s) => this._log("ICE " + s + " (" + conn.peer + ")"));
     conn.on("open", () => {
+      this._log("Direktverbindung offen ✅ (" + conn.peer + ")");
       console.log("[WebRTC] Datenkanal geöffnet zu", conn.peer);
       if (this.onConnect) this.onConnect(conn.peer);
     });
@@ -220,12 +241,14 @@ window.SpotMeWebRTC = class SpotMeWebRTC {
     });
 
     conn.on("close", () => {
+      this._log("Direktverbindung geschlossen (" + conn.peer + ")");
       console.log("[WebRTC] Verbindung geschlossen zu", conn.peer);
       if (this.conn === conn) this.conn = null;
       if (this.onDisconnect) this.onDisconnect(conn.peer);
     });
 
     conn.on("error", (err) => {
+      this._log("Verbindungsfehler: " + (err && (err.type || err.message) || "?"));
       console.error("[WebRTC] Connection Error:", err);
       if (this.onError) this.onError(err);
     });
@@ -302,6 +325,7 @@ window.SpotMeWebRTC = class SpotMeWebRTC {
     if (this._connAt && this._connTo === partnerCode && Date.now() - this._connAt < 10000) return null;
     this._connAt = Date.now();
     this._connTo = partnerCode;
+    this._log("Verbinde zu " + partnerCode + " …");
 
     const conn = this.peer.connect(partnerCode, {
       metadata: { from: this.code, fromName: this.userName },
