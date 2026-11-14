@@ -145,6 +145,7 @@ app.use("/peerjs", peerServer);
 // Verbindung wird geprüft, ob für diese ID gerade ein frisches Ticket
 // ausgestellt wurde – falls nicht, wird die Verbindung sofort gekappt.
 const peerTickets = new Map(); // code -> expiresAt (Timestamp)
+const peerClients = new Map(); // code -> aktuelles PeerJS-Client-Objekt (um alte, tote Sockets zu ersetzen)
 const PEER_TICKET_TTL_MS = 30_000;
 
 app.post("/api/peer-ticket", async (req, res) => {
@@ -161,6 +162,17 @@ app.post("/api/peer-ticket", async (req, res) => {
       return res.status(403).json({ error: "Ungültiger Code oder Token" });
     }
     peerTickets.set(code, Date.now() + PEER_TICKET_TTL_MS);
+    // Wer ein gültiges Ticket holt, ist der Besitzer der ID. Ein alter Eintrag, dessen Verbindung
+    // schon weg ist (z. B. WLAN/VPN-Wechsel), blockiert sonst die neue Anmeldung bis zu 90 s
+    // ("unavailable-id"). Darum den alten Socket sofort beenden.
+    const old = peerClients.get(code);
+    if (old) {
+      peerClients.delete(code);
+      try {
+        const sock = old.getSocket && old.getSocket();
+        if (sock) (sock.terminate ? sock.terminate() : sock.close());
+      } catch (e) {}
+    }
     res.json({ ok: true, ttl: PEER_TICKET_TTL_MS });
   } catch (e) {
     console.error("POST /api/peer-ticket:", e.message);
@@ -201,6 +213,7 @@ peerServer.on("connection", (client) => {
 
   // Ticket ist einmalig gültig
   peerTickets.delete(id);
+  peerClients.set(id, client);
   console.log(`✅ PeerJS: ID "${id}" mit gültigem Ticket verbunden`);
 });
 
