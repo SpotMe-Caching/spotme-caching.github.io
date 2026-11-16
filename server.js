@@ -428,6 +428,15 @@ async function initDB() {
     );
     // Gast-Profile (schneller Einstieg): guest=true bis ein vollständiges Profil gespeichert wird
     await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS guest BOOLEAN DEFAULT FALSE`);
+    // Messenger: stillgelegte Kontakte (owner hat other beendet) + Erstkontakt-Zähler pro Paar.
+    // Nur Code-Paare, keine Inhalte.
+    await pool.query(`CREATE TABLE IF NOT EXISTS messenger_closed (
+      owner TEXT NOT NULL, other TEXT NOT NULL, created_at BIGINT NOT NULL, PRIMARY KEY (owner, other))`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS messenger_pairs (
+      lo TEXT NOT NULL, hi TEXT NOT NULL, initiator TEXT NOT NULL,
+      answered BOOLEAN NOT NULL DEFAULT FALSE, init_cnt INTEGER NOT NULL DEFAULT 0,
+      created_at BIGINT NOT NULL, PRIMARY KEY (lo, hi))`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_msgr_pairs_init ON messenger_pairs(initiator, created_at)`);
     await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_visit BIGINT`);
     // Länder getrennt (ES/DE/…): Bestand ist Spanien → Default 'ES'
     await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS country TEXT DEFAULT 'ES'`);
@@ -1058,10 +1067,105 @@ function normCode(v) {
 }
 const isMsgCode = (c) => /^[a-z]{6}$/.test(String(c || ""));
 
+// ── Spam-Schutz Messenger ────────────────────────────────────────────────
+const MSGR_FIRST_LIMIT = 3;      // unbeantwortete Nachrichten an einen neuen Kontakt
+const MSGR_NEW_PER_DAY = 20;     // neue, unbeantwortete Erstkontakte pro Profil und 24 h
+const MSGR_REG_PER_HOUR = 5;     // neue Profile pro IP und Stunde
+const MSGR_REG_PER_DAY = 15;     // neue Profile pro IP und 24 h
+const msgrRegHits = new Map();   // ip -> [timestamps]
+let msgrIpSourceLogged = false;
+function clientIpFor(req) {
+  const h = req.headers || {};
+  const xff = String(h["x-forwarded-for"] || "").split(",")[0].trim();
+  const pick = [["cf-connecting-ip", h["cf-connecting-ip"]], ["true-client-ip", h["true-client-ip"]],
+    ["x-real-ip", h["x-real-ip"]], ["x-forwarded-for", xff]].find(([, v]) => v);
+  if (!msgrIpSourceLogged) { msgrIpSourceLogged = true; console.log(`🌐 Messenger IP-Quelle: ${pick ? pick[0] : "req.ip"}`); }
+  return String(pick ? pick[1] : req.ip || "unknown").trim();
+}
+// true = erlaubt (und gezählt), false = Limit erreicht
+function msgrRegAllowed(ip, now = Date.now()) {
+  const day = (msgrRegHits.get(ip) || []).filter((t) => now - t < 86400000);
+  const hour = day.filter((t) => now - t < 3600000);
+  if (hour.length >= MSGR_REG_PER_HOUR || day.length >= MSGR_REG_PER_DAY) { msgrRegHits.set(ip, day); return false; }
+  day.push(now); msgrRegHits.set(ip, day);
+  if (msgrRegHits.size > 5000) for (const [k, v] of msgrRegHits) if (!v.some((t) => now - t < 86400000)) msgrRegHits.delete(k);
+  return true;
+}
+const MSGR_CLOSED_MARK = "__SM_CLOSED__"; // Hinweis-Nachricht an den Partner beim Beenden
+
+// Prüft/zählt eine Nachricht von sender an recipient. Rückgabe:
+//  {ok:true, pending:{used,limit}|null}  oder  {ok:false, status, code, error}
+async function messengerGate(sender, recipient) {
+  const cl = await pool.query("SELECT 1 FROM messenger_closed WHERE owner=$1 AND other=$2 LIMIT 1", [recipient, sender]);
+  if (cl.rows.length) {
+    return { ok: false, status: 403, code: "closed", error: "Dein Kontakt möchte den Chat nicht weiterführen" };
+  }
+  // Wer selbst beendet hatte und jetzt schreibt, öffnet den Chat wieder (frischer Start)
+  const re = await pool.query("DELETE FROM messenger_closed WHERE owner=$1 AND other=$2", [sender, recipient]);
+  if (re.rowCount) await pool.query("DELETE FROM messenger_pairs WHERE lo=$1 AND hi=$2", [sender < recipient ? sender : recipient, sender < recipient ? recipient : sender]);
+
+  const lo = sender < recipient ? sender : recipient, hi = sender < recipient ? recipient : sender;
+  const r = await pool.query("SELECT initiator, answered, init_cnt FROM messenger_pairs WHERE lo=$1 AND hi=$2", [lo, hi]);
+  if (!r.rows.length) {
+    const since = Date.now() - 86400000;
+    const d = await pool.query("SELECT COUNT(*) AS c FROM messenger_pairs WHERE initiator=$1 AND answered=FALSE AND created_at>$2", [sender, since]);
+    if (Number(d.rows[0].c) >= MSGR_NEW_PER_DAY) {
+      return { ok: false, status: 429, code: "daily", error: "Heute zu viele neue Kontakte angeschrieben – bitte später wieder" };
+    }
+    const ins = await pool.query(
+      "INSERT INTO messenger_pairs (lo,hi,initiator,answered,init_cnt,created_at) VALUES ($1,$2,$3,FALSE,1,$4) ON CONFLICT DO NOTHING",
+      [lo, hi, sender, Date.now()]);
+    if (ins.rowCount) return { ok: true, pending: { used: 1, limit: MSGR_FIRST_LIMIT } };
+    return messengerGate(sender, recipient); // parallel angelegt → erneut prüfen
+  }
+  const row = r.rows[0];
+  if (row.answered) return { ok: true, pending: null };
+  if (row.initiator !== sender) {
+    await pool.query("UPDATE messenger_pairs SET answered=TRUE WHERE lo=$1 AND hi=$2", [lo, hi]);
+    return { ok: true, pending: null };
+  }
+  const up = await pool.query(
+    "UPDATE messenger_pairs SET init_cnt=init_cnt+1 WHERE lo=$1 AND hi=$2 AND init_cnt<$3 RETURNING init_cnt",
+    [lo, hi, MSGR_FIRST_LIMIT]);
+  if (!up.rowCount) {
+    return { ok: false, status: 429, code: "limit", error: `Erst nach einer Antwort kannst du weiterschreiben (max. ${MSGR_FIRST_LIMIT} Nachrichten)`, pending: { used: MSGR_FIRST_LIMIT, limit: MSGR_FIRST_LIMIT } };
+  }
+  return { ok: true, pending: { used: up.rows[0].init_cnt, limit: MSGR_FIRST_LIMIT } };
+}
+
+// Kontakt beenden: Partner kann nicht mehr schreiben, sieht einen freundlichen Hinweis; nur der Beender kann es wieder öffnen (durch Schreiben)
+app.post("/api/messenger/close", async (req, res) => {
+  const code = normCode(req.body?.code);
+  const partner = normCode(req.body?.partner);
+  const token = String(req.body?.token || "");
+  if (!isMsgCode(code) || !isMsgCode(partner) || !token || code === partner) return res.status(400).json({ error: "code, partner und token erforderlich" });
+  try {
+    if (!(await authCheck(code, token))) return res.status(403).json({ error: "Ungültiger Token" });
+    await pool.query("INSERT INTO messenger_closed (owner, other, created_at) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING", [code, partner, Date.now()]);
+    await pool.query("DELETE FROM messenger_pairs WHERE lo=$1 AND hi=$2", [code < partner ? code : partner, code < partner ? partner : code]);
+    // noch nicht abgeholte Nachrichten des Partners an mich verwerfen
+    await pool.query("DELETE FROM offline_messages WHERE recipient=$1 AND sender_code=$2 AND spot_type='messenger_chat'", [code, partner]);
+    // Hinweis für den Partner (läuft über das normale Abholen, auch wenn er gerade offline ist; kein Push)
+    const exists = await pool.query("SELECT 1 FROM profiles WHERE code=$1 LIMIT 1", [partner]);
+    if (exists.rows.length) {
+      await pool.query(
+        "INSERT INTO offline_messages (recipient, sender_code, sender_name, message, spot_type) VALUES ($1,$2,$3,$4,'messenger_chat')",
+        [partner, code, encrypt(code), encrypt(MSGR_CLOSED_MARK)]);
+    }
+    res.json({ success: true });
+  } catch (e) {
+    console.error("POST /api/messenger/close:", e.message);
+    res.status(500).json({ error: "Datenbankfehler" });
+  }
+});
+
 // Messenger-Profil automatisch anlegen: nur Name (echt oder Fantasie), kein GPS, kein Ort.
 app.post("/api/messenger/register", async (req, res) => {
   const name = String(req.body?.name || "").trim().slice(0, 40);
   if (!name) return res.status(400).json({ error: "Name erforderlich" });
+  if (!msgrRegAllowed(clientIpFor(req))) {
+    return res.status(429).json({ error: "Zu viele neue Profile von diesem Netzwerk – bitte später erneut versuchen" });
+  }
   try {
     let code = null;
     for (let i = 0; i < 30; i++) {
@@ -1358,6 +1462,8 @@ app.delete("/api/account/:code", async (req, res) => {
       await run("wochenspots", "DELETE FROM weekly_spots WHERE code=$1", [code]);
       await run("push", "DELETE FROM push_subscriptions WHERE code=$1", [code]);
       await run("nachrichten", "DELETE FROM offline_messages WHERE recipient=$1 OR sender_code=$1", [code]);
+      await run("messenger_stillgelegt", "DELETE FROM messenger_closed WHERE owner=$1 OR other=$1", [code]);
+      await run("messenger_paare", "DELETE FROM messenger_pairs WHERE lo=$1 OR hi=$1", [code]);
       await run("live_folgen", "DELETE FROM live_followers WHERE follower_code=$1", [code]);
       await run("kommentare", "DELETE FROM profile_comments WHERE profile_code=$1 OR sender_code=$1", [code]);
       await run("bluesky", "DELETE FROM bluesky_accounts WHERE code=$1", [code]);
@@ -1657,6 +1763,9 @@ app.post("/api/message", async (req, res) => {
   if (!clean.length) {
     return res.status(400).json({ error: "Nachricht ist leer oder ungültig" });
   }
+  if (clean.trim() === MSGR_CLOSED_MARK) {
+    return res.status(400).json({ error: "Nachricht ist leer oder ungültig" });
+  }
 
   try {
     // Token muss zum sender_code passen (jedes Profil dieses Codes zählt –
@@ -1681,6 +1790,14 @@ app.post("/api/message", async (req, res) => {
       if (dup.rows.length) {
         return res.json({ success: true, duplicate: true, id: dup.rows[0].id, message: clean, delivered: false });
       }
+    }
+
+    // Messenger: Stilllegung + Limits für neue Kontakte (Caching bleibt unberührt)
+    let pending = null;
+    if (chatType === "messenger_chat") {
+      const gate = await messengerGate(sender_code, recipient);
+      if (!gate.ok) return res.status(gate.status).json({ error: gate.error, code: gate.code, pending: gate.pending || null });
+      pending = gate.pending;
     }
 
     const countCheck = await pool.query(
@@ -1723,7 +1840,7 @@ app.post("/api/message", async (req, res) => {
       ]);
     } catch {}
     // message = bereinigter Text, damit der Absender sieht was ankam
-    res.json({ success: true, id: ins.rows[0].id, message: clean, delivered });
+    res.json({ success: true, id: ins.rows[0].id, message: clean, delivered, pending });
   } catch (e) {
     console.error("POST /api/message:", e.message);
     res.status(500).json({ error: "Datenbankfehler" });
