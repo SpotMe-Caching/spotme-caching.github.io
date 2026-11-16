@@ -781,3 +781,14 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
 .img-gone { font-size: 0.8rem; opacity: 0.7; padding: 0.5rem; display: inline-block; }
 .img-preview { width: 100%; max-height: 50vh; object-fit: contain; border-radius: 10px; margin: 0.6rem 0; }
 .img-view { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+/* Kontakt-Zustand: Hinweisleiste, Tags */
+#chatNote.hidden { display: none; }
+.chat-note { font-size: 0.78rem; line-height: 1.35; padding: 0.55rem 1rem; text-align: center; border-top: 1px solid var(--bord2, rgba(255,255,255,0.11)); color: var(--text, #e8eef2); background: var(--card, #111820); }
+.chat-note.paused { background: rgba(122, 152, 170, 0.14); }
+.chat-note.request { background: rgba(255, 159, 0, 0.14); }
+.chat-note.wait { color: var(--muted2, #7a98aa); }
+.note-btn { margin-left: 0.5rem; padding: 0.2rem 0.7rem; border-radius: 999px; border: 1px solid var(--acc, #ff9f00); background: transparent; color: var(--acc, #ff9f00); font: inherit; font-weight: 600; cursor: pointer; }
+.chat-tag { display: inline-block; font-size: 0.68rem; padding: 0.05rem 0.45rem; border-radius: 999px; background: rgba(122,152,170,0.18); color: var(--muted2, #7a98aa); }
+.chat-tag.req { background: rgba(255,159,0,0.18); color: var(--acc, #ff9f00); }
+.input-bar textarea:disabled, .input-bar button:disabled { opacity: 0.45; }

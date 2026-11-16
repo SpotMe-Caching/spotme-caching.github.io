@@ -19,6 +19,7 @@ window.SpotMeWebRTC = class SpotMeWebRTC {
     this.onError = null;
     this.onPeerReady = null;
     this.onImage = null; // komplettes Bild per P2P empfangen
+    this.acceptFrom = null; // optional: (code) => bool, Absender-Filter für Text/Bilder
     this._rx = {};      // laufende Bild-Empfänge je Partner
 
     this.reconnectAttempts = 0;
@@ -216,6 +217,8 @@ window.SpotMeWebRTC = class SpotMeWebRTC {
     });
 
     conn.on("data", (data) => {
+      // Filter der App: unbekannte/pausierte/beendete Kontakte werden still verworfen (ohne Ack)
+      if (data && data.type !== "ACK" && typeof this.acceptFrom === "function" && !this.acceptFrom(conn.peer)) return;
       if (data && data.type === "IMG_START") { this._imgStart(conn, data); return; }
       if (data && data.type === "IMG_CHUNK") { this._imgChunk(conn, data); return; }
       if (this.onMessage && data.type === "MESSAGE") {

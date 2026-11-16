@@ -122,6 +122,7 @@
   
   <div id="messages" class="messages-container"></div>
   
+  <div id="chatNote" class="hidden"></div>
   <div id="imgHint" class="img-hint off">📷 Bilder nur, wenn ihr beide online seid</div>
   <div class="input-bar">
     <button id="imgBtn" class="img-btn" onclick="pickImage()" aria-label="Bild senden" title="Bild senden">📷</button>
@@ -268,6 +269,28 @@ function addContact(code, name) {
   lsSet('sm_chat_contacts', JSON.stringify(c));
 }
 
+// Kontakt-Zustand (nur auf diesem Gerät): req = Anfrage von Unbekannt, heard = er/sie hat geschrieben,
+// talk = ich habe nach dem Hören über den Server geantwortet, paused = Gegenüber hat den Kontakt beendet,
+// out = meine unbeantworteten Erstnachrichten (Server-Limit 3)
+const CLOSED_MARK = '__SM_CLOSED__', FIRST_LIMIT = 3;
+function getMeta() { try { return JSON.parse(lsGet('sm_chat_meta') || '{}') || {}; } catch (e) { return {}; } }
+function metaOf(code) { return getMeta()[code] || {}; }
+function setMeta(code, patch) { if (!code) return; const m = getMeta(); m[code] = Object.assign({}, m[code] || {}, patch); lsSet('sm_chat_meta', JSON.stringify(m)); }
+function delMeta(code) { const m = getMeta(); delete m[code]; lsSet('sm_chat_meta', JSON.stringify(m)); }
+function getClosedByMe() { try { return JSON.parse(lsGet('sm_chat_closed') || '{}') || {}; } catch (e) { return {}; } }
+function setClosedByMe(code, on) { const c = getClosedByMe(); if (on) c[code] = Date.now(); else delete c[code]; lsSet('sm_chat_closed', JSON.stringify(c)); }
+// Bestehende Kontakte (vor dieser Version) gelten als vertraut
+function migrateMeta() {
+  const m = getMeta(); let ch = false;
+  for (const code of Object.keys(getContacts())) if (!m[code]) { m[code] = { heard: true, talk: true }; ch = true; }
+  if (ch) lsSet('sm_chat_meta', JSON.stringify(m));
+}
+// Nur Kontakte, die ich kenne und angenommen habe, dürfen direkt (P2P) Text/Bilder schicken
+function acceptP2PFrom(code) {
+  const m = metaOf(code);
+  return !!getContacts()[code] && !m.req && !m.paused && !getClosedByMe()[code];
+}
+
 function showSetup(prefill, msg) {
   document.getElementById('chatListScreen').style.display = 'none';
   document.getElementById('chatDetailScreen').style.display = 'none';
@@ -292,7 +315,7 @@ async function createProfile() {
     }, 20000);
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || 'Anlegen fehlgeschlagen');
+      throw new Error(data.error || (res.status === 429 ? 'Zu viele neue Profile von diesem Netzwerk – bitte später erneut versuchen' : 'Anlegen fehlgeschlagen'));
     }
     const { code, token, name: n } = await res.json();
     CODE = code; TOKEN = token; PROFILE = { code, name: n };
@@ -306,6 +329,7 @@ async function createProfile() {
 }
 
 function startApp() {
+  migrateMeta();
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('chatListScreen').style.display = 'block';
   try { initWebRTC(); } catch (e) { console.warn('[P2P]', e); }
@@ -425,7 +449,8 @@ function imgDeleteAll() { try { indexedDB.deleteDatabase(IMG_DB); } catch (e) {}
 
 // Kanal zum aktuellen Gegenüber offen? → beide sind online und direkt verbunden
 function canSendImage() {
-  return !!(webrtc && PARTNER_CODE && typeof webrtc.isConnectedTo === 'function' && webrtc.isConnectedTo(PARTNER_CODE));
+  const m = metaOf(PARTNER_CODE);
+  return !!(webrtc && PARTNER_CODE && !m.paused && !m.req && m.heard && typeof webrtc.isConnectedTo === 'function' && webrtc.isConnectedTo(PARTNER_CODE));
 }
 function refreshImageState() {
   const btn = document.getElementById('imgBtn'), hint = document.getElementById('imgHint');
@@ -434,6 +459,12 @@ function refreshImageState() {
   btn.classList.toggle('on', on);
   hint.className = 'img-hint ' + (on ? 'on' : 'off');
   // Nach 25 s ohne P2P: häufigster Grund ist die Energiesparfunktion des Browsers (friert Hintergrund-Apps ein)
+  const mm = metaOf(PARTNER_CODE);
+  if (!on && (mm.req || mm.paused || !mm.heard)) {
+    hint.className = 'img-hint off';
+    hint.textContent = mm.paused ? '📷 Chat pausiert' : '📷 Bilder gehen erst, nachdem dein Kontakt geantwortet hat';
+    return;
+  }
   const slow = !on && CHAT_OPENED_AT && (Date.now() - CHAT_OPENED_AT > 25000);
   hint.textContent = on
     ? '📷 Ihr seid beide online – Bilder möglich'
@@ -501,7 +532,9 @@ async function sendPickedImage() {
 // Bild per P2P angekommen
 async function onImageReceived(img) {
   const room = [CODE, img.from].sort().join('-');
+  if (!acceptP2PFrom(img.from)) return;
   if (img.fromName) addContact(img.from, img.fromName);
+  setMeta(img.from, { heard: true, out: 0 });
   await imgPut(room, img.id, img.dataUrl);
   const msgs = await loadRoomMessages(room);
   if (!msgs.some(m => m.iid === img.id)) {
@@ -708,6 +741,7 @@ async function initWebRTC() {
   console.log('[WebRTC] Instantiated with User:', PROFILE?.name || CODE);
 
   webrtc = new window.SpotMeWebRTC(CODE, TOKEN, PROFILE?.name || CODE);
+  webrtc.acceptFrom = acceptP2PFrom; // Anfragen/pausierte/beendete Kontakte kommen nicht per P2P durch
 
   // ── NEU: Peer ist beim Server registriert ──
   webrtc.onPeerReady = (id) => {
@@ -731,6 +765,7 @@ async function initWebRTC() {
     // (Nachricht kann ankommen, wenn Chat gar nicht geöffnet ist)
     const room = [CODE, msg.from].sort().join('-');
     if (msg.fromName) addContact(msg.from, msg.fromName);
+    setMeta(msg.from, { heard: true, out: 0 });
 
     const msgs = await loadRoomMessages(room);
 
@@ -852,6 +887,7 @@ async function renderChatList() {
   const contacts = getContacts();
   const seen = getSeen();
   const byRoom = {};
+  const metaAll = getMeta();
   for (const [code, name] of Object.entries(contacts)) {
     byRoom[[CODE, code].sort().join('-')] = { partnerCode: code, partnerName: name, lastText: 'Noch keine Nachricht', lastTs: 0, timeStr: '', unread: 0 };
   }
@@ -883,28 +919,85 @@ async function renderChatList() {
       <div class="avatar">${escapeHtml((c.partnerName[0] || '?').toUpperCase())}</div>
       <div class="chat-info">
         <div class="chat-name">${escapeHtml(c.partnerName)}</div>
-        <div class="chat-preview">${escapeHtml(c.lastText)}</div>
+        <div class="chat-preview">${(metaAll[c.partnerCode] || {}).paused ? '<span class="chat-tag">⏸ pausiert</span> ' : (metaAll[c.partnerCode] || {}).req ? '<span class="chat-tag req">📨 Anfrage</span> ' : ''}${escapeHtml(c.lastText)}</div>
       </div>
       <div class="chat-meta"><div class="chat-time">${c.timeStr}</div>${c.unread ? `<div class="unread-badge">${c.unread}</div>` : ''}</div>
-      <button class="chat-del" data-del="${escapeHtml(c.room)}" aria-label="Chat löschen" title="Chat löschen">🗑</button>
+      <button class="chat-del" data-del="${escapeHtml(c.room)}" aria-label="Kontakt beenden" title="Kontakt beenden">🗑</button>
     </div>`).join('') || `<p class="text-center" style="padding:2rem;color:var(--muted2);">Noch keine Chats.<br>Tippe auf + und gib eine ID ein.<br><br>Deine ID: <b>${fmtId(CODE)}</b></p>`;
 }
-// Chat löschen (Nachrichten auf diesem Gerät + Kontakt)
-function deleteChat(room, name) {
-  if (!confirm(`Chat mit ${name || 'diesem Kontakt'} löschen? Alle Nachrichten auf diesem Gerät werden entfernt.`)) return;
+// Kontakt beenden: Verlauf hier löschen; das Gegenüber sieht einen freundlichen Hinweis und kann nicht mehr schreiben.
+// Wieder öffnen: einfach selbst eine Nachricht schreiben.
+async function deleteChat(room, name, decline) {
   const partner = room.split('-').find(c => c !== CODE);
+  const paused = !!metaOf(partner).paused; // Gegenüber hat selbst beendet → nur aufräumen
+  const label = name || 'diesem Kontakt';
+  const q = paused
+    ? `Chat mit ${label} löschen? Der Verlauf wird auf diesem Gerät entfernt.`
+    : decline
+      ? `Anfrage von ${label} ablehnen? ${label} sieht, dass du den Kontakt nicht weiterführen möchtest, und kann dir nicht mehr schreiben.`
+      : `Kontakt mit ${label} beenden? Dein Verlauf wird hier gelöscht. ${label} sieht freundlich, dass du nicht weiterschreiben möchtest, und kann dir nicht mehr schreiben. Du kannst jederzeit selbst wieder schreiben – dann ist der Chat wieder offen.`;
+  if (!confirm(q)) return false;
+  if (!paused) {
+    try {
+      const r = await tfetch(`${API}/messenger/close`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: CODE, token: TOKEN, partner })
+      }, 15000);
+      if (!r.ok) throw new Error('close ' + r.status);
+      setClosedByMe(partner, true);
+    } catch (e) {
+      alert('Kontakt konnte nicht beendet werden – keine Verbindung zum Server. Bitte später erneut versuchen.');
+      return false;
+    }
+  }
   lsDel(CHAT_PREFIX + room);
   imgDeleteRoom(room);
   const c = getContacts(); delete c[partner]; lsSet('sm_chat_contacts', JSON.stringify(c));
+  delMeta(partner);
   const sn = getSeen(); delete sn[room]; lsSet('sm_chat_seen', JSON.stringify(sn));
   renderChatList();
+  return true;
+}
+async function declineRequest() {
+  if (!CURRENT_ROOM) return;
+  if (await deleteChat(CURRENT_ROOM, PARTNER_NAME, true)) goBackToList();
+}
+// Hinweisleiste im Chat + Eingabe sperren, wenn pausiert / Limit erreicht
+function applyChatState(extra) {
+  const note = document.getElementById('chatNote'), input = document.getElementById('msgInput');
+  const send = document.querySelector('button[onclick="sendMessage()"]'), cam = document.getElementById('imgBtn');
+  if (!note || !input || !PARTNER_CODE) return;
+  const m = metaOf(PARTNER_CODE), nm = escapeHtml(PARTNER_NAME || fmtId(PARTNER_CODE));
+  let html = '', cls = 'hidden', lock = false, ph = 'Nachricht...';
+  if (m.paused) {
+    html = `🕊️ ${nm} möchte den Kontakt gerade nicht weiterführen. Der Chat ist pausiert – du kannst den Verlauf weiterhin lesen.`;
+    cls = 'chat-note paused'; lock = true; ph = 'Chat pausiert';
+  } else if (m.req) {
+    html = `📨 Neue Anfrage von ${nm}. Wenn du antwortest, nimmst du sie an. <button class="note-btn" onclick="declineRequest()">Ablehnen</button>`;
+    cls = 'chat-note request';
+  } else if (!m.heard && (m.out || 0) >= FIRST_LIMIT) {
+    html = `⏳ Du hast ${FIRST_LIMIT} Nachrichten gesendet. Weitere gehen, sobald ${nm} antwortet.`;
+    cls = 'chat-note wait'; lock = true; ph = 'Warte auf Antwort…';
+  } else if (!m.heard && (m.out || 0) > 0) {
+    html = `Nachricht ${m.out} von ${FIRST_LIMIT} – bis ${nm} antwortet, kannst du ${FIRST_LIMIT} Nachrichten schreiben.`;
+    cls = 'chat-note wait';
+  } else if (getClosedByMe()[PARTNER_CODE]) {
+    html = 'Du hattest diesen Kontakt beendet. Sobald du schreibst, ist der Chat wieder offen.';
+    cls = 'chat-note wait';
+  }
+  if (extra) { html = escapeHtml(extra); cls = 'chat-note wait'; }
+  note.innerHTML = html; note.className = cls;
+  input.disabled = lock; input.placeholder = ph;
+  if (send) send.disabled = lock;
+  if (cam) cam.disabled = lock;
+  refreshImageState();
 }
 document.addEventListener('click', (e) => {
   const del = e.target.closest && e.target.closest('.chat-del');
   if (del) {
     e.stopPropagation();
     const it = del.closest('.chat-item');
-    deleteChat(del.dataset.del, it && it.dataset.name);
+    deleteChat(del.dataset.del, it && it.dataset.name).catch(() => {});
     return;
   }
   const it = e.target.closest && e.target.closest('.chat-item');
@@ -927,7 +1020,7 @@ async function openChat(room, partnerCode, partnerName) {
   document.getElementById('headerCode').textContent = fmtId(partnerCode);
   document.getElementById('headerAvatar').textContent = (partnerName[0] || '?').toUpperCase();
   updateP2PUI(canSendImage(), canSendImage() ? 'P2P Aktiv' : 'Server-Modus');
-  refreshImageState();
+  applyChatState();
 
   await renderMessages();
 
@@ -1119,6 +1212,9 @@ async function sendMessage() {
     return;
   }
 
+  const st0 = metaOf(PARTNER_CODE);
+  if (st0.paused) return;
+  if (!st0.heard && (st0.out || 0) >= FIRST_LIMIT) { applyChatState(); return; }
   const myName = PROFILE?.name || CODE;
   const ts = Date.now(); // EIN Timestamp für lokale Bubble + P2P-Ack-Matching
 
@@ -1132,7 +1228,9 @@ async function sendMessage() {
   input.style.height = 'auto';
 
   // Priority: P2P → Server Fallback
-  if (webrtc && typeof webrtc.isConnected === 'function' && webrtc.isConnected()) {
+  // P2P nur nach der ersten Antwort (beide kennen sich) – die erste Runde läuft über den Server (Limits)
+  const st1 = metaOf(PARTNER_CODE);
+  if (st1.heard && st1.talk && !st1.req && webrtc && typeof webrtc.isConnectedTo === 'function' && webrtc.isConnectedTo(PARTNER_CODE)) {
     try {
       const sent = webrtc.send(text, ts);
       if (sent) {
@@ -1162,9 +1260,27 @@ async function sendMessage() {
 
     if (!res.ok) {
       console.warn('[Chat] Nachricht nicht gesendet:', res.status, res.statusText);
+      const err = await res.json().catch(() => ({}));
+      if (err.code === 'closed' || err.code === 'limit' || err.code === 'daily') {
+        // abgelehnt → Blase wieder entfernen, Text zurück ins Eingabefeld
+        const stillThere = (await getMessages()).filter(m => !(m.from === CODE && m.ts === ts));
+        await saveMessages(stillThere);
+        if (CURRENT_ROOM) await renderMessages();
+        if (err.code === 'closed') setMeta(PARTNER_CODE, { paused: true });
+        else if (err.code === 'limit') setMeta(PARTNER_CODE, { out: FIRST_LIMIT });
+        if (err.code !== 'closed') { const i = document.getElementById('msgInput'); if (!i.value) i.value = text; }
+        applyChatState(err.code === 'daily' ? 'Heute hast du schon viele neue Kontakte angeschrieben – bitte später wieder.' : null);
+      }
     } else {
       console.log('[Chat] Via Server gesendet');
       updateP2PUI(false, 'Server-Modus');
+      {
+        const d0 = await res.clone().json().catch(() => ({}));
+        const was = metaOf(PARTNER_CODE);
+        setMeta(PARTNER_CODE, { req: false, out: d0.pending ? d0.pending.used : 0, talk: was.heard ? true : !!was.talk });
+        setClosedByMe(PARTNER_CODE, false);
+        applyChatState();
+      }
 
       // "delivered" = Push-Zustellung an den Dienst hat geklappt.
       // KEIN Lesestatus, keine Uhrzeit – nur ob die Benachrichtigung raus ist.
@@ -1222,6 +1338,21 @@ async function pollOnce() {
           for (const m of newMsgs) {
             const room = [CODE, m.sender_code].sort().join('-');
 
+            // Hinweis: Gegenüber hat den Kontakt beendet → Chat pausieren (nichts speichern)
+            if (m.message === CLOSED_MARK) {
+              if (getContacts()[m.sender_code] && !getClosedByMe()[m.sender_code]) {
+                setMeta(m.sender_code, { paused: true });
+                listNeedsUpdate = true;
+                if (room === CURRENT_ROOM) applyChatState();
+              }
+              continue;
+            }
+            // Von mir beendete Kontakte: nichts annehmen
+            if (getClosedByMe()[m.sender_code]) continue;
+            const knownBefore = !!getContacts()[m.sender_code];
+            if (!knownBefore) setMeta(m.sender_code, { req: true, heard: true });
+            else setMeta(m.sender_code, { heard: true, paused: false, out: 0 });
+
             const msgs = await loadRoomMessages(room);
 
             const exists = msgs.some(e => e.sid === m.id) || msgs.some(e =>
@@ -1244,6 +1375,7 @@ async function pollOnce() {
                 markSeen(room);
                 await renderMessages(true);
                 renderedAny = true;
+                applyChatState();
               }
             }
           }
