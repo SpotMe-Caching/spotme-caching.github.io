@@ -792,3 +792,9 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
 .chat-tag { display: inline-block; font-size: 0.68rem; padding: 0.05rem 0.45rem; border-radius: 999px; background: rgba(122,152,170,0.18); color: var(--muted2, #7a98aa); }
 .chat-tag.req { background: rgba(255,159,0,0.18); color: var(--acc, #ff9f00); }
 .input-bar textarea:disabled, .input-bar button:disabled { opacity: 0.45; }
+
+.closed-box { margin: 0.8rem 1rem 1.2rem; font-size: 0.85rem; color: var(--muted2, #7a98aa); }
+.closed-box summary { cursor: pointer; padding: 0.5rem 0; }
+.closed-item { display: flex; align-items: center; gap: 0.7rem; padding: 0.5rem 0; border-top: 1px solid var(--bord2, rgba(255,255,255,0.11)); }
+.closed-info { flex: 1; min-width: 0; }
+.closed-hint { font-size: 0.72rem; margin: 0.4rem 0 0; }

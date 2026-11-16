@@ -40,6 +40,7 @@
       <button class="logout-btn" onclick="showSettings()" style="background:none;border:none;color:#ff4f7b;cursor:pointer;font-size:0.85rem;flex-shrink:0;">⚙︎ Profil</button>
     </div>
     <div id="chatList" class="chat-list"></div>
+    <div id="closedList"></div>
   </div>
 
   <!-- Neuer Chat: Partner-Code eingeben -->
@@ -278,7 +279,31 @@ function metaOf(code) { return getMeta()[code] || {}; }
 function setMeta(code, patch) { if (!code) return; const m = getMeta(); m[code] = Object.assign({}, m[code] || {}, patch); lsSet('sm_chat_meta', JSON.stringify(m)); }
 function delMeta(code) { const m = getMeta(); delete m[code]; lsSet('sm_chat_meta', JSON.stringify(m)); }
 function getClosedByMe() { try { return JSON.parse(lsGet('sm_chat_closed') || '{}') || {}; } catch (e) { return {}; } }
-function setClosedByMe(code, on) { const c = getClosedByMe(); if (on) c[code] = Date.now(); else delete c[code]; lsSet('sm_chat_closed', JSON.stringify(c)); }
+function setClosedByMe(code, on, name) {
+  const c = getClosedByMe();
+  if (on) c[code] = { ts: Date.now(), name: name || (c[code] && c[code].name) || '' }; else delete c[code];
+  lsSet('sm_chat_closed', JSON.stringify(c));
+}
+// Beendete Kontakte bleiben (ohne Verlauf) in einer Liste, damit man sie wieder öffnen kann – auch ohne notierte ID
+function renderClosedList() {
+  const el = document.getElementById('closedList');
+  if (!el) return;
+  const list = Object.entries(getClosedByMe());
+  if (!CODE || !list.length) { el.innerHTML = ''; return; }
+  const open = el.querySelector('details') && el.querySelector('details').open;
+  el.innerHTML = `<details class="closed-box"${open ? ' open' : ''}><summary>Beendete Kontakte (${list.length})</summary>` + list.map(([code, v]) => {
+    const nm = (v && v.name) || fmtId(code);
+    return `<div class="closed-item"><div class="avatar">${escapeHtml((nm[0] || '?').toUpperCase())}</div>
+      <div class="closed-info"><div class="chat-name">${escapeHtml(nm)}</div><div class="chat-preview">${fmtId(code)}</div></div>
+      <button class="note-btn" data-reopen="${escapeHtml(code)}" data-name="${escapeHtml(nm)}">Wieder öffnen</button>
+      <button class="chat-del" style="opacity:1" data-forget="${escapeHtml(code)}" aria-label="Aus Liste entfernen" title="Aus Liste entfernen">✕</button></div>`;
+  }).join('') + '<p class="closed-hint">Schreibst du dem Kontakt, ist der Chat wieder offen. „✕“ entfernt ihn nur aus dieser Liste.</p></details>';
+}
+async function reopenContact(code, name) {
+  addContact(code, name);
+  const room = [CODE, code].sort().join('-');
+  await openChat(room, code, name);
+}
 // Bestehende Kontakte (vor dieser Version) gelten als vertraut
 function migrateMeta() {
   const m = getMeta(); let ch = false;
@@ -879,6 +904,7 @@ async function startNewChat() {
 
 // ── CHAT LIST ─────────────────────────────────────────────────────────────
 async function renderChatList() {
+  renderClosedList();
   const container = document.getElementById('chatList');
   if (!CODE) {
     container.innerHTML = '<p class="text-center" style="padding:2rem;color:var(--muted2);">Keine Chats</p>';
@@ -925,6 +951,14 @@ async function renderChatList() {
       <button class="chat-del" data-del="${escapeHtml(c.room)}" aria-label="Kontakt beenden" title="Kontakt beenden">🗑</button>
     </div>`).join('') || `<p class="text-center" style="padding:2rem;color:var(--muted2);">Noch keine Chats.<br>Tippe auf + und gib eine ID ein.<br><br>Deine ID: <b>${fmtId(CODE)}</b></p>`;
 }
+document.addEventListener('click', (e) => {
+  const re = e.target.closest && e.target.closest('[data-reopen]');
+  if (re) { reopenContact(re.dataset.reopen, re.dataset.name).catch(() => {}); return; }
+  const fo = e.target.closest && e.target.closest('[data-forget]');
+  if (fo) {
+    if (confirm('Aus der Liste entfernen? Der Kontakt bleibt für dich beendet – du kannst ihn nur über seine ID wieder hinzufügen.')) { setClosedByMe(fo.dataset.forget, false); renderClosedList(); }
+  }
+});
 // Kontakt beenden: Verlauf hier löschen; das Gegenüber sieht einen freundlichen Hinweis und kann nicht mehr schreiben.
 // Wieder öffnen: einfach selbst eine Nachricht schreiben.
 async function deleteChat(room, name, decline) {
@@ -935,7 +969,7 @@ async function deleteChat(room, name, decline) {
     ? `Chat mit ${label} löschen? Der Verlauf wird auf diesem Gerät entfernt.`
     : decline
       ? `Anfrage von ${label} ablehnen? ${label} sieht, dass du den Kontakt nicht weiterführen möchtest, und kann dir nicht mehr schreiben.`
-      : `Kontakt mit ${label} beenden? Dein Verlauf wird hier gelöscht. ${label} sieht freundlich, dass du nicht weiterschreiben möchtest, und kann dir nicht mehr schreiben. Du kannst jederzeit selbst wieder schreiben – dann ist der Chat wieder offen.`;
+      : `Kontakt mit ${label} beenden? Dein Verlauf wird hier gelöscht. ${label} sieht freundlich, dass du nicht weiterschreiben möchtest, und kann dir nicht mehr schreiben. Du findest den Kontakt unten unter „Beendete Kontakte“ und kannst jederzeit selbst wieder schreiben – dann ist der Chat wieder offen.`;
   if (!confirm(q)) return false;
   if (!paused) {
     try {
@@ -944,7 +978,7 @@ async function deleteChat(room, name, decline) {
         body: JSON.stringify({ code: CODE, token: TOKEN, partner })
       }, 15000);
       if (!r.ok) throw new Error('close ' + r.status);
-      setClosedByMe(partner, true);
+      setClosedByMe(partner, true, name);
     } catch (e) {
       alert('Kontakt konnte nicht beendet werden – keine Verbindung zum Server. Bitte später erneut versuchen.');
       return false;
