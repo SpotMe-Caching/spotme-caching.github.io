@@ -805,3 +805,5 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
 .backup-bar .bk-btns { display: flex; gap: 0.4rem; margin-left: auto; }
 .backup-bar .note-btn { margin-left: 0; }
 .note-btn.ghost { border-color: var(--bord2, rgba(255,255,255,0.2)); color: var(--muted2, #7a98aa); }
+
+.restore-sep{margin:1rem 0 .6rem;color:#7f93a3;font-size:.8rem;text-align:center}
