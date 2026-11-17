@@ -1,6 +1,17 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
+<script>
+/* Gäste ohne Profil sehen zuerst die Startseite (landing.html). ?neu=1 überspringt sie. */
+(function(){
+  try {
+    var q = location.search || '';
+    var hasProfile = !!(localStorage.getItem('sm_chat_code') && localStorage.getItem('sm_chat_token'));
+    var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+    if (!hasProfile && !standalone && !/[?&]neu=1/.test(q)) location.replace('landing.html' + q);
+  } catch (e) {}
+})();
+</script>
 <!-- External CSS -->
 <link rel="stylesheet" href="messenger.css">
 
@@ -8,7 +19,14 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
-  <title>Spot Chat</title>
+  <title>SpotMe Messenger</title>
+  <meta name="description" content="Der SpotMe Messenger: anonym und privat schreiben. Nur ein Name, keine Telefonnummer, keine E-Mail, keine Werbung. Als Link aufs Handy – ohne App-Store.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://spotme-caching.github.io/chat/">
+  <meta property="og:title" content="SpotMe Messenger – Schreiben ohne Nummer, ohne E-Mail">
+  <meta property="og:description" content="Anonym und privat schreiben: nur ein Name, keine Telefonnummer, keine Werbung. Als Link aufs Handy – ohne App-Store.">
+  <meta property="og:image" content="https://spotme-caching.github.io/chat/icons/spot_512.png">
+  <meta name="twitter:card" content="summary">
   <link rel="manifest" href="/chat/manifest.json">
   <meta name="theme-color" content="#0a0d12">
   <link rel="stylesheet" href="../fonts.css">
@@ -29,7 +47,7 @@
       <button id="setupBtn" onclick="createProfile()">Los geht's</button>
       <p id="registerError" class="error"></p>
     </div>
-    <a href="/" style="margin-top:1rem; color:#ff4f7b; font-size:0.85rem;">← Zurück zu SpotME Caching</a>
+    <a href="landing.html?info=1" style="margin-top:1rem; color:#ff4f7b; font-size:0.85rem;">← Mehr über den Messenger</a>
   </div>
 
   <!-- Chat List -->
