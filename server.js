@@ -1091,6 +1091,16 @@ function msgrRegAllowed(ip, now = Date.now()) {
   if (msgrRegHits.size > 5000) for (const [k, v] of msgrRegHits) if (!v.some((t) => now - t < 86400000)) msgrRegHits.delete(k);
   return true;
 }
+// Aktiver Chat: wer gerade im Chatfenster mit X ist (kommt beim Abholen mit), bekommt von X keinen Push
+const msgrActive = new Map(); // code -> { partner, ts }
+const MSGR_ACTIVE_TTL = 15000;
+function msgrIsActiveWith(code, partner) {
+  const a = msgrActive.get(code);
+  if (!a) return false;
+  if (Date.now() - a.ts > MSGR_ACTIVE_TTL) { msgrActive.delete(code); return false; }
+  return a.partner === partner;
+}
+setInterval(() => { const n = Date.now(); for (const [k, v] of msgrActive) if (n - v.ts > MSGR_ACTIVE_TTL) msgrActive.delete(k); }, 60000).unref();
 const MSGR_CLOSED_MARK = "__SM_CLOSED__"; // Hinweis-Nachricht an den Partner beim Beenden
 
 // Prüft/zählt eine Nachricht von sender an recipient. Rückgabe:
@@ -1826,8 +1836,10 @@ app.post("/api/message", async (req, res) => {
     console.log(`💬 Chat: ${sender_code} → ${recipient}`);
     // Push darf die Antwort nie blockieren oder den Versand fehlschlagen lassen
     let delivered = false;
+    // Empfänger hat genau diesen Chat gerade offen → kein Push (Nachricht kommt beim nächsten Abholen)
+    const skipPush = chatType === "messenger_chat" && msgrIsActiveWith(recipient, sender_code);
     try {
-      delivered = await Promise.race([
+      if (!skipPush) delivered = await Promise.race([
         sendPushToCode(
           recipient,
           "💬 Neue Nachricht",
@@ -1862,6 +1874,13 @@ app.get("/api/messages/:code", async (req, res) => {
   try {
     if (!(await authCheck(code, String(token)))) {
       return res.status(403).json({ error: "Ungültiger Token" });
+    }
+
+    // Client meldet beim Abholen, mit wem er gerade im Chatfenster ist (nur Messenger)
+    if (isMsgCode(code)) {
+      const act = req.query.active ? normCode(String(req.query.active)) : "";
+      if (act && isMsgCode(act)) msgrActive.set(code, { partner: act, ts: Date.now() });
+      else msgrActive.delete(code);
     }
 
     // Nachrichten der letzten 48 Stunden. NICHT mehr beim Abruf als gelesen
