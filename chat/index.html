@@ -57,6 +57,7 @@
       <button class="new-chat-btn" onclick="showNewChatLayer()" title="Neuer Chat">+</button>
       <button class="logout-btn" onclick="showSettings()" style="background:none;border:none;color:#ff4f7b;cursor:pointer;font-size:0.85rem;flex-shrink:0;">⚙︎ Profil</button>
     </div>
+    <div id="backupBar" class="backup-bar hidden"></div>
     <div id="chatList" class="chat-list"></div>
     <div id="closedList"></div>
   </div>
@@ -88,6 +89,19 @@
   <div id="imgViewLayer" class="hidden overlay" onclick="this.classList.add('hidden')"><img id="imgView" class="img-view" alt=""></div>
 
   <!-- Profil / Einstellungen -->
+  <div id="backupLayer" class="hidden overlay">
+    <div class="overlay-card">
+      <h2>💾 Sicherung erstellen</h2>
+      <p style="font-size:0.78rem;color:#7a98aa;margin:-0.4rem 0 0.8rem;">Deine Chats und dein Zugang in einer Datei – für Gerätewechsel oder falls etwas verloren geht. Bilder sind nicht enthalten.</p>
+      <label for="bkPass">Passwort (freiwillig)</label>
+      <input type="password" id="bkPass" autocomplete="new-password" placeholder="Leer lassen = ohne Passwort">
+      <p style="font-size:0.7rem;color:#7a98aa;margin:0.2rem 0 0.8rem;">Mit Passwort ist die Datei geschützt. Vergisst du es, lässt sie sich nicht mehr öffnen. Ohne Passwort kann jeder mit der Datei dein Profil übernehmen – bewahre sie sicher auf.</p>
+      <p id="bkMsg" class="copy-feedback"></p>
+      <button class="primary-btn" id="bkGo" onclick="doBackup()">Sichern</button>
+      <button class="link-btn" style="width:100%;text-align:center;" onclick="closeBackupDialog()">Abbrechen</button>
+    </div>
+  </div>
+
   <div id="settingsLayer" class="hidden overlay">
     <div class="overlay-card">
       <h2>👤 Dein Profil</h2>
@@ -106,8 +120,9 @@
       </div>
       <p id="setMsg" class="copy-feedback"></p>
       <label>Sicherung (Chats + Zugang) – für Gerätewechsel</label>
+      <p id="bkLast" style="font-size:0.7rem;color:#7a98aa;margin:-0.2rem 0 0.5rem;"></p>
       <div class="copy-row">
-        <button onclick="exportBackup()">Sichern</button>
+        <button onclick="openBackupDialog()">Sichern</button>
         <button onclick="document.getElementById('restoreFile').click()">Wiederherstellen</button>
         <input type="file" id="restoreFile" accept=".json,application/json" class="hidden" onchange="importBackup(this)">
       </div>
@@ -252,6 +267,7 @@ async function saveRoomMessages(room, msgs) {
   try {
     const enc = await encryptLocalData(msgs);
     localStorage.setItem(CHAT_PREFIX + room, enc);
+    noteChange();
   } catch (e) {
     console.error('[Crypto] Verschlüsselung fehlgeschlagen für', room, e);
   }
@@ -373,6 +389,8 @@ async function createProfile() {
 
 function startApp() {
   migrateMeta();
+  // Browser soll die Chats nicht bei Platzmangel löschen
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('chatListScreen').style.display = 'block';
   try { initWebRTC(); } catch (e) { console.warn('[P2P]', e); }
@@ -633,6 +651,7 @@ function showSettings() {
   document.getElementById('setId').value = fmtId(CODE);
   document.getElementById('setName').value = (PROFILE && PROFILE.name) || '';
   document.getElementById('setMsg').textContent = '';
+  { const b = bkInfo(); document.getElementById('bkLast').textContent = b.ts ? `Letzte Sicherung: ${fmtDay(b.ts)}${changesSince() ? ' · seitdem Neues' : ' · alles gesichert'}` : 'Noch keine Sicherung'; }
   document.getElementById('settingsLayer').classList.remove('hidden');
 }
 function hideSettings() { document.getElementById('settingsLayer').classList.add('hidden'); }
@@ -668,24 +687,106 @@ async function saveName() {
   } catch (e) { setMsg('Keine Verbindung – bitte später erneut versuchen'); }
 }
 
-function exportBackup() {
-  const data = { app: 'spot-chat', v: 1, items: {} };
-  Object.keys(localStorage).filter(k => k.startsWith('sm_chat_')).forEach(k => { data.items[k] = localStorage.getItem(k); });
-  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+// ── Sicherung ───────────────────────────────────────────────────────────────
+const BK_KEY = 'sm_chat_bk', CHG_KEY = 'sm_chat_chg', SNOOZE_KEY = 'sm_chat_bk_snooze';
+function bkInfo() { try { return JSON.parse(lsGet(BK_KEY) || '{}') || {}; } catch (e) { return {}; } }
+function chgNow() { return parseInt(lsGet(CHG_KEY) || '0', 10) || 0; }
+function noteChange() { lsSet(CHG_KEY, String(chgNow() + 1)); }
+function changesSince() { return Math.max(0, chgNow() - (bkInfo().chg || 0)); }
+function fmtDay(ts) { const d = new Date(ts); return `${d.getDate()}.${d.getMonth() + 1}.`; }
+// Erinnerung: es gibt Neues seit der letzten Sicherung (nie gesichert → gleich; sonst höchstens einmal am Tag)
+function backupDue() {
+  if (!CODE || changesSince() <= 0) return false;
+  if (Date.now() < (parseInt(lsGet(SNOOZE_KEY) || '0', 10) || 0)) return false;
+  const b = bkInfo();
+  return !b.ts || Date.now() - b.ts >= 86400000 || changesSince() >= 40;
+}
+function updateBackupBar() {
+  const el = document.getElementById('backupBar');
+  if (!el) return;
+  if (!backupDue()) { el.className = 'backup-bar hidden'; el.innerHTML = ''; return; }
+  const b = bkInfo();
+  el.className = 'backup-bar';
+  el.innerHTML = `<span>💾 ${b.ts ? 'Neue Chats seit deiner Sicherung vom ' + fmtDay(b.ts) + '.' : 'Noch keine Sicherung – schütze deine Chats vor Verlust.'}</span>
+    <span class="bk-btns"><button class="note-btn" onclick="openBackupDialog()">Jetzt sichern</button><button class="note-btn ghost" onclick="snoozeBackup()">Später</button></span>`;
+}
+function snoozeBackup() { lsSet(SNOOZE_KEY, String(Date.now() + 86400000)); updateBackupBar(); }
+let BK_FROM_SETTINGS = false;
+function openBackupDialog() {
+  BK_FROM_SETTINGS = !document.getElementById('settingsLayer').classList.contains('hidden');
+  document.getElementById('bkPass').value = '';
+  document.getElementById('bkMsg').textContent = '';
+  document.getElementById('settingsLayer').classList.add('hidden');
+  document.getElementById('backupLayer').classList.remove('hidden');
+}
+function closeBackupDialog() { document.getElementById('backupLayer').classList.add('hidden'); }
+function bkB64(buf) { let s = ''; new Uint8Array(buf).forEach(b => s += String.fromCharCode(b)); return btoa(s); }
+function bkUnB64(str) { const s = atob(str); const a = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; }
+async function bkKey(pass, salt, it) {
+  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: it, hash: 'SHA-256' }, k, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function bkEncrypt(text, pass) {
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12)), it = 200000;
+  const key = await bkKey(pass, salt, it);
+  const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(text));
+  return { app: 'spot-chat', v: 2, enc: { kdf: 'PBKDF2-SHA256', it, salt: bkB64(salt), iv: bkB64(iv), data: bkB64(data) } };
+}
+async function bkDecrypt(obj, pass) {
+  const e = obj.enc, key = await bkKey(pass, bkUnB64(e.salt), e.it);
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bkUnB64(e.iv) }, key, bkUnB64(e.data));
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+function bkDownload(file) {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `spot-chat-sicherung-${new Date().toISOString().slice(0, 10)}.json`;
+  a.href = URL.createObjectURL(file); a.download = file.name;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-  setMsg('✅ Sicherung erstellt – sicher aufbewahren, sie enthält deinen Zugang');
 }
-
+async function doBackup() {
+  const btn = document.getElementById('bkGo'), msg = document.getElementById('bkMsg');
+  const pass = document.getElementById('bkPass').value;
+  const prevBk = lsGet(BK_KEY), prevSnooze = lsGet(SNOOZE_KEY);
+  btn.disabled = true; msg.textContent = '';
+  try {
+    // Sicherungsstand zuerst setzen, damit er auch in der Datei steht
+    lsSet(BK_KEY, JSON.stringify({ ts: Date.now(), chg: chgNow() }));
+    lsSet(SNOOZE_KEY, '0');
+    const data = { app: 'spot-chat', v: 1, items: {} };
+    Object.keys(localStorage).filter(k => k.startsWith('sm_chat_')).forEach(k => { data.items[k] = localStorage.getItem(k); });
+    const out = pass ? await bkEncrypt(JSON.stringify(data), pass) : data;
+    const file = new File([JSON.stringify(out)], `spot-chat-sicherung-${new Date().toISOString().slice(0, 10)}.json`, { type: 'application/json' });
+    let done = false;
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: 'SpotMe Messenger – Sicherung' }); done = true; }
+      catch (e) { if (e && e.name === 'AbortError') done = false; else { bkDownload(file); done = true; } }
+    } else { bkDownload(file); done = true; }
+    if (!done) {
+      if (prevBk === null) localStorage.removeItem(BK_KEY); else lsSet(BK_KEY, prevBk);
+      if (prevSnooze === null) localStorage.removeItem(SNOOZE_KEY); else lsSet(SNOOZE_KEY, prevSnooze);
+      msg.textContent = 'Abgebrochen – nichts gesichert.';
+    } else {
+      closeBackupDialog(); updateBackupBar();
+      if (BK_FROM_SETTINGS) setTimeout(() => { try { showSettings(); setMsg(pass ? '✅ Gesichert (mit Passwort)' : '✅ Gesichert – sicher aufbewahren, die Datei enthält deinen Zugang'); } catch (e) {} }, 0);
+    }
+  } catch (e) {
+    console.error('[Backup]', e);
+    if (prevBk === null) localStorage.removeItem(BK_KEY); else lsSet(BK_KEY, prevBk);
+    msg.textContent = 'Sicherung fehlgeschlagen.';
+  }
+  btn.disabled = false;
+}
 async function importBackup(input) {
   const f = input.files && input.files[0];
   input.value = '';
   if (!f) return;
   try {
-    const data = JSON.parse(await f.text());
+    let data = JSON.parse(await f.text());
+    if (data && data.enc) {
+      const pass = prompt('Diese Sicherung ist mit einem Passwort geschützt. Passwort:');
+      if (pass === null) return;
+      try { data = await bkDecrypt(data, pass); } catch (e) { setMsg('Passwort falsch oder Datei beschädigt'); return; }
+    }
     const items = data && data.app === 'spot-chat' && data.items;
     if (!items || !items.sm_chat_code || !items.sm_chat_token) throw new Error();
     if (!confirm('Aktuelles Profil auf diesem Gerät durch die Sicherung ersetzen?')) return;
@@ -923,6 +1024,7 @@ async function startNewChat() {
 // ── CHAT LIST ─────────────────────────────────────────────────────────────
 async function renderChatList() {
   renderClosedList();
+  updateBackupBar();
   const container = document.getElementById('chatList');
   if (!CODE) {
     container.innerHTML = '<p class="text-center" style="padding:2rem;color:var(--muted2);">Keine Chats</p>';

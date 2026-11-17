@@ -798,3 +798,10 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
 .closed-item { display: flex; align-items: center; gap: 0.7rem; padding: 0.5rem 0; border-top: 1px solid var(--bord2, rgba(255,255,255,0.11)); }
 .closed-info { flex: 1; min-width: 0; }
 .closed-hint { font-size: 0.72rem; margin: 0.4rem 0 0; }
+
+/* Sicherungs-Leiste */
+.backup-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 0.8rem; margin: 0.6rem 1rem; padding: 0.65rem 0.9rem; border-radius: 14px; background: rgba(255, 159, 0, 0.12); border: 1px solid rgba(255, 159, 0, 0.35); font-size: 0.8rem; line-height: 1.35; }
+.backup-bar.hidden { display: none; }
+.backup-bar .bk-btns { display: flex; gap: 0.4rem; margin-left: auto; }
+.backup-bar .note-btn { margin-left: 0; }
+.note-btn.ghost { border-color: var(--bord2, rgba(255,255,255,0.2)); color: var(--muted2, #7a98aa); }
