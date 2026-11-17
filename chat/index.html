@@ -1486,7 +1486,8 @@ async function pollOnce() {
 
     try {
       // ── 1. Nachrichten abholen (wie bisher) ──
-      const res = await tfetch(`${API}/messages/${CODE}?spot_type=messenger_chat&token=${encodeURIComponent(TOKEN)}`);
+      const actQ = (CURRENT_ROOM && PARTNER_CODE && !document.hidden) ? `&active=${encodeURIComponent(PARTNER_CODE)}` : '';
+      const res = await tfetch(`${API}/messages/${CODE}?spot_type=messenger_chat&token=${encodeURIComponent(TOKEN)}${actQ}`);
       if (res.ok) {
         const newMsgs = await res.json();
         if (newMsgs.length) {
