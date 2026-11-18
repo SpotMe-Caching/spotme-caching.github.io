@@ -16,7 +16,7 @@
   "dir": "auto",
   "icons": [
     {
-      "src": "https://spotme-caching.github.io/chat/icons/spot_192.png",
+      "src": "https://spotme-caching.github.io/chat/icons/pwa_192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
