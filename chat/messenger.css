@@ -874,3 +874,28 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
 #messages.comic .message.cm.cm-whisper{--fill:#eef2f5}
 #messages.comic .message.cm.cm-love{--fill:#ffd3e4}
 #messages.comic .message.cm.cm-wow{background:#fff}
+
+/* ── Weitere Blasen ─────────────────────────────────────────────────────── */
+.mood-tray button.more{min-width:3rem;color:#ff9f00}
+.mood-tray:not(.more) button.mx{display:none}
+.snd-row{margin:-.2rem 0 .6rem}
+.snd-row select{flex:1;background:#1a1f26;color:#fff;border:1px solid #333;border-radius:8px;padding:.5rem}
+.cm-badge.w{width:auto;min-width:26px;padding:0 7px;border-radius:14px;font-size:.78rem;white-space:nowrap}
+@keyframes cmShiver{0%,100%{transform:translateX(0) rotate(var(--tilt,0deg))}25%{transform:translateX(-2px) rotate(var(--tilt,0deg))}75%{transform:translateX(2px) rotate(var(--tilt,0deg))}}
+@keyframes cmShake{0%,100%{transform:translate(0,0) rotate(var(--tilt,0deg))}20%{transform:translate(-3px,1px) rotate(-1deg)}40%{transform:translate(3px,-1px) rotate(1deg)}60%{transform:translate(-2px,0) rotate(-.6deg)}80%{transform:translate(2px,1px) rotate(.6deg)}}
+@keyframes cmWobble{0%,100%{transform:rotate(var(--tilt,0deg))}25%{transform:rotate(-2.2deg) translateY(-2px)}75%{transform:rotate(2.2deg) translateY(-2px)}}
+#messages.comic .cm-scare::before,#messages.comic .cm-anger::before,#messages.comic .cm-laugh::before,#messages.comic .cm-sad::before,#messages.comic .cm-tired::before,#messages.comic .cm-idea::before,#messages.comic .cm-cool::before,#messages.comic .cm-scare::after,#messages.comic .cm-anger::after,#messages.comic .cm-laugh::after,#messages.comic .cm-sad::after,#messages.comic .cm-tired::after,#messages.comic .cm-idea::after,#messages.comic .cm-cool::after{content:"";position:absolute;width:0;height:0}
+#messages.comic .cm-scare::before,#messages.comic .cm-anger::before,#messages.comic .cm-laugh::before,#messages.comic .cm-sad::before,#messages.comic .cm-tired::before,#messages.comic .cm-idea::before,#messages.comic .cm-cool::before{bottom:-17px;border-top:17px solid var(--ink)}
+#messages.comic .cm-scare::after,#messages.comic .cm-anger::after,#messages.comic .cm-laugh::after,#messages.comic .cm-sad::after,#messages.comic .cm-tired::after,#messages.comic .cm-idea::after,#messages.comic .cm-cool::after{bottom:-10px;border-top:12px solid var(--fill)}
+#messages.comic .message.cm.cm-scare{--fill:#d9f7e4;border-radius:16px;animation:cmShiver .12s 8}
+#messages.comic .message.cm.cm-anger{--fill:#ff4d3f;--sh:#7a0000;color:#fff;border-radius:6px;font-weight:900;text-shadow:1px 1px 0 var(--ink);animation:cmShake .14s 7}
+#messages.comic .message.cm.cm-anger .msg-time{color:#fff}
+#messages.comic .message.cm.cm-laugh{--fill:#fff0a8;border-radius:24px;animation:cmWobble .5s 3}
+#messages.comic .message.cm.cm-sad{--fill:#cfe3ff;color:#26405f;border-radius:18px 18px 18px 30px;font-style:italic}
+#messages.comic .message.cm.cm-tired{--fill:#e6e6ec;color:#555b66;font-style:italic;border-radius:22px;transform:rotate(calc(var(--tilt,0deg) - 1.5deg))}
+#messages.comic .message.cm.cm-idea{--fill:#fffbd0;border-radius:20px}
+#messages.comic .message.cm.cm-cool{--fill:#202a35;--sh:#00e5ff;color:#fff;border-radius:22px}
+#messages.comic .message.cm.cm-cool .msg-time{color:#fff}
+#messages.comic .message.cm.cm-narrator{--fill:#ffe9a8;--sh:#ff9f00;border-radius:2px;margin-bottom:6px;max-width:92%;font-family:"Courier New",monospace;font-weight:700;font-size:.85rem;text-transform:uppercase;letter-spacing:.04em;transform:rotate(0deg)}
+#messages.comic .message.cm.cm-narrator::before,#messages.comic .message.cm.cm-narrator::after{display:none}
+@media (prefers-reduced-motion:reduce){#messages.comic .message.cm{animation:none!important}}

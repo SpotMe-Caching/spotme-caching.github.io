@@ -124,6 +124,8 @@
       </div>
       <p id="setMsg" class="copy-feedback"></p>
       <label class="comic-row"><input type="checkbox" id="comicToggle" onchange="setComic(this.checked)"> 🗯️ Comic-Stil im Chat (Sprechblasen)</label>
+      <label class="comic-row"><input type="checkbox" id="sndToggle" onchange="setSnd(this.checked)"> 🔊 Töne zu den Sprechblasen</label>
+      <div class="copy-row snd-row"><select id="sndVol" onchange="setSndVol(this.value)"><option value="1">leise</option><option value="2">mittel</option><option value="3">laut</option></select><button onclick="testSnd()">▶ Testen</button></div>
       <label>Sicherung (Chats + Zugang) – für Gerätewechsel</label>
       <p id="bkLast" style="font-size:0.7rem;color:#7a98aa;margin:-0.2rem 0 0.5rem;"></p>
       <div class="copy-row">
@@ -170,6 +172,15 @@
     <button data-mood="📣" onclick="pickMood('📣')">📣<span>Rufen</span></button>
     <button data-mood="🤫" onclick="pickMood('🤫')">🤫<span>Flüstern</span></button>
     <button data-mood="💗" onclick="pickMood('💗')">💗<span>Lieb</span></button>
+    <button class="mx" data-mood="😱" onclick="pickMood('😱')">😱<span>Schreck</span></button>
+    <button class="mx" data-mood="😡" onclick="pickMood('😡')">😡<span>Wut</span></button>
+    <button class="mx" data-mood="😂" onclick="pickMood('😂')">😂<span>Lachen</span></button>
+    <button class="mx" data-mood="😢" onclick="pickMood('😢')">😢<span>Traurig</span></button>
+    <button class="mx" data-mood="😴" onclick="pickMood('😴')">😴<span>Müde</span></button>
+    <button class="mx" data-mood="💡" onclick="pickMood('💡')">💡<span>Idee</span></button>
+    <button class="mx" data-mood="😎" onclick="pickMood('😎')">😎<span>Cool</span></button>
+    <button class="mx" data-mood="📜" onclick="pickMood('📜')">📜<span>Erzähler</span></button>
+    <button class="more" id="moodMore" onclick="toggleMoodMore()">▸<span>mehr</span></button>
   </div>
   <div class="input-bar">
     <button id="moodBtn" class="img-btn" onclick="toggleMoodTray()" aria-label="Stimmung" title="Stimmung der Sprechblase">💬</button>
@@ -667,6 +678,8 @@ function showSettings() {
   document.getElementById('setName').value = (PROFILE && PROFILE.name) || '';
   document.getElementById('setMsg').textContent = '';
   document.getElementById('comicToggle').checked = comicOn();
+  document.getElementById('sndToggle').checked = sndOn();
+  document.getElementById('sndVol').value = sndVol();
   { const b = bkInfo(); document.getElementById('bkLast').textContent = b.ts ? `Letzte Sicherung: ${fmtDay(b.ts)}${changesSince() ? ' · seitdem Neues' : ' · alles gesichert'}` : 'Noch keine Sicherung'; }
   document.getElementById('settingsLayer').classList.remove('hidden');
 }
@@ -945,6 +958,7 @@ async function initWebRTC() {
         ts: msg.ts || Date.now()
       });
       await saveRoomMessages(room, msgs);
+      playIncoming(msg.text);
     }
 
     // UI aktualisieren
@@ -1067,7 +1081,9 @@ async function renderChatList() {
     try { msgs = await decryptLocalData(localStorage.getItem(key)); } catch (e) { msgs = []; }
     if (!Array.isArray(msgs) || !msgs.length) continue;
     const last = msgs[msgs.length - 1];
-    const prev = last.text.length > 30 ? last.text.slice(0, 30) + '…' : last.text;
+    const pv = parseMood(last.text || '');
+    const pvt = pv.text.length > 30 ? pv.text.slice(0, 30) + '…' : pv.text;
+    const prev = (pv.mood !== 'speech' && pv.mood !== 'question' ? MOOD_ICON[pv.mood] + ' ' : '') + pvt;
     const other = [...msgs].reverse().find(m => m.from !== CODE);
     byRoom[room] = {
       partnerCode,
@@ -1330,9 +1346,10 @@ async function renderMessages(appendOnly = false) {
       : escapeHtml(m.text);
     if (m.kind !== 'image' && comicOn()) {
       const pm = parseMood(m.text);
-      const badge = { question: '?', shout: '!', love: '♥', whisper: '…' }[pm.mood] || '';
+      const BADGES = { question: '?', shout: '!', love: '♥', whisper: '…', scare: '!?', anger: '#@!', laugh: 'HA', sad: '💧', tired: 'Zzz', idea: '💡', cool: '😎' };
+      const badge = BADGES[pm.mood] || '';
       const tilt = ((m.ts % 5) - 2) * 0.35;
-      return `<div class="message ${isMine ? 'mine' : 'other'} cm cm-${pm.mood}" style="--tilt:${tilt}deg">${badge ? `<span class="cm-badge">${badge}</span>` : ''}<span class="cm-txt">${escapeHtml(pm.text)}</span><div class="msg-time">${time}${statusTick}</div></div>`;
+      return `<div class="message ${isMine ? 'mine' : 'other'} cm cm-${pm.mood}" style="--tilt:${tilt}deg">${badge ? `<span class="cm-badge${/^[?!♥…]$/.test(badge) || /\p{Extended_Pictographic}/u.test(badge) ? '' : ' w'}">${badge}</span>` : ''}<span class="cm-txt">${escapeHtml(pm.text)}</span><div class="msg-time">${time}${statusTick}</div></div>`;
     }
     return `<div class="message ${isMine ? 'mine' : 'other'}${m.kind === 'image' ? ' has-img' : ''}">${body}<div class="msg-time">${time}${statusTick}</div></div>`;
   };
@@ -1358,13 +1375,16 @@ async function renderMessages(appendOnly = false) {
 // Die Stimmung reist als Emoji am Nachrichtenanfang ("💥 Echt jetzt!") – kein Server-Umbau,
 // alte Versionen zeigen einfach das Emoji. Frage wird automatisch bei "?" am Ende erkannt.
 const COMIC_KEY = 'sm_chat_comic';        // '1' an, '0' aus, leer = noch nicht entschieden
-const MOODS = { '🗯': 'thought', '💥': 'wow', '📣': 'shout', '🤫': 'whisper', '💗': 'love' };
-const MOOD_ICON = { thought: '🗯️', wow: '💥', shout: '📣', whisper: '🤫', love: '💗' };
+const MOODS = { '🗯': 'thought', '💥': 'wow', '📣': 'shout', '🤫': 'whisper', '💗': 'love',
+  '😱': 'scare', '😡': 'anger', '😂': 'laugh', '😢': 'sad', '😴': 'tired', '💡': 'idea', '😎': 'cool', '📜': 'narrator' };
+const MOOD_ICON = { speech: '💬', question: '❓', thought: '🗯️', wow: '💥', shout: '📣', whisper: '🤫', love: '💗',
+  scare: '😱', anger: '😡', laugh: '😂', sad: '😢', tired: '😴', idea: '💡', cool: '😎', narrator: '📜' };
+const MOOD_RE = new RegExp('^(' + Object.keys(MOODS).map(k => k === '🗯' ? '🗯\\uFE0F?' : k).join('|') + ')\\s+([\\s\\S]*)$', 'u');
 let CUR_MOOD = '';
 function comicOn() { return lsGet(COMIC_KEY) === '1'; }
 function parseMood(text) {
   const t = String(text || '');
-  const m = t.match(/^(🗯️?|💥|📣|🤫|💗)\s+([\s\S]*)$/u);
+  const m = t.match(MOOD_RE);
   if (m) return { mood: MOODS[m[1].replace('️', '')], text: m[2] };
   if (/\?[!?\s]*$/.test(t.trim())) return { mood: 'question', text: t };
   return { mood: 'speech', text: t };
@@ -1387,6 +1407,11 @@ function updateComicHint() {
   el.innerHTML = `<span>🗯️ <b>Neu:</b> Comic-Stil – Sprechblasen mit Gefühl! Du kannst es jederzeit im Profil ändern.</span>
     <span class="bk-btns"><button class="note-btn" onclick="setComic(true)">Ausprobieren</button><button class="note-btn ghost" onclick="setComic(false)">Nein danke</button></span>`;
 }
+function toggleMoodMore() {
+  const t = document.getElementById('moodTray'); t.classList.toggle('more');
+  const b = document.getElementById('moodMore'); const on = t.classList.contains('more');
+  b.innerHTML = (on ? '◂' : '▸') + '<span>' + (on ? 'weniger' : 'mehr') + '</span>';
+}
 function toggleMoodTray() { document.getElementById('moodTray').classList.toggle('hidden'); }
 function pickMood(m) {
   CUR_MOOD = m;
@@ -1396,6 +1421,80 @@ function pickMood(m) {
   document.getElementById('moodTray').classList.add('hidden');
   document.getElementById('msgInput').focus();
 }
+
+
+// ── TÖNE: alles live per WebAudio erzeugt (keine Audiodateien) ─────────────
+// Beim Senden (leiser Bestätigungston) und beim Empfangen (voll). Nur bei sichtbarer Seite.
+const SND_KEY = 'sm_chat_snd', SNDV_KEY = 'sm_chat_snd_vol';
+let AC = null;
+function sndOn() { return lsGet(SND_KEY) === '1'; }
+function sndVol() { const v = lsGet(SNDV_KEY); return v === '1' || v === '3' ? v : '2'; }
+function setSnd(on) { lsSet(SND_KEY, on ? '1' : '0'); if (on) { sndCtx(); testSnd(); } }
+function setSndVol(v) { lsSet(SNDV_KEY, v); testSnd(); }
+function testSnd() { playMood('wow', 'in', true); }
+function sndCtx() {
+  try {
+    if (!AC) { const C = window.AudioContext || window.webkitAudioContext; if (!C) return null; AC = new C(); }
+    if (AC.state === 'suspended') AC.resume().catch(() => {});
+    return AC;
+  } catch (e) { return null; }
+}
+// Browser erlaubt Ton erst nach einer Berührung → beim ersten Tippen freischalten
+document.addEventListener('pointerdown', () => { if (sndOn()) sndCtx(); }, { passive: true });
+function sndTone(c, out, t, o) {
+  const osc = c.createOscillator(), g = c.createGain(), d = o.d || 0.15;
+  osc.type = o.type || 'sine';
+  osc.frequency.setValueAtTime(o.f, t);
+  if (o.f2) osc.frequency.exponentialRampToValueAtTime(o.f2, t + d);
+  if (o.vib) { const l = c.createOscillator(), lg = c.createGain(); l.frequency.value = o.vib; lg.gain.value = o.f * 0.06; l.connect(lg); lg.connect(osc.frequency); l.start(t); l.stop(t + d + 0.05); }
+  let node = osc;
+  if (o.lp) { const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = o.lp; osc.connect(f); node = f; }
+  node.connect(g); g.connect(out);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(o.g || 0.2, t + (o.at || 0.008));
+  g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+  osc.start(t); osc.stop(t + d + 0.05);
+}
+function sndNoise(c, out, t, o) {
+  const len = Math.max(1, Math.floor(c.sampleRate * o.d)), buf = c.createBuffer(1, len, c.sampleRate), data = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+  const src = c.createBufferSource(); src.buffer = buf;
+  const f = c.createBiquadFilter(); f.type = o.type || 'bandpass'; f.frequency.value = o.f || 2000;
+  const g = c.createGain();
+  src.connect(f); f.connect(g); g.connect(out);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(o.g || 0.1, t + (o.at || 0.01));
+  g.gain.exponentialRampToValueAtTime(0.0001, t + o.d);
+  src.start(t); src.stop(t + o.d + 0.02);
+}
+const SOUNDS = {
+  speech:  (c, o, t) => sndTone(c, o, t, { f: 560, f2: 300, d: 0.09, g: 0.28 }),
+  question:(c, o, t) => { sndTone(c, o, t, { f: 520, d: 0.13, type: 'triangle', g: 0.25 }); sndTone(c, o, t + 0.13, { f: 700, d: 0.2, type: 'triangle', g: 0.25 }); },
+  thought: (c, o, t) => sndTone(c, o, t, { f: 420, d: 0.5, g: 0.2, vib: 7, at: 0.12 }),
+  wow:     (c, o, t) => { sndNoise(c, o, t, { d: 0.2, f: 1400, type: 'lowpass', g: 0.35 }); sndTone(c, o, t, { f: 120, f2: 45, d: 0.4, g: 0.5 }); sndTone(c, o, t, { f: 900, f2: 220, d: 0.16, type: 'square', g: 0.12, lp: 2500 }); },
+  shout:   (c, o, t) => { sndTone(c, o, t, { f: 300, d: 0.16, type: 'sawtooth', g: 0.2, lp: 1600 }); sndTone(c, o, t + 0.19, { f: 340, d: 0.24, type: 'sawtooth', g: 0.2, lp: 1600 }); },
+  whisper: (c, o, t) => sndNoise(c, o, t, { d: 0.4, f: 3200, g: 0.07, at: 0.15 }),
+  love:    (c, o, t) => [784, 988, 1175].forEach((f, i) => sndTone(c, o, t + i * 0.1, { f, d: 0.3, g: 0.2 })),
+  scare:   (c, o, t) => sndTone(c, o, t, { f: 400, f2: 1500, d: 0.32, type: 'sawtooth', g: 0.14, lp: 2600, vib: 14 }),
+  anger:   (c, o, t) => { sndTone(c, o, t, { f: 95, f2: 70, d: 0.42, type: 'sawtooth', g: 0.3, lp: 420, vib: 22 }); sndTone(c, o, t, { f: 101, f2: 74, d: 0.42, type: 'square', g: 0.12, lp: 380 }); },
+  laugh:   (c, o, t) => [600, 520, 600, 520].forEach((f, i) => sndTone(c, o, t + i * 0.11, { f, d: 0.08, type: 'triangle', g: 0.25 })),
+  sad:     (c, o, t) => { sndTone(c, o, t, { f: 440, f2: 330, d: 0.28, g: 0.2, vib: 6 }); sndTone(c, o, t + 0.28, { f: 330, f2: 230, d: 0.4, g: 0.2, vib: 6 }); },
+  tired:   (c, o, t) => sndTone(c, o, t, { f: 320, f2: 170, d: 0.7, g: 0.16, at: 0.2 }),
+  idea:    (c, o, t) => { sndTone(c, o, t, { f: 1319, d: 0.5, g: 0.22 }); sndTone(c, o, t + 0.09, { f: 1760, d: 0.45, g: 0.14 }); },
+  cool:    (c, o, t) => { sndTone(c, o, t, { f: 200, f2: 340, d: 0.28, type: 'sawtooth', g: 0.2, lp: 700 }); sndNoise(c, o, t, { d: 0.03, f: 5000, type: 'highpass', g: 0.15 }); },
+  narrator:(c, o, t) => [0, 0.06, 0.12].forEach(d => sndNoise(c, o, t + d, { d: 0.025, f: 4500, type: 'highpass', g: 0.22 }))
+};
+function playMood(mood, dir, force) {
+  if (!force && (!sndOn() || document.hidden)) return;
+  const c = sndCtx();
+  if (!c) return;
+  const fn = SOUNDS[mood] || SOUNDS.speech;
+  const master = c.createGain();
+  master.gain.value = ({ '1': 0.45, '2': 1, '3': 1.8 }[sndVol()]) * (dir === 'out' ? 0.5 : 1);
+  master.connect(c.destination);
+  try { fn(c, master, c.currentTime + 0.02); } catch (e) {}
+}
+function playIncoming(text) { playMood(parseMood(text).mood, 'in'); }
 
 // ── SEND MESSAGE (P2P Priority + Fallback) ────────────────────────────────
 // ── EINGABE: mehrzeilig, Auto-Grow, Strg/Cmd+Enter zum Senden ─────────────
@@ -1428,7 +1527,7 @@ async function sendMessage() {
   let text = input.value.trim().replace(/\n{3,}/g, '\n\n');
 
   if (!text) return;
-  if (CUR_MOOD && !parseMood(text).mood.match(/^(thought|wow|shout|whisper|love)$/)) text = CUR_MOOD + ' ' + text;
+  if (CUR_MOOD && !MOOD_RE.test(text)) text = CUR_MOOD + ' ' + text;
   if (CUR_MOOD) pickMood('');
 
   if (!PARTNER_CODE) {
@@ -1450,6 +1549,7 @@ async function sendMessage() {
   await renderMessages(true);
   input.value = '';
   input.style.height = 'auto';
+  playMood(parseMood(text).mood, 'out');
 
   // Priority: P2P → Server Fallback
   // P2P nur nach der ersten Antwort (beide kennen sich) – die erste Runde läuft über den Server (Limits)
@@ -1559,6 +1659,7 @@ async function pollOnce() {
         if (newMsgs.length) {
           let renderedAny = false;
           let listNeedsUpdate = false;
+          let sndText = null;
 
           for (const m of newMsgs) {
             const room = [CODE, m.sender_code].sort().join('-');
@@ -1595,6 +1696,7 @@ async function pollOnce() {
               });
               await saveRoomMessages(room, msgs);
               listNeedsUpdate = true;
+              sndText = m.message;
 
               if (room === CURRENT_ROOM) {
                 markSeen(room);
@@ -1604,6 +1706,8 @@ async function pollOnce() {
               }
             }
           }
+
+          if (sndText !== null) playIncoming(sndText);
 
           // Empfang bestätigen – erst dann löscht der Server die Nachrichten
           fetch(`${API}/messages/${CODE}/ack`, {
