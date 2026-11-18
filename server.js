@@ -437,6 +437,10 @@ async function initDB() {
       answered BOOLEAN NOT NULL DEFAULT FALSE, init_cnt INTEGER NOT NULL DEFAULT 0,
       created_at BIGINT NOT NULL, PRIMARY KEY (lo, hi))`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_msgr_pairs_init ON messenger_pairs(initiator, created_at)`);
+    // Messenger: gegenseitig verifizierte Paare (grüner Haken). Erst "beide bestätigt" zählt.
+    await pool.query(`CREATE TABLE IF NOT EXISTS messenger_verified (
+      lo TEXT NOT NULL, hi TEXT NOT NULL, lo_ok BOOLEAN NOT NULL DEFAULT FALSE, hi_ok BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at BIGINT NOT NULL, PRIMARY KEY (lo, hi))`);
     await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_visit BIGINT`);
     // Länder getrennt (ES/DE/…): Bestand ist Spanien → Default 'ES'
     await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS country TEXT DEFAULT 'ES'`);
@@ -1153,6 +1157,7 @@ app.post("/api/messenger/close", async (req, res) => {
     if (!(await authCheck(code, token))) return res.status(403).json({ error: "Ungültiger Token" });
     await pool.query("INSERT INTO messenger_closed (owner, other, created_at) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING", [code, partner, Date.now()]);
     await pool.query("DELETE FROM messenger_pairs WHERE lo=$1 AND hi=$2", [code < partner ? code : partner, code < partner ? partner : code]);
+    await pool.query("DELETE FROM messenger_verified WHERE lo=$1 AND hi=$2", [code < partner ? code : partner, code < partner ? partner : code]);
     // noch nicht abgeholte Nachrichten des Partners an mich verwerfen
     await pool.query("DELETE FROM offline_messages WHERE recipient=$1 AND sender_code=$2 AND spot_type='messenger_chat'", [code, partner]);
     // Hinweis für den Partner (läuft über das normale Abholen, auch wenn er gerade offline ist; kein Push)
@@ -1165,6 +1170,48 @@ app.post("/api/messenger/close", async (req, res) => {
     res.json({ success: true });
   } catch (e) {
     console.error("POST /api/messenger/close:", e.message);
+    res.status(500).json({ error: "Datenbankfehler" });
+  }
+});
+
+// Verifizierung (grüner Haken): jede Seite bestätigt für sich; zählt erst, wenn beide bestätigt haben. on=false hebt auf.
+app.post("/api/messenger/verify", async (req, res) => {
+  const code = normCode(req.body?.code);
+  const partner = normCode(req.body?.partner);
+  const token = String(req.body?.token || "");
+  const on = req.body?.on !== false;
+  if (!isMsgCode(code) || !isMsgCode(partner) || !token || code === partner) return res.status(400).json({ error: "code, partner und token erforderlich" });
+  try {
+    if (!(await authCheck(code, token))) return res.status(403).json({ error: "Ungültiger Token" });
+    const lo = code < partner ? code : partner, hi = code < partner ? partner : code;
+    if (!on) {
+      await pool.query("DELETE FROM messenger_verified WHERE lo=$1 AND hi=$2", [lo, hi]);
+      return res.json({ success: true, both: false });
+    }
+    const exists = await pool.query("SELECT 1 FROM profiles WHERE code=$1 LIMIT 1", [partner]);
+    if (!exists.rows.length) return res.status(404).json({ error: "Kontakt nicht gefunden" });
+    const mine = code === lo ? "lo_ok" : "hi_ok";
+    const r = await pool.query(
+      `INSERT INTO messenger_verified (lo, hi, ${mine}, created_at) VALUES ($1,$2,TRUE,$3)
+       ON CONFLICT (lo, hi) DO UPDATE SET ${mine}=TRUE RETURNING lo_ok, hi_ok`, [lo, hi, Date.now()]);
+    res.json({ success: true, both: !!(r.rows[0].lo_ok && r.rows[0].hi_ok) });
+  } catch (e) {
+    console.error("POST /api/messenger/verify:", e.message);
+    res.status(500).json({ error: "Datenbankfehler" });
+  }
+});
+
+// Anzahl gegenseitig verifizierter Kontakte (Grundlage für den späteren @Handle)
+app.get("/api/messenger/verified/:code", async (req, res) => {
+  const code = normCode(req.params.code);
+  const token = String(req.query.token || req.headers["x-spotme-token"] || "");
+  if (!isMsgCode(code) || !token) return res.status(400).json({ error: "code und token erforderlich" });
+  try {
+    if (!(await authCheck(code, token))) return res.status(403).json({ error: "Ungültiger Token" });
+    const r = await pool.query("SELECT COUNT(*)::int AS n FROM messenger_verified WHERE (lo=$1 OR hi=$1) AND lo_ok AND hi_ok", [code]);
+    res.json({ count: r.rows[0].n });
+  } catch (e) {
+    console.error("GET /api/messenger/verified:", e.message);
     res.status(500).json({ error: "Datenbankfehler" });
   }
 });
@@ -1474,6 +1521,7 @@ app.delete("/api/account/:code", async (req, res) => {
       await run("nachrichten", "DELETE FROM offline_messages WHERE recipient=$1 OR sender_code=$1", [code]);
       await run("messenger_stillgelegt", "DELETE FROM messenger_closed WHERE owner=$1 OR other=$1", [code]);
       await run("messenger_paare", "DELETE FROM messenger_pairs WHERE lo=$1 OR hi=$1", [code]);
+      await run("messenger_verifiziert", "DELETE FROM messenger_verified WHERE lo=$1 OR hi=$1", [code]);
       await run("live_folgen", "DELETE FROM live_followers WHERE follower_code=$1", [code]);
       await run("kommentare", "DELETE FROM profile_comments WHERE profile_code=$1 OR sender_code=$1", [code]);
       await run("bluesky", "DELETE FROM bluesky_accounts WHERE code=$1", [code]);
@@ -1843,7 +1891,9 @@ app.post("/api/message", async (req, res) => {
         sendPushToCode(
           recipient,
           "💬 Neue Nachricht",
-          `${String(sender_name || sender_code).slice(0, 50)}: ${clean.slice(0, 80)}`,
+          clean.startsWith("🔏")
+            ? `${String(sender_name || sender_code).slice(0, 50)}: 🔏 Verifizierung`
+            : `${String(sender_name || sender_code).slice(0, 50)}: ${clean.slice(0, 80)}`,
           isMsgCode(sender_code) ? "/chat/" : "/",
           "chat",
           `chat-${sender_code}`,
