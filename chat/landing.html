@@ -245,7 +245,7 @@ footer{border-top:1px solid var(--bord);padding:2.4rem 1.25rem;max-width:1100px;
 <header class="hero">
   <div class="badge"><i></i> Kostenlos · Ohne Konto · Open Source</div>
   <h1>Schreiben ohne Nummer.<br><span class="c2">Ohne E-Mail.</span> <span class="a">Ohne Spuren.</span></h1>
-  <div class="invite" id="invite">💌 Du wurdest eingeladen: Schreib mit der ID <b id="inviteId"></b>. Lege kurz deinen Namen fest – danach ist der Chat startklar.</div>
+  <div class="invite" id="invite">💌 Du wurdest eingeladen: Schreib mit <b id="inviteId"></b>. Lege kurz deinen Namen fest – danach ist der Chat startklar.</div>
   <p class="hero-sub">
     Der <b>SpotMe Messenger</b> braucht nur einen <b>Namen</b> – echt oder ausgedacht. Du bekommst eine ID wie <b>abc-def</b>, und wer sie kennt, kann dir schreiben. Er läuft als <b>Link auf deinem Handy</b>, ohne App-Store.
   </p>
@@ -415,6 +415,17 @@ footer{border-top:1px solid var(--bord);padding:2.4rem 1.25rem;max-width:1100px;
   var isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var standalone = false;
   try { standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) {}
+
+  // Kurzlink: ?Name → "@Name" anzeigen und an "Jetzt starten" weitergeben
+  try {
+    var hq = '', sp = new URLSearchParams(location.search), skip = ['add', 'neu', 'info', 'h', 'ref'];
+    sp.forEach(function (v, k) { if (!hq && v === '' && /^[A-Za-z][A-Za-z0-9_]{2,19}$/.test(k) && skip.indexOf(k.toLowerCase()) < 0) hq = k; });
+    if (hq) {
+      document.getElementById('inviteId').textContent = '@' + hq;
+      document.getElementById('invite').style.display = 'block';
+      document.querySelectorAll('.js-start').forEach(function (a) { a.setAttribute('href', 'index.html?neu=1&' + hq); });
+    }
+  } catch (e) {}
 
   // Einladungslink: ?add=abcdef → ID anzeigen und an "Jetzt starten" weitergeben
   try {

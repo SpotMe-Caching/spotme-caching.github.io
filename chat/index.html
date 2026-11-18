@@ -70,8 +70,8 @@
   <div id="newChatLayer" class="hidden overlay">
     <div class="overlay-card">
       <h2>💬 Neuer Chat</h2>
-      <p>Gib die ID deines Chatpartners ein, z. B. <b>abc-def</b>.</p>
-      <input type="text" id="newChatCode" maxlength="8" placeholder="abc-def" autocapitalize="off" autocomplete="off" style="width:100%;padding:0.6rem 0.75rem;border:1px solid #333;border-radius:8px;background:#1a1f26;color:#fff;font-size:1rem;text-align:center;margin-bottom:0.75rem;">
+      <p>Gib die ID deines Chatpartners ein, z. B. <b>abc-def</b> – oder seinen <b>@Handle</b>.</p>
+      <input type="text" id="newChatCode" maxlength="21" placeholder="abc-def oder @Name" autocapitalize="off" autocomplete="off" style="width:100%;padding:0.6rem 0.75rem;border:1px solid #333;border-radius:8px;background:#1a1f26;color:#fff;font-size:1rem;text-align:center;margin-bottom:0.75rem;">
       <p id="newChatError" class="error"></p>
       <button class="primary-btn" onclick="startNewChat()">Chat starten</button>
       <button type="button" class="link-btn" onclick="hideNewChatLayer()" style="width:100%;text-align:center;">Abbrechen</button>
@@ -117,6 +117,14 @@
         <button onclick="copyId()">Kopieren</button>
       </div>
       <button class="link-btn" style="width:100%;text-align:center;" onclick="shareId()">🔗 Link teilen</button>
+      <label>Dein @Handle (Kurzlink)</label>
+      <p id="hdInfo" style="font-size:0.72rem;color:#7a98aa;margin:-0.2rem 0 0.5rem;"></p>
+      <div class="copy-row" id="hdRow">
+        <input type="text" id="hdInput" maxlength="21" placeholder="@DeinName" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false">
+        <button onclick="claimHandle()">Speichern</button>
+      </div>
+      <button class="link-btn" id="hdShare" style="width:100%;text-align:center;display:none;" onclick="shareHandle()">🔗 Kurzlink teilen</button>
+      <button class="link-btn" id="hdFree" style="width:100%;text-align:center;display:none;" onclick="releaseHandle()">Handle freigeben</button>
       <label>Dein Name (die ID bleibt gleich)</label>
       <div class="copy-row">
         <input type="text" id="setName" maxlength="40">
@@ -426,6 +434,12 @@ function startApp() {
   initPushNotifications();
   renderChatList();
   pingVisit();
+  const hq = handleFromSearch(location.search);
+  if (hq) {
+    try { history.replaceState(null, '', location.pathname); } catch (e) {}
+    showNewChatLayer();
+    document.getElementById('newChatCode').value = '@' + hq;
+  }
   const add = new URLSearchParams(location.search).get('add');
   if (add) {
     try { history.replaceState(null, '', location.pathname); } catch (e) {}
@@ -684,9 +698,78 @@ function showSettings() {
   document.getElementById('sndVol').value = sndVol();
   { const b = bkInfo(); document.getElementById('bkLast').textContent = b.ts ? `Letzte Sicherung: ${fmtDay(b.ts)}${changesSince() ? ' · seitdem Neues' : ' · alles gesichert'}` : 'Noch keine Sicherung'; }
   document.getElementById('settingsLayer').classList.remove('hidden');
+  loadHandleInfo();
 }
 function hideSettings() { document.getElementById('settingsLayer').classList.add('hidden'); }
 function setMsg(t) { const el = document.getElementById('setMsg'); el.textContent = t; setTimeout(() => { if (el.textContent === t) el.textContent = ''; }, 3000); }
+
+
+// ── @HANDLE (Kurzlink /chat/?Name) ─────────────────────────────────────────
+let HD = { count: 0, min: 3, handle: null };
+const HANDLE_RE = /^[A-Za-z][A-Za-z0-9_]{2,19}$/;
+const RESERVED_Q = ['add', 'neu', 'info', 'h', 'ref'];
+function handleFromSearch(search) {
+  try { for (const [k, v] of new URLSearchParams(search)) if (v === '' && HANDLE_RE.test(k) && !RESERVED_Q.includes(k.toLowerCase())) return k; } catch (e) {}
+  return '';
+}
+function handleLink(hd) { return `${location.origin}/chat/?${hd}`; }
+async function loadHandleInfo() {
+  try {
+    const r = await tfetch(`${API}/messenger/verified/${CODE}?token=${encodeURIComponent(TOKEN)}`, {}, 10000);
+    if (r.ok) HD = await r.json();
+  } catch (e) {}
+  renderHandleInfo();
+}
+function renderHandleInfo() {
+  const info = document.getElementById('hdInfo'), row = document.getElementById('hdRow');
+  const share = document.getElementById('hdShare'), free = document.getElementById('hdFree'), inp = document.getElementById('hdInput');
+  if (!info) return;
+  if (HD.handle) {
+    info.innerHTML = `Dein Kurzlink: <b>${escapeHtml(handleLink(HD.handle).replace(/^https?:\/\//, ''))}</b>`;
+    row.style.display = ''; share.style.display = ''; free.style.display = '';
+    inp.value = '@' + HD.handle;
+  } else if ((HD.count || 0) >= (HD.min || 3)) {
+    info.textContent = `Du hast ${HD.count} verifizierte Kontakte ✔ – such dir einen @Handle aus. Er ersetzt deine ID nicht, du hast dann einen kurzen Link.`;
+    row.style.display = ''; share.style.display = 'none'; free.style.display = 'none';
+  } else {
+    info.textContent = `Ab ${HD.min || 3} verifizierten Kontakten (grüner Haken ✔) kannst du dir einen @Handle aussuchen. Aktuell: ${HD.count || 0}.`;
+    row.style.display = 'none'; share.style.display = 'none'; free.style.display = 'none';
+  }
+}
+async function claimHandle() {
+  const v = document.getElementById('hdInput').value.trim().replace(/^@/, '');
+  if (!HANDLE_RE.test(v)) return setMsg('3–20 Zeichen: Buchstaben, Zahlen, _ – mit Buchstabe beginnen');
+  try {
+    const r = await tfetch(`${API}/messenger/handle`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: CODE, token: TOKEN, handle: v })
+    }, 15000);
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return setMsg(j.error || 'Konnte nicht gespeichert werden');
+    HD.handle = j.handle; renderHandleInfo(); setMsg('✅ @' + j.handle + ' gehört dir');
+  } catch (e) { setMsg('Keine Verbindung zum Server'); }
+}
+async function releaseHandle() {
+  if (!confirm('@' + HD.handle + ' freigeben? Dein Kurzlink funktioniert dann nicht mehr, deine ID bleibt.')) return;
+  try {
+    const r = await tfetch(`${API}/messenger/handle`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: CODE, token: TOKEN })
+    }, 15000);
+    if (!r.ok) throw new Error('x');
+    HD.handle = null; document.getElementById('hdInput').value = ''; renderHandleInfo(); setMsg('Handle freigegeben');
+  } catch (e) { setMsg('Konnte nicht freigegeben werden'); }
+}
+async function shareHandle() {
+  if (!HD.handle) return;
+  const url = handleLink(HD.handle);
+  const text = `Schreib mir im Spot-Chat: @${HD.handle}`;
+  try {
+    if (navigator.share) { await navigator.share({ title: 'Spot-Chat', text, url }); return; }
+    await navigator.clipboard.writeText(`${text}\n${url}`);
+    setMsg('✅ Kurzlink kopiert');
+  } catch (e) {}
+}
 
 async function copyId() {
   const el = document.getElementById('setId');
@@ -1021,31 +1104,39 @@ function hideNewChatLayer() {
 }
 
 async function startNewChat() {
-  const partnerCode = normId(document.getElementById('newChatCode').value);
+  const raw = document.getElementById('newChatCode').value.trim();
   const errEl = document.getElementById('newChatError');
   errEl.textContent = '';
-
-  if (!/^[a-z]{6}$/.test(partnerCode)) {
-    errEl.textContent = 'Bitte eine ID wie abc-def eingeben';
-    return;
-  }
-  if (partnerCode === CODE) {
-    errEl.textContent = 'Das ist deine eigene ID';
-    return;
-  }
+  let partnerCode = '', partnerName = '', handleUsed = '';
+  const looksId = /^[a-z]{3}-?[a-z]{3}$/i.test(raw);
 
   try {
-    // Öffentlicher Profil-Check – existiert der Code überhaupt?
-    const res = await tfetch(`${API}/profile/${partnerCode}?spot=messenger`);
-    if (!res.ok) {
-      errEl.textContent = res.status === 404 ? 'Keine Person mit dieser ID gefunden' : 'Server gerade nicht erreichbar';
-      return;
+    if (raw.startsWith('@') || (!looksId && HANDLE_RE.test(raw))) {
+      // @Handle → ID auflösen
+      const hn = raw.replace(/^@/, '');
+      if (!HANDLE_RE.test(hn)) { errEl.textContent = 'Bitte eine ID wie abc-def oder einen @Handle eingeben'; return; }
+      const r = await tfetch(`${API}/messenger/handle/${encodeURIComponent(hn)}`);
+      if (!r.ok) { errEl.textContent = r.status === 404 ? `Keinen Handle @${hn} gefunden` : r.status === 429 ? 'Zu viele Anfragen – gleich nochmal versuchen' : 'Server gerade nicht erreichbar'; return; }
+      const j = await r.json();
+      partnerCode = j.code; partnerName = j.name || j.handle; handleUsed = j.handle;
+      if (partnerCode === CODE) { errEl.textContent = 'Das ist dein eigener Handle'; return; }
+    } else {
+      partnerCode = normId(raw);
+      if (!/^[a-z]{6}$/.test(partnerCode)) { errEl.textContent = 'Bitte eine ID wie abc-def oder einen @Handle eingeben'; return; }
+      if (partnerCode === CODE) { errEl.textContent = 'Das ist deine eigene ID'; return; }
+      // Öffentlicher Profil-Check – existiert der Code überhaupt?
+      const res = await tfetch(`${API}/profile/${partnerCode}?spot=messenger`);
+      if (!res.ok) {
+        errEl.textContent = res.status === 404 ? 'Keine Person mit dieser ID gefunden' : 'Server gerade nicht erreichbar';
+        return;
+      }
+      const profile = await res.json();
+      partnerName = profile.name || partnerCode;
     }
-    const profile = await res.json();
-    const partnerName = profile.name || partnerCode;
 
     hideNewChatLayer();
     addContact(partnerCode, partnerName);
+    if (handleUsed) setMeta(partnerCode, { h: handleUsed });
 
     const room = [CODE, partnerCode].sort().join('-');
     await openChat(room, partnerCode, partnerName);
@@ -1209,7 +1300,7 @@ async function openChat(room, partnerCode, partnerName) {
 
   document.getElementById('headerName').textContent = partnerName;
   VC_OPEN = false;
-  document.getElementById('headerCode').textContent = fmtId(partnerCode);
+  { const hh = metaOf(partnerCode).h; document.getElementById('headerCode').textContent = (hh ? '@' + hh + ' · ' : '') + fmtId(partnerCode); }
   document.getElementById('headerAvatar').textContent = (partnerName[0] || '?').toUpperCase();
   updateP2PUI(canSendImage(), canSendImage() ? 'P2P Aktiv' : 'Server-Modus');
   applyChatState();
