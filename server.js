@@ -1218,7 +1218,7 @@ function msgrHandleOwner(key) {
   }
   return undefined;
 }
-const MSGR_HANDLE_RE = /^[A-Za-z][A-Za-z0-9_]{2,19}$/;
+const MSGR_HANDLE_RE = /^[A-Za-z0-9][A-Za-z0-9_]{2,19}$/; // auch nur Zahlen (ICQ-Nummern-Hommage)
 const msgrResolveHits = new Map();
 setInterval(() => msgrResolveHits.clear(), 60000).unref();
 async function msgrVerifiedCount(code) {
@@ -1251,7 +1251,7 @@ app.post("/api/messenger/handle", async (req, res) => {
   const token = String(req.body?.token || "");
   const raw = String(req.body?.handle || "").trim().replace(/^@/, "");
   if (!isMsgCode(code) || !token) return res.status(400).json({ error: "code und token erforderlich" });
-  if (!MSGR_HANDLE_RE.test(raw)) return res.status(400).json({ code: "format", error: "3–20 Zeichen: Buchstaben, Zahlen, _ – und mit einem Buchstaben beginnen" });
+  if (!MSGR_HANDLE_RE.test(raw)) return res.status(400).json({ code: "format", error: "3–20 Zeichen: Buchstaben, Zahlen und _" });
   try {
     if (!(await authCheck(code, token))) return res.status(403).json({ error: "Ungültiger Token" });
     const key = raw.toLowerCase();
