@@ -158,11 +158,13 @@
         </span>
       </div>
     </div>
+    <button id="verBtn" class="ver-btn" onclick="toggleVerCard()" aria-label="Verifizieren" title="Verifizieren">✓</button>
     <button class="back-btn" onclick="goBackToList()" aria-label="Zurück" title="Zurück">✕</button>
   </div>
   
   <div id="messages" class="messages-container"></div>
   
+  <div id="verCard" class="ver-card hidden"></div>
   <div id="chatNote" class="hidden"></div>
   <div id="imgHint" class="img-hint off">📷 Bilder nur, wenn ihr beide online seid</div>
   <div id="moodTray" class="mood-tray hidden">
@@ -934,6 +936,7 @@ async function initWebRTC() {
   // ── Nachricht via P2P empfangen ──
   webrtc.onMessage = async (msg) => {
     console.log('[Chat] P2P Nachricht empfangen:', msg);
+    if (String(msg.text || '').startsWith(VCTRL)) { handleControl(msg.from, msg.text); return; }
 
     // WICHTIG: Room aus Absender-Code berechnen, nicht CURRENT_ROOM nutzen
     // (Nachricht kann ankommen, wenn Chat gar nicht geöffnet ist)
@@ -1098,8 +1101,8 @@ async function renderChatList() {
     <div class="chat-item" data-room="${escapeHtml(c.room)}" data-code="${escapeHtml(c.partnerCode)}" data-name="${escapeHtml(c.partnerName)}">
       <div class="avatar">${escapeHtml((c.partnerName[0] || '?').toUpperCase())}</div>
       <div class="chat-info">
-        <div class="chat-name">${escapeHtml(c.partnerName)}</div>
-        <div class="chat-preview">${(metaAll[c.partnerCode] || {}).paused ? '<span class="chat-tag">⏸ pausiert</span> ' : (metaAll[c.partnerCode] || {}).req ? '<span class="chat-tag req">📨 Anfrage</span> ' : ''}${escapeHtml(c.lastText)}</div>
+        <div class="chat-name">${escapeHtml(c.partnerName)}${(metaAll[c.partnerCode] || {}).ver ? ' <span class="ver-tick" title="Verifiziert">✔</span>' : ''}</div>
+        <div class="chat-preview">${((metaAll[c.partnerCode] || {}).vp && ['ask-in', 'judge'].includes(metaAll[c.partnerCode].vp.st)) ? '<span class="chat-tag ver">🔏 Frage wartet</span> ' : ''}${(metaAll[c.partnerCode] || {}).paused ? '<span class="chat-tag">⏸ pausiert</span> ' : (metaAll[c.partnerCode] || {}).req ? '<span class="chat-tag req">📨 Anfrage</span> ' : ''}${escapeHtml(c.lastText)}</div>
       </div>
       <div class="chat-meta"><div class="chat-time">${c.timeStr}</div>${c.unread ? `<div class="unread-badge">${c.unread}</div>` : ''}</div>
       <button class="chat-del" data-del="${escapeHtml(c.room)}" aria-label="Kontakt beenden" title="Kontakt beenden">🗑</button>
@@ -1205,10 +1208,13 @@ async function openChat(room, partnerCode, partnerName) {
   fitChatToViewport();
 
   document.getElementById('headerName').textContent = partnerName;
+  VC_OPEN = false;
   document.getElementById('headerCode').textContent = fmtId(partnerCode);
   document.getElementById('headerAvatar').textContent = (partnerName[0] || '?').toUpperCase();
   updateP2PUI(canSendImage(), canSendImage() ? 'P2P Aktiv' : 'Server-Modus');
   applyChatState();
+  updateHeaderVer();
+  renderVerCard();
 
   await renderMessages();
 
@@ -1482,6 +1488,7 @@ const SOUNDS = {
   tired:   (c, o, t) => sndTone(c, o, t, { f: 320, f2: 170, d: 0.7, g: 0.16, at: 0.2 }),
   idea:    (c, o, t) => { sndTone(c, o, t, { f: 1319, d: 0.5, g: 0.22 }); sndTone(c, o, t + 0.09, { f: 1760, d: 0.45, g: 0.14 }); },
   cool:    (c, o, t) => { sndTone(c, o, t, { f: 200, f2: 340, d: 0.28, type: 'sawtooth', g: 0.2, lp: 700 }); sndNoise(c, o, t, { d: 0.03, f: 5000, type: 'highpass', g: 0.15 }); },
+  verify:  (c, o, t) => [523, 659, 784, 1047].forEach((f, i) => sndTone(c, o, t + i * 0.09, { f, d: 0.35, g: 0.2 })),
   narrator:(c, o, t) => [0, 0.06, 0.12].forEach(d => sndNoise(c, o, t + d, { d: 0.025, f: 4500, type: 'highpass', g: 0.22 }))
 };
 function playMood(mood, dir, force) {
@@ -1495,6 +1502,140 @@ function playMood(mood, dir, force) {
   try { fn(c, master, c.currentTime + 0.02); } catch (e) {}
 }
 function playIncoming(text) { playMood(parseMood(text).mood, 'in'); }
+
+
+// ── VERIFIZIERUNG (grüner Haken) – immer zwischen genau 2 Chatpartnern ─────
+// Ablauf: A stellt eine Frage → B antwortet → A bestätigt ("Stimmt") → beide bekommen ✔.
+// Die Schritte laufen als unsichtbare Steuer-Nachrichten (🔏…) über das normale Postfach.
+const VCTRL = '🔏';
+const VCTRL_RE = /^🔏(Q|A|OK|NO|X|UN)\|([a-z0-9]{4,12})(?:\|([\s\S]*))?$/u;
+let VC_OPEN = false;
+function vpOf(code) { return metaOf(code).vp || null; }
+function verRid() { return Math.random().toString(36).slice(2, 8).padEnd(6, 'x'); }
+async function sendCtrl(partner, text) {
+  try {
+    const res = await tfetch(`${API}/message`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recipient: partner, sender_code: CODE, sender_name: PROFILE?.name || CODE, message: text, spot_type: 'messenger_chat', token: TOKEN })
+    }, 15000);
+    return res.ok;
+  } catch (e) { return false; }
+}
+function verifyServer(partner, on) {
+  tfetch(`${API}/messenger/verify`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: CODE, token: TOKEN, partner, on })
+  }, 15000).catch(() => {});
+}
+function verifiedFx() { playMood('verify', 'in'); }
+function handleControl(from, text) {
+  const m = String(text).match(VCTRL_RE);
+  if (!m) return false;
+  const t = m[1], id = m[2], body = (m[3] || '').slice(0, 160);
+  const mt = metaOf(from);
+  if (!getContacts()[from] || mt.req) return true; // nur von bekannten Kontakten
+  const vp = mt.vp || null;
+  if (t === 'Q') {
+    if (!mt.ver) { setMeta(from, { vp: { id, role: 'answerer', q: body, st: 'ask-in' }, vnote: '' }); playMood('question', 'in'); }
+  } else if (t === 'A') {
+    if (vp && vp.role === 'asker' && vp.id === id && vp.st === 'asked') { setMeta(from, { vp: Object.assign({}, vp, { st: 'judge', a: body }) }); playMood('question', 'in'); }
+  } else if (t === 'OK') {
+    if (vp && vp.role === 'answerer' && vp.id === id && vp.st === 'answered') { setMeta(from, { ver: true, vp: null, vnote: '' }); verifyServer(from, true); verifiedFx(); }
+  } else if (t === 'NO') {
+    if (vp && vp.id === id) setMeta(from, { vp: null, vnote: 'no' });
+  } else if (t === 'X') {
+    if (vp && vp.id === id) setMeta(from, { vp: null, vnote: 'x' });
+  } else if (t === 'UN') {
+    if (mt.ver) { setMeta(from, { ver: false, vp: null, vnote: 'un' }); verifyServer(from, false); }
+  }
+  refreshVerUI(from);
+  return true;
+}
+function refreshVerUI(from) {
+  if (CURRENT_ROOM && from === PARTNER_CODE) { updateHeaderVer(); renderVerCard(); }
+  renderChatList();
+}
+function updateHeaderVer() {
+  const b = document.getElementById('verBtn');
+  const ver = !!(PARTNER_CODE && metaOf(PARTNER_CODE).ver);
+  if (b) { b.classList.toggle('on', ver); b.title = ver ? 'Verifiziert' : 'Verifizieren'; }
+  const n = document.getElementById('headerName');
+  if (n && PARTNER_NAME) n.innerHTML = escapeHtml(PARTNER_NAME) + (ver ? ' <span class="ver-tick">✔</span>' : '');
+}
+function toggleVerCard() {
+  if (!PARTNER_CODE) return;
+  const vp = vpOf(PARTNER_CODE);
+  if (vp) { VC_OPEN = true; renderVerCard(); return; } // laufende Verifizierung bleibt sichtbar
+  VC_OPEN = !VC_OPEN;
+  setMeta(PARTNER_CODE, { vnote: '' });
+  renderVerCard();
+}
+function renderVerCard() {
+  const el = document.getElementById('verCard');
+  if (!el) return;
+  if (!PARTNER_CODE) { el.className = 'ver-card hidden'; return; }
+  const m = metaOf(PARTNER_CODE), vp = m.vp, nm = escapeHtml(PARTNER_NAME || fmtId(PARTNER_CODE));
+  let html = '';
+  if (vp) {
+    if (vp.st === 'asked') html = `<b>🔏 Verifizierung läuft</b><p>Deine Frage an ${nm}:<br><i>„${escapeHtml(vp.q)}“</i></p><p class="vc-wait">Warte auf die Antwort …</p><div class="vc-btns"><button class="vc-ghost" onclick="verCancel()">Abbrechen</button></div>`;
+    else if (vp.st === 'ask-in') html = `<b>🔏 ${nm} möchte dich verifizieren</b><p>Die Frage lautet:<br><i>„${escapeHtml(vp.q)}“</i></p><input id="vcInput" maxlength="120" placeholder="Deine Antwort" autocomplete="off"><div class="vc-btns"><button onclick="verAnswer()">Antworten</button><button class="vc-ghost" onclick="verCancel()">Ablehnen</button></div>`;
+    else if (vp.st === 'answered') html = `<b>🔏 Antwort gesendet</b><p>Du hast geantwortet: <i>„${escapeHtml(vp.a || '')}“</i></p><p class="vc-wait">Warte, bis ${nm} bestätigt …</p><div class="vc-btns"><button class="vc-ghost" onclick="verCancel()">Abbrechen</button></div>`;
+    else if (vp.st === 'judge') html = `<b>🔏 ${nm} antwortet</b><p>Deine Frage: <i>„${escapeHtml(vp.q)}“</i><br>Antwort: <i>„${escapeHtml(vp.a || '')}“</i></p><p>Ist das die richtige Antwort?</p><div class="vc-btns"><button onclick="verJudge(true)">✔ Stimmt</button><button class="vc-no" onclick="verJudge(false)">✖ Stimmt nicht</button><button class="vc-ghost" onclick="verCancel()">Abbrechen</button></div>`;
+  } else if (m.ver) {
+    if (!VC_OPEN) { el.className = 'ver-card hidden'; return; }
+    html = `<b>✔ Verifiziert</b><p>Du und ${nm} habt euch gegenseitig bestätigt. Der grüne Haken bleibt am Namen.</p><div class="vc-btns"><button class="vc-ghost" onclick="verUnverify()">Verifizierung aufheben</button><button class="vc-ghost" onclick="toggleVerCard()">Schließen</button></div>`;
+  } else {
+    const note = { no: 'Die Antwort wurde nicht bestätigt – keine Verifizierung.', x: 'Die Verifizierung wurde abgebrochen.', un: 'Die Verifizierung wurde aufgehoben.' }[m.vnote || ''];
+    if (!VC_OPEN && !note) { el.className = 'ver-card hidden'; return; }
+    const can = m.heard && m.talk && !m.req && !m.paused;
+    html = `${note ? `<p class="vc-note">${note}</p>` : ''}` + (VC_OPEN ? (can
+      ? `<b>🔏 ${nm} verifizieren</b><p>Stelle eine Frage, die nur dein echter Kontakt beantworten kann (z. B. „Wo haben wir uns zuerst gesehen?“). Bestätigst du die Antwort, bekommt ihr beide einen grünen Haken.</p><input id="vcInput" maxlength="120" placeholder="Deine Frage" autocomplete="off"><div class="vc-btns"><button onclick="verSend()">Frage senden</button><button class="vc-ghost" onclick="toggleVerCard()">Abbrechen</button></div>`
+      : `<b>🔏 Verifizieren</b><p>Das geht, sobald ihr euch gegenseitig geschrieben habt.</p><div class="vc-btns"><button class="vc-ghost" onclick="toggleVerCard()">Schließen</button></div>`) : `<div class="vc-btns"><button class="vc-ghost" onclick="verNoteClose()">OK</button></div>`);
+  }
+  el.className = 'ver-card';
+  el.innerHTML = html;
+}
+function verNoteClose() { setMeta(PARTNER_CODE, { vnote: '' }); renderVerCard(); }
+async function verSend() {
+  const i = document.getElementById('vcInput'), q = (i && i.value || '').trim();
+  if (q.length < 3) { if (i) i.focus(); return; }
+  const id = verRid();
+  setMeta(PARTNER_CODE, { vp: { id, role: 'asker', q, st: 'asked' }, vnote: '' });
+  VC_OPEN = true; renderVerCard();
+  const ok = await sendCtrl(PARTNER_CODE, `${VCTRL}Q|${id}|${q}`);
+  if (!ok) { setMeta(PARTNER_CODE, { vp: null, vnote: '' }); VC_OPEN = true; renderVerCard(); const el = document.getElementById('verCard'); el.insertAdjacentHTML('afterbegin', '<p class="vc-note">Nicht gesendet – bitte später erneut versuchen.</p>'); }
+}
+async function verAnswer() {
+  const i = document.getElementById('vcInput'), a = (i && i.value || '').trim(), vp = vpOf(PARTNER_CODE);
+  if (!vp || !a) { if (i) i.focus(); return; }
+  const ok = await sendCtrl(PARTNER_CODE, `${VCTRL}A|${vp.id}|${a}`);
+  if (!ok) { const el = document.getElementById('verCard'); el.insertAdjacentHTML('afterbegin', '<p class="vc-note">Nicht gesendet – bitte später erneut versuchen.</p>'); return; }
+  setMeta(PARTNER_CODE, { vp: Object.assign({}, vp, { st: 'answered', a }) });
+  renderVerCard();
+}
+async function verJudge(yes) {
+  const vp = vpOf(PARTNER_CODE);
+  if (!vp) return;
+  const ok = await sendCtrl(PARTNER_CODE, `${VCTRL}${yes ? 'OK' : 'NO'}|${vp.id}`);
+  if (!ok) { const el = document.getElementById('verCard'); el.insertAdjacentHTML('afterbegin', '<p class="vc-note">Nicht gesendet – bitte später erneut versuchen.</p>'); return; }
+  if (yes) { setMeta(PARTNER_CODE, { ver: true, vp: null, vnote: '' }); verifyServer(PARTNER_CODE, true); verifiedFx(); VC_OPEN = true; }
+  else { setMeta(PARTNER_CODE, { vp: null, vnote: '' }); VC_OPEN = false; }
+  updateHeaderVer(); renderVerCard(); renderChatList();
+}
+async function verCancel() {
+  const vp = vpOf(PARTNER_CODE);
+  if (!vp) return;
+  sendCtrl(PARTNER_CODE, `${VCTRL}X|${vp.id}`);
+  setMeta(PARTNER_CODE, { vp: null, vnote: '' });
+  VC_OPEN = false; renderVerCard(); renderChatList();
+}
+async function verUnverify() {
+  if (!confirm('Verifizierung mit ' + (PARTNER_NAME || 'diesem Kontakt') + ' aufheben? Der Haken verschwindet bei euch beiden.')) return;
+  sendCtrl(PARTNER_CODE, `${VCTRL}UN|${verRid()}`);
+  setMeta(PARTNER_CODE, { ver: false, vp: null, vnote: '' });
+  verifyServer(PARTNER_CODE, false);
+  VC_OPEN = false; updateHeaderVer(); renderVerCard(); renderChatList();
+}
 
 // ── SEND MESSAGE (P2P Priority + Fallback) ────────────────────────────────
 // ── EINGABE: mehrzeilig, Auto-Grow, Strg/Cmd+Enter zum Senden ─────────────
@@ -1526,6 +1667,7 @@ async function sendMessage() {
   // Maximal eine Leerzeile zwischen Absätzen bleibt erlaubt.
   let text = input.value.trim().replace(/\n{3,}/g, '\n\n');
 
+  if (text.startsWith(VCTRL)) text = text.slice(VCTRL.length).trim();
   if (!text) return;
   if (CUR_MOOD && !MOOD_RE.test(text)) text = CUR_MOOD + ' ' + text;
   if (CUR_MOOD) pickMood('');
@@ -1675,6 +1817,8 @@ async function pollOnce() {
             }
             // Von mir beendete Kontakte: nichts annehmen
             if (getClosedByMe()[m.sender_code]) continue;
+            // Verifizierungs-Schritte: nie als Chat-Nachricht anzeigen
+            if (String(m.message).startsWith(VCTRL)) { if (handleControl(m.sender_code, m.message)) listNeedsUpdate = true; continue; }
             const knownBefore = !!getContacts()[m.sender_code];
             if (!knownBefore) setMeta(m.sender_code, { req: true, heard: true });
             else setMeta(m.sender_code, { heard: true, paused: false, out: 0 });

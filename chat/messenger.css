@@ -899,3 +899,19 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
 #messages.comic .message.cm.cm-narrator{--fill:#ffe9a8;--sh:#ff9f00;border-radius:2px;margin-bottom:6px;max-width:92%;font-family:"Courier New",monospace;font-weight:700;font-size:.85rem;text-transform:uppercase;letter-spacing:.04em;transform:rotate(0deg)}
 #messages.comic .message.cm.cm-narrator::before,#messages.comic .message.cm.cm-narrator::after{display:none}
 @media (prefers-reduced-motion:reduce){#messages.comic .message.cm{animation:none!important}}
+
+/* ── Verifizierung (grüner Haken) ──────────────────────────────────────── */
+.ver-btn{width:38px;height:38px;border-radius:50%;border:1px solid rgba(255,255,255,.14);background:#111820;color:#7d8a96;font-size:1.1rem;font-weight:900;margin-right:.45rem;flex:0 0 auto}
+.ver-btn.on{color:#0b1f12;background:#2ecc71;border-color:#2ecc71}
+.ver-tick{color:#2ecc71;font-weight:900;font-size:.85em}
+.chat-tag.ver{background:#12301f;color:#6be39a;border-color:#2ecc7155}
+.ver-card{margin:.4rem .6rem;padding:.7rem .8rem;border:2px solid #2ecc71;border-radius:14px;background:#0e2619;color:#d8f5e3;font-size:.88rem;box-shadow:3px 3px 0 #1c7a45}
+.ver-card.hidden{display:none}
+.ver-card p{margin:.35rem 0}
+.ver-card i{color:#fff}
+.ver-card input{width:100%;box-sizing:border-box;margin:.3rem 0;padding:.55rem .7rem;border-radius:10px;border:1px solid #2ecc7188;background:#0a1a11;color:#fff;font-size:.95rem}
+.vc-btns{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.4rem}
+.vc-btns button{flex:1;min-width:6rem;padding:.5rem .6rem;border-radius:10px;border:0;background:#2ecc71;color:#06210f;font-weight:700}
+.vc-btns .vc-ghost{background:transparent;border:1px solid #2ecc7188;color:#9be6b8}
+.vc-btns .vc-no{background:#ff6b5e;color:#2a0500}
+.vc-wait,.vc-note{color:#9be6b8;font-size:.8rem}
