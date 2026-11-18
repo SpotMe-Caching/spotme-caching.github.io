@@ -434,6 +434,7 @@ function startApp() {
   initPushNotifications();
   renderChatList();
   pingVisit();
+  syncVerified(false);
   const hq = handleFromSearch(location.search);
   if (hq) {
     try { history.replaceState(null, '', location.pathname); } catch (e) {}
@@ -714,6 +715,7 @@ function handleFromSearch(search) {
 }
 function handleLink(hd) { return `${location.origin}/chat/?${hd}`; }
 async function loadHandleInfo() {
+  await syncVerified(true);
   try {
     const r = await tfetch(`${API}/messenger/verified/${CODE}?token=${encodeURIComponent(TOKEN)}`, {}, 10000);
     if (r.ok) HD = await r.json();
@@ -732,7 +734,7 @@ function renderHandleInfo() {
     info.textContent = `Du hast ${HD.count} verifizierte Kontakte ✔ – such dir einen @Handle aus. Er ersetzt deine ID nicht, du hast dann einen kurzen Link.`;
     row.style.display = ''; share.style.display = 'none'; free.style.display = 'none';
   } else {
-    info.textContent = `Ab ${HD.min || 3} verifizierten Kontakten (grüner Haken ✔) kannst du dir einen @Handle aussuchen. Aktuell: ${HD.count || 0}.`;
+    info.textContent = `Ab ${HD.min || 3} verifizierten Kontakten (grüner Haken ✔) kannst du dir einen @Handle aussuchen. Aktuell: ${HD.count || 0} – zählt, sobald beide Seiten online waren und den Haken haben.`;
     row.style.display = 'none'; share.style.display = 'none'; free.style.display = 'none';
   }
 }
@@ -1617,6 +1619,20 @@ function verifyServer(partner, on) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ code: CODE, token: TOKEN, partner, on })
   }, 15000).catch(() => {});
+}
+// Alle lokal verifizierten Kontakte beim Server nachmelden (idempotent) – heilt verlorene Einzelmeldungen
+async function syncVerified(force) {
+  try {
+    const last = Number(lsGet('sm_chat_vsync') || 0);
+    if (!force && Date.now() - last < 6 * 3600 * 1000) return;
+    const m = getMeta(), partners = Object.keys(m).filter(k => m[k] && m[k].ver);
+    if (!partners.length) return;
+    const r = await tfetch(`${API}/messenger/verify`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: CODE, token: TOKEN, partners })
+    }, 15000);
+    if (r.ok) lsSet('sm_chat_vsync', String(Date.now()));
+  } catch (e) {}
 }
 function verifiedFx() { playMood('verify', 'in'); }
 function handleControl(from, text) {
