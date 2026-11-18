@@ -16,13 +16,13 @@
   "dir": "auto",
   "icons": [
     {
-      "src": "https://spotme-caching.github.io/chat/icons/pwa_192.png",
+      "src": "https://spotme-caching.github.io/chat/icons/isee_192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "https://spotme-caching.github.io/chat/icons/pwa_512.png",
+      "src": "https://spotme-caching.github.io/chat/icons/isee_512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
