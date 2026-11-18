@@ -441,6 +441,9 @@ async function initDB() {
     await pool.query(`CREATE TABLE IF NOT EXISTS messenger_verified (
       lo TEXT NOT NULL, hi TEXT NOT NULL, lo_ok BOOLEAN NOT NULL DEFAULT FALSE, hi_ok BOOLEAN NOT NULL DEFAULT FALSE,
       created_at BIGINT NOT NULL, PRIMARY KEY (lo, hi))`);
+    // Messenger: @Handle als Kurzlink (/chat/?Name). Eindeutig (ohne Groß/Klein), je Profil genau einer.
+    await pool.query(`CREATE TABLE IF NOT EXISTS messenger_handles (
+      handle TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, display TEXT NOT NULL, updated_at BIGINT NOT NULL)`);
     await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_visit BIGINT`);
     // Länder getrennt (ES/DE/…): Bestand ist Spanien → Default 'ES'
     await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS country TEXT DEFAULT 'ES'`);
@@ -1201,15 +1204,108 @@ app.post("/api/messenger/verify", async (req, res) => {
   }
 });
 
-// Anzahl gegenseitig verifizierter Kontakte (Grundlage für den späteren @Handle)
+// ── @Handle ────────────────────────────────────────────────────────────────
+// Voraussetzung: MSGR_HANDLE_MIN gegenseitig verifizierte Kontakte (Standard 3). Reservierte Namen
+// gehören niemandem, außer sie stehen in MSGR_HANDLE_OWNERS ("dragonschain=abcdef,spotme=ghjkmn").
+const MSGR_HANDLE_MIN = Math.max(0, parseInt(process.env.MSGR_HANDLE_MIN || "3", 10) || 0);
+const MSGR_HANDLE_RESERVED = new Set(["add", "neu", "info", "h", "ref", "spotme", "admin", "administrator", "support", "messenger",
+  "chat", "caching", "help", "hilfe", "mod", "moderator", "team", "official", "offiziell", "www", "api", "landing", "index", "root",
+  "system", "dragonschain", "snailstones", "datenschutz", "impressum"]);
+function msgrHandleOwner(key) {
+  for (const pair of String(process.env.MSGR_HANDLE_OWNERS || "").split(",")) {
+    const [n, c] = pair.split("=").map((x) => (x || "").trim());
+    if (n && c && n.toLowerCase() === key) return normCode(c);
+  }
+  return undefined;
+}
+const MSGR_HANDLE_RE = /^[A-Za-z][A-Za-z0-9_]{2,19}$/;
+const msgrResolveHits = new Map();
+setInterval(() => msgrResolveHits.clear(), 60000).unref();
+async function msgrVerifiedCount(code) {
+  const r = await pool.query("SELECT COUNT(*)::int AS n FROM messenger_verified WHERE (lo=$1 OR hi=$1) AND lo_ok AND hi_ok", [code]);
+  return r.rows[0].n;
+}
+
+// Handle auflösen (öffentlich, nur Handle → ID + Name; bremst Durchprobieren)
+app.get("/api/messenger/handle/:name", async (req, res) => {
+  const ip = clientIpFor(req);
+  const n = (msgrResolveHits.get(ip) || 0) + 1;
+  msgrResolveHits.set(ip, n);
+  if (n > 60) return res.status(429).json({ error: "Zu viele Anfragen" });
+  const name = String(req.params.name || "").replace(/^@/, "");
+  if (!MSGR_HANDLE_RE.test(name)) return res.status(404).json({ error: "Handle nicht gefunden" });
+  try {
+    const r = await pool.query(
+      "SELECT h.code, h.display, p.name FROM messenger_handles h JOIN profiles p ON p.code=h.code WHERE h.handle=$1", [name.toLowerCase()]);
+    if (!r.rows.length) return res.status(404).json({ error: "Handle nicht gefunden" });
+    res.json({ code: r.rows[0].code, handle: r.rows[0].display, name: decrypt(r.rows[0].name) });
+  } catch (e) {
+    console.error("GET /api/messenger/handle:", e.message);
+    res.status(500).json({ error: "Datenbankfehler" });
+  }
+});
+
+// Handle beanspruchen / ändern
+app.post("/api/messenger/handle", async (req, res) => {
+  const code = normCode(req.body?.code);
+  const token = String(req.body?.token || "");
+  const raw = String(req.body?.handle || "").trim().replace(/^@/, "");
+  if (!isMsgCode(code) || !token) return res.status(400).json({ error: "code und token erforderlich" });
+  if (!MSGR_HANDLE_RE.test(raw)) return res.status(400).json({ code: "format", error: "3–20 Zeichen: Buchstaben, Zahlen, _ – und mit einem Buchstaben beginnen" });
+  try {
+    if (!(await authCheck(code, token))) return res.status(403).json({ error: "Ungültiger Token" });
+    const key = raw.toLowerCase();
+    const owner = msgrHandleOwner(key);
+    if (MSGR_HANDLE_RESERVED.has(key) && owner !== code) return res.status(409).json({ code: "reserved", error: "Dieser Name ist reserviert" });
+    const count = await msgrVerifiedCount(code);
+    if (owner !== code && count < MSGR_HANDLE_MIN) {
+      return res.status(403).json({ code: "need_verified", count, min: MSGR_HANDLE_MIN, error: `Dafür brauchst du ${MSGR_HANDLE_MIN} verifizierte Kontakte` });
+    }
+    const mine = await pool.query("SELECT handle, updated_at FROM messenger_handles WHERE code=$1", [code]);
+    if (mine.rows.length && mine.rows[0].handle !== key && Date.now() - Number(mine.rows[0].updated_at) < 3600 * 1000) {
+      return res.status(429).json({ code: "often", error: "Du kannst den Handle höchstens einmal pro Stunde ändern" });
+    }
+    // verwaiste Handles (Profil gelöscht/aufgeräumt) werden frei
+    await pool.query("DELETE FROM messenger_handles WHERE handle=$1 AND code NOT IN (SELECT code FROM profiles)", [key]);
+    const taken = await pool.query("SELECT code FROM messenger_handles WHERE handle=$1", [key]);
+    if (taken.rows.length && taken.rows[0].code !== code) return res.status(409).json({ code: "taken", error: "Dieser Handle ist schon vergeben" });
+    await pool.query(
+      `INSERT INTO messenger_handles (handle, code, display, updated_at) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (code) DO UPDATE SET handle=EXCLUDED.handle, display=EXCLUDED.display, updated_at=EXCLUDED.updated_at`,
+      [key, code, raw, Date.now()]);
+    res.json({ success: true, handle: raw });
+  } catch (e) {
+    if (e.code === "23505") return res.status(409).json({ code: "taken", error: "Dieser Handle ist schon vergeben" });
+    console.error("POST /api/messenger/handle:", e.message);
+    res.status(500).json({ error: "Datenbankfehler" });
+  }
+});
+
+// Handle freigeben
+app.delete("/api/messenger/handle", async (req, res) => {
+  const code = normCode(req.body?.code);
+  const token = String(req.body?.token || "");
+  if (!isMsgCode(code) || !token) return res.status(400).json({ error: "code und token erforderlich" });
+  try {
+    if (!(await authCheck(code, token))) return res.status(403).json({ error: "Ungültiger Token" });
+    await pool.query("DELETE FROM messenger_handles WHERE code=$1", [code]);
+    res.json({ success: true });
+  } catch (e) {
+    console.error("DELETE /api/messenger/handle:", e.message);
+    res.status(500).json({ error: "Datenbankfehler" });
+  }
+});
+
+// Anzahl gegenseitig verifizierter Kontakte + eigener Handle (für das Profil)
 app.get("/api/messenger/verified/:code", async (req, res) => {
   const code = normCode(req.params.code);
   const token = String(req.query.token || req.headers["x-spotme-token"] || "");
   if (!isMsgCode(code) || !token) return res.status(400).json({ error: "code und token erforderlich" });
   try {
     if (!(await authCheck(code, token))) return res.status(403).json({ error: "Ungültiger Token" });
-    const r = await pool.query("SELECT COUNT(*)::int AS n FROM messenger_verified WHERE (lo=$1 OR hi=$1) AND lo_ok AND hi_ok", [code]);
-    res.json({ count: r.rows[0].n });
+    const count = await msgrVerifiedCount(code);
+    const h = await pool.query("SELECT display FROM messenger_handles WHERE code=$1", [code]);
+    res.json({ count, min: MSGR_HANDLE_MIN, handle: h.rows[0]?.display || null });
   } catch (e) {
     console.error("GET /api/messenger/verified:", e.message);
     res.status(500).json({ error: "Datenbankfehler" });
@@ -1522,6 +1618,7 @@ app.delete("/api/account/:code", async (req, res) => {
       await run("messenger_stillgelegt", "DELETE FROM messenger_closed WHERE owner=$1 OR other=$1", [code]);
       await run("messenger_paare", "DELETE FROM messenger_pairs WHERE lo=$1 OR hi=$1", [code]);
       await run("messenger_verifiziert", "DELETE FROM messenger_verified WHERE lo=$1 OR hi=$1", [code]);
+      await run("messenger_handle", "DELETE FROM messenger_handles WHERE code=$1", [code]);
       await run("live_folgen", "DELETE FROM live_followers WHERE follower_code=$1", [code]);
       await run("kommentare", "DELETE FROM profile_comments WHERE profile_code=$1 OR sender_code=$1", [code]);
       await run("bluesky", "DELETE FROM bluesky_accounts WHERE code=$1", [code]);
