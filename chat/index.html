@@ -706,7 +706,7 @@ function setMsg(t) { const el = document.getElementById('setMsg'); el.textConten
 
 // ── @HANDLE (Kurzlink /chat/?Name) ─────────────────────────────────────────
 let HD = { count: 0, min: 3, handle: null };
-const HANDLE_RE = /^[A-Za-z][A-Za-z0-9_]{2,19}$/;
+const HANDLE_RE = /^[A-Za-z0-9][A-Za-z0-9_]{2,19}$/; // auch nur Zahlen (wie alte ICQ-Nummern)
 const RESERVED_Q = ['add', 'neu', 'info', 'h', 'ref'];
 function handleFromSearch(search) {
   try { for (const [k, v] of new URLSearchParams(search)) if (v === '' && HANDLE_RE.test(k) && !RESERVED_Q.includes(k.toLowerCase())) return k; } catch (e) {}
@@ -738,7 +738,7 @@ function renderHandleInfo() {
 }
 async function claimHandle() {
   const v = document.getElementById('hdInput').value.trim().replace(/^@/, '');
-  if (!HANDLE_RE.test(v)) return setMsg('3–20 Zeichen: Buchstaben, Zahlen, _ – mit Buchstabe beginnen');
+  if (!HANDLE_RE.test(v)) return setMsg('3–20 Zeichen: Buchstaben, Zahlen, _ (auch nur Zahlen, wie früher bei ICQ)');
   try {
     const r = await tfetch(`${API}/messenger/handle`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
