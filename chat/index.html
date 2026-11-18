@@ -61,6 +61,7 @@
       <button class="logout-btn" onclick="showSettings()" style="background:none;border:none;color:#ff4f7b;cursor:pointer;font-size:0.85rem;flex-shrink:0;">⚙︎ Profil</button>
     </div>
     <div id="backupBar" class="backup-bar hidden"></div>
+    <div id="comicHint" class="backup-bar hidden"></div>
     <div id="chatList" class="chat-list"></div>
     <div id="closedList"></div>
   </div>
@@ -122,6 +123,7 @@
         <button onclick="saveName()">Speichern</button>
       </div>
       <p id="setMsg" class="copy-feedback"></p>
+      <label class="comic-row"><input type="checkbox" id="comicToggle" onchange="setComic(this.checked)"> 🗯️ Comic-Stil im Chat (Sprechblasen)</label>
       <label>Sicherung (Chats + Zugang) – für Gerätewechsel</label>
       <p id="bkLast" style="font-size:0.7rem;color:#7a98aa;margin:-0.2rem 0 0.5rem;"></p>
       <div class="copy-row">
@@ -161,7 +163,16 @@
   
   <div id="chatNote" class="hidden"></div>
   <div id="imgHint" class="img-hint off">📷 Bilder nur, wenn ihr beide online seid</div>
+  <div id="moodTray" class="mood-tray hidden">
+    <button data-mood="" onclick="pickMood('')">💬<span>Sagen</span></button>
+    <button data-mood="🗯️" onclick="pickMood('🗯️')">🗯️<span>Denken</span></button>
+    <button data-mood="💥" onclick="pickMood('💥')">💥<span>WOW</span></button>
+    <button data-mood="📣" onclick="pickMood('📣')">📣<span>Rufen</span></button>
+    <button data-mood="🤫" onclick="pickMood('🤫')">🤫<span>Flüstern</span></button>
+    <button data-mood="💗" onclick="pickMood('💗')">💗<span>Lieb</span></button>
+  </div>
   <div class="input-bar">
+    <button id="moodBtn" class="img-btn" onclick="toggleMoodTray()" aria-label="Stimmung" title="Stimmung der Sprechblase">💬</button>
     <button id="imgBtn" class="img-btn" onclick="pickImage()" aria-label="Bild senden" title="Bild senden">📷</button>
     <input type="file" id="imgFile" accept="image/*" class="hidden" onchange="onImagePicked(this)">
     <textarea id="msgInput" placeholder="Nachricht..." rows="1"></textarea>
@@ -392,6 +403,7 @@ async function createProfile() {
 
 function startApp() {
   migrateMeta();
+  applyComic();
   // Browser soll die Chats nicht bei Platzmangel löschen
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
   document.getElementById('loginScreen').classList.add('hidden');
@@ -654,6 +666,7 @@ function showSettings() {
   document.getElementById('setId').value = fmtId(CODE);
   document.getElementById('setName').value = (PROFILE && PROFILE.name) || '';
   document.getElementById('setMsg').textContent = '';
+  document.getElementById('comicToggle').checked = comicOn();
   { const b = bkInfo(); document.getElementById('bkLast').textContent = b.ts ? `Letzte Sicherung: ${fmtDay(b.ts)}${changesSince() ? ' · seitdem Neues' : ' · alles gesichert'}` : 'Noch keine Sicherung'; }
   document.getElementById('settingsLayer').classList.remove('hidden');
 }
@@ -1029,6 +1042,7 @@ async function startNewChat() {
 async function renderChatList() {
   renderClosedList();
   updateBackupBar();
+  updateComicHint();
   const container = document.getElementById('chatList');
   if (!CODE) {
     container.innerHTML = '<p class="text-center" style="padding:2rem;color:var(--muted2);">Keine Chats</p>';
@@ -1314,6 +1328,12 @@ async function renderMessages(appendOnly = false) {
     const body = m.kind === 'image'
       ? `<img class="chat-img ${isMine ? '' : 'blur'}" data-iid="${escapeHtml(m.iid)}" alt="Bild">${isMine ? '' : '<div class="img-tap">Tippen zum Anzeigen</div>'}`
       : escapeHtml(m.text);
+    if (m.kind !== 'image' && comicOn()) {
+      const pm = parseMood(m.text);
+      const badge = { question: '?', shout: '!', love: '♥', whisper: '…' }[pm.mood] || '';
+      const tilt = ((m.ts % 5) - 2) * 0.35;
+      return `<div class="message ${isMine ? 'mine' : 'other'} cm cm-${pm.mood}" style="--tilt:${tilt}deg">${badge ? `<span class="cm-badge">${badge}</span>` : ''}<span class="cm-txt">${escapeHtml(pm.text)}</span><div class="msg-time">${time}${statusTick}</div></div>`;
+    }
     return `<div class="message ${isMine ? 'mine' : 'other'}${m.kind === 'image' ? ' has-img' : ''}">${body}<div class="msg-time">${time}${statusTick}</div></div>`;
   };
 
@@ -1331,6 +1351,50 @@ async function renderMessages(appendOnly = false) {
   RENDERED_MSG_COUNT = msgs.length;
   container.scrollTop = container.scrollHeight;
   hydrateImages(container).then(() => { container.scrollTop = container.scrollHeight; });
+}
+
+
+// ── COMIC-STIL: Sprechblasen je Stimmung ───────────────────────────────────
+// Die Stimmung reist als Emoji am Nachrichtenanfang ("💥 Echt jetzt!") – kein Server-Umbau,
+// alte Versionen zeigen einfach das Emoji. Frage wird automatisch bei "?" am Ende erkannt.
+const COMIC_KEY = 'sm_chat_comic';        // '1' an, '0' aus, leer = noch nicht entschieden
+const MOODS = { '🗯': 'thought', '💥': 'wow', '📣': 'shout', '🤫': 'whisper', '💗': 'love' };
+const MOOD_ICON = { thought: '🗯️', wow: '💥', shout: '📣', whisper: '🤫', love: '💗' };
+let CUR_MOOD = '';
+function comicOn() { return lsGet(COMIC_KEY) === '1'; }
+function parseMood(text) {
+  const t = String(text || '');
+  const m = t.match(/^(🗯️?|💥|📣|🤫|💗)\s+([\s\S]*)$/u);
+  if (m) return { mood: MOODS[m[1].replace('️', '')], text: m[2] };
+  if (/\?[!?\s]*$/.test(t.trim())) return { mood: 'question', text: t };
+  return { mood: 'speech', text: t };
+}
+function applyComic() {
+  const c = document.getElementById('messages');
+  if (c) c.classList.toggle('comic', comicOn());
+}
+function setComic(on) {
+  lsSet(COMIC_KEY, on ? '1' : '0');
+  applyComic(); updateComicHint();
+  if (CURRENT_ROOM) renderMessages();
+}
+function updateComicHint() {
+  const el = document.getElementById('comicHint');
+  if (!el) return;
+  const bb = document.getElementById('backupBar');
+  if (lsGet(COMIC_KEY) !== null || (bb && !bb.classList.contains('hidden'))) { el.className = 'backup-bar hidden'; el.innerHTML = ''; return; }
+  el.className = 'backup-bar comic-hint';
+  el.innerHTML = `<span>🗯️ <b>Neu:</b> Comic-Stil – Sprechblasen mit Gefühl! Du kannst es jederzeit im Profil ändern.</span>
+    <span class="bk-btns"><button class="note-btn" onclick="setComic(true)">Ausprobieren</button><button class="note-btn ghost" onclick="setComic(false)">Nein danke</button></span>`;
+}
+function toggleMoodTray() { document.getElementById('moodTray').classList.toggle('hidden'); }
+function pickMood(m) {
+  CUR_MOOD = m;
+  document.getElementById('moodBtn').textContent = m || '💬';
+  document.getElementById('moodBtn').classList.toggle('on', !!m);
+  document.querySelectorAll('#moodTray button').forEach(b => b.classList.toggle('sel', b.dataset.mood === m));
+  document.getElementById('moodTray').classList.add('hidden');
+  document.getElementById('msgInput').focus();
 }
 
 // ── SEND MESSAGE (P2P Priority + Fallback) ────────────────────────────────
@@ -1361,9 +1425,11 @@ async function sendMessage() {
   const input = document.getElementById('msgInput');
   // FIX: Mehrfaches Enter erzeugt sonst viele Leerzeilen → riesige Bubble.
   // Maximal eine Leerzeile zwischen Absätzen bleibt erlaubt.
-  const text = input.value.trim().replace(/\n{3,}/g, '\n\n');
+  let text = input.value.trim().replace(/\n{3,}/g, '\n\n');
 
   if (!text) return;
+  if (CUR_MOOD && !parseMood(text).mood.match(/^(thought|wow|shout|whisper|love)$/)) text = CUR_MOOD + ' ' + text;
+  if (CUR_MOOD) pickMood('');
 
   if (!PARTNER_CODE) {
     console.error('[Chat] Kein Partner ausgewählt!');

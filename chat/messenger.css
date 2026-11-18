@@ -807,3 +807,70 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
 .note-btn.ghost { border-color: var(--bord2, rgba(255,255,255,0.2)); color: var(--muted2, #7a98aa); }
 
 .restore-sep{margin:1rem 0 .6rem;color:#7f93a3;font-size:.8rem;text-align:center}
+
+/* ── Comic-Stil ─────────────────────────────────────────────────────────── */
+.comic-row{display:flex;gap:.5rem;align-items:center;margin:.2rem 0 .6rem;font-size:.85rem;color:#dce8f0}
+.comic-row input{width:1.1rem;height:1.1rem;accent-color:#ff9f00}
+.mood-tray{display:flex;gap:.35rem;padding:.4rem .6rem;background:#0f151c;border-top:1px solid rgba(255,255,255,.11);overflow-x:auto}
+.mood-tray.hidden{display:none}
+.mood-tray button{flex:1 0 auto;min-width:3.4rem;display:flex;flex-direction:column;align-items:center;gap:1px;background:#111820;border:1px solid rgba(255,255,255,.14);border-radius:10px;color:#9fb4c4;font-size:1.25rem;padding:.3rem .2rem}
+.mood-tray button span{font-size:.58rem;font-family:'Space Mono',monospace}
+.mood-tray button.sel{border-color:#ff9f00;color:#ff9f00;background:#1d1a10}
+#moodBtn.on{box-shadow:0 0 0 2px #ff9f00;border-radius:50%}
+.comic-hint{border-color:#ff9f0066}
+
+#messages.comic{--ink:#0b0b0f;gap:.9rem;padding:1.1rem 1rem 1.4rem;
+  background-color:#0a0e14;background-image:radial-gradient(rgba(255,159,0,.10) 1.2px,transparent 1.4px);background-size:14px 14px}
+#messages.comic .message.cm{position:relative;max-width:80%;margin-bottom:12px;padding:.6rem .9rem .5rem;
+  border:3px solid var(--ink);border-radius:20px;background:var(--fill);color:#12141a;
+  font-family:"Comic Neue","Comic Sans MS","Chalkboard SE","Marker Felt",ui-rounded,sans-serif;font-weight:700;font-size:.97rem;line-height:1.3;
+  box-shadow:4px 4px 0 var(--sh);transform:rotate(var(--tilt,0deg))}
+#messages.comic .message.cm.mine{--fill:#fff3c4;--sh:#ff9f00;border-bottom-right-radius:20px}
+#messages.comic .message.cm.other{--fill:#ffffff;--sh:#ff4f7b;border-bottom-left-radius:20px;border-left:3px solid var(--ink)}
+#messages.comic .cm .msg-time{color:#12141a;opacity:.5;font-family:'Space Mono',monospace;font-weight:400}
+/* Schwanz */
+#messages.comic .cm-speech::before,#messages.comic .cm-question::before,#messages.comic .cm-shout::before,#messages.comic .cm-whisper::before,#messages.comic .cm-love::before,
+#messages.comic .cm-speech::after,#messages.comic .cm-question::after,#messages.comic .cm-shout::after,#messages.comic .cm-whisper::after,#messages.comic .cm-love::after{content:"";position:absolute;width:0;height:0}
+#messages.comic .cm-speech::before,#messages.comic .cm-question::before,#messages.comic .cm-shout::before,#messages.comic .cm-whisper::before,#messages.comic .cm-love::before{bottom:-17px;border-top:17px solid var(--ink)}
+#messages.comic .cm-speech::after,#messages.comic .cm-question::after,#messages.comic .cm-shout::after,#messages.comic .cm-whisper::after,#messages.comic .cm-love::after{bottom:-10px;border-top:12px solid var(--fill)}
+#messages.comic .mine.cm::before{right:18px;border-left:16px solid transparent}
+#messages.comic .mine.cm::after{right:21px;border-left:10px solid transparent}
+#messages.comic .other.cm::before{left:18px;border-right:16px solid transparent}
+#messages.comic .other.cm::after{left:21px;border-right:10px solid transparent}
+/* Badge */
+.cm-badge{position:absolute;top:-13px;width:26px;height:26px;border-radius:50%;background:#ffe14d;border:3px solid var(--ink,#0b0b0f);color:#12141a;font-weight:900;font-size:.95rem;line-height:20px;text-align:center}
+.mine .cm-badge{left:-10px}.other .cm-badge{right:-10px}
+/* Frage */
+#messages.comic .message.cm.cm-question{--fill:#d8f0ff}
+#messages.comic .message.cm.cm-question.mine{--fill:#d8f0ff}
+/* Gedanke: Wolke + Gedankenpunkte */
+#messages.comic .message.cm.cm-thought{border-radius:34px;padding:.8rem 1.15rem .7rem;margin-bottom:26px;font-style:italic;--fill:#f4f1ff}
+#messages.comic .message.cm.cm-thought::before,#messages.comic .message.cm.cm-thought::after{content:"";position:absolute;box-sizing:content-box;height:auto;border-radius:50%;background:var(--fill);border:3px solid var(--ink)}
+#messages.comic .message.cm.cm-thought::before{width:12px;height:12px;bottom:-24px}
+#messages.comic .message.cm.cm-thought::after{width:6px;height:6px;bottom:-36px}
+#messages.comic .message.cm.mine.cm-thought::before{right:26px;left:auto;border:3px solid var(--ink)}
+#messages.comic .message.cm.mine.cm-thought::after{right:14px;left:auto;border:3px solid var(--ink)}
+#messages.comic .message.cm.other.cm-thought::before{left:26px;right:auto;border:3px solid var(--ink)}
+#messages.comic .message.cm.other.cm-thought::after{left:14px;right:auto;border:3px solid var(--ink)}
+/* WOW: Zackenblase */
+#messages.comic .message.cm.cm-wow{background:var(--ink);border:0;border-radius:0;box-shadow:none;padding:1.5rem 1.9rem;margin:6px 0 16px;clip-path:polygon(100.0% 50.0%,89.5% 70.3%,97.7% 84.3%,85.8% 82.3%,90.4% 94.8%,77.5% 88.2%,75.4% 99.4%,50.0% 90.0%,24.6% 99.4%,22.5% 88.2%,9.6% 94.8%,14.2% 82.3%,2.3% 84.3%,10.5% 70.3%,0.0% 50.0%,10.5% 29.7%,2.3% 15.7%,14.2% 17.7%,9.6% 5.2%,22.5% 11.8%,24.6% 0.6%,50.0% 10.0%,75.4% 0.6%,77.5% 11.8%,90.4% 5.2%,85.8% 17.7%,97.7% 15.7%,89.5% 29.7%);
+  font-size:1.2rem;font-weight:900;text-align:center;isolation:isolate;transform:rotate(calc(var(--tilt,0deg) * 3))}
+#messages.comic .message.cm.cm-wow::before{content:"";position:absolute;inset:5px;background:#ffe14d;clip-path:polygon(100.0% 50.0%,89.5% 70.3%,97.7% 84.3%,85.8% 82.3%,90.4% 94.8%,77.5% 88.2%,75.4% 99.4%,50.0% 90.0%,24.6% 99.4%,22.5% 88.2%,9.6% 94.8%,14.2% 82.3%,2.3% 84.3%,10.5% 70.3%,0.0% 50.0%,10.5% 29.7%,2.3% 15.7%,14.2% 17.7%,9.6% 5.2%,22.5% 11.8%,24.6% 0.6%,50.0% 10.0%,75.4% 0.6%,77.5% 11.8%,90.4% 5.2%,85.8% 17.7%,97.7% 15.7%,89.5% 29.7%);z-index:-1;border:0}
+#messages.comic .message.cm.cm-wow::after{display:none}
+/* Rufen */
+#messages.comic .message.cm.cm-shout{--fill:#ff7a59;color:#fff;font-size:1.12rem;font-weight:900;text-transform:uppercase;letter-spacing:.02em;border-radius:12px;text-shadow:1px 1px 0 var(--ink);transform:rotate(calc(var(--tilt,0deg) * 2))}
+#messages.comic .message.cm.cm-shout .msg-time{color:#fff}
+/* Flüstern */
+#messages.comic .message.cm.cm-whisper{border-style:dashed;--fill:#eef2f5;font-size:.82rem;font-weight:400;font-style:italic;box-shadow:none;color:#3b4652}
+/* Liebe */
+#messages.comic .message.cm.cm-love{--fill:#ffd3e4;border-radius:26px}
+#messages.comic .message.cm.cm-love .cm-badge{background:#ff4f7b;color:#fff}
+/* Bilder */
+#messages.comic .message.has-img{border:3px solid var(--ink,#0b0b0f);border-radius:14px;box-shadow:4px 4px 0 #ff9f00}
+
+#messages.comic .message.cm.cm-question{--fill:#d8f0ff}
+#messages.comic .message.cm.cm-thought{--fill:#f4f1ff}
+#messages.comic .message.cm.cm-shout{--fill:#ff7a59}
+#messages.comic .message.cm.cm-whisper{--fill:#eef2f5}
+#messages.comic .message.cm.cm-love{--fill:#ffd3e4}
+#messages.comic .message.cm.cm-wow{background:#fff}
