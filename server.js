@@ -1179,6 +1179,32 @@ app.post("/api/messenger/close", async (req, res) => {
 
 // Verifizierung (grüner Haken): jede Seite bestätigt für sich; zählt erst, wenn beide bestätigt haben. on=false hebt auf.
 app.post("/api/messenger/verify", async (req, res) => {
+  // Sammel-Abgleich: das Gerät meldet alle lokal verifizierten Kontakte (selbstheilend, falls eine Einzelmeldung verloren ging)
+  if (Array.isArray(req.body?.partners)) {
+    const code = normCode(req.body?.code);
+    const token = String(req.body?.token || "");
+    if (!isMsgCode(code) || !token) return res.status(400).json({ error: "code und token erforderlich" });
+    try {
+      if (!(await authCheck(code, token))) return res.status(403).json({ error: "Ungültiger Token" });
+      let n = 0;
+      for (const raw of req.body.partners.slice(0, 300)) {
+        const partner = normCode(raw);
+        if (!isMsgCode(partner) || partner === code) continue;
+        const exists = await pool.query("SELECT 1 FROM profiles WHERE code=$1 LIMIT 1", [partner]);
+        if (!exists.rows.length) continue;
+        const lo = code < partner ? code : partner, hi = code < partner ? partner : code;
+        const mine = code === lo ? "lo_ok" : "hi_ok";
+        await pool.query(
+          `INSERT INTO messenger_verified (lo, hi, ${mine}, created_at) VALUES ($1,$2,TRUE,$3)
+           ON CONFLICT (lo, hi) DO UPDATE SET ${mine}=TRUE`, [lo, hi, Date.now()]);
+        n++;
+      }
+      return res.json({ success: true, synced: n });
+    } catch (e) {
+      console.error("POST /api/messenger/verify (sync):", e.message);
+      return res.status(500).json({ error: "Datenbankfehler" });
+    }
+  }
   const code = normCode(req.body?.code);
   const partner = normCode(req.body?.partner);
   const token = String(req.body?.token || "");
