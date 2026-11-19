@@ -16,13 +16,13 @@
   "dir": "auto",
   "icons": [
     {
-      "src": "https://spotme-caching.github.io/chat/icons/isee_192.png",
+      "src": "https://spotme-caching.github.io/chat/icons/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "https://spotme-caching.github.io/chat/icons/iseeq_512.png",
+      "src": "https://spotme-caching.github.io/chat/icons/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
@@ -36,7 +36,7 @@
       "url": "https://spotme-caching.github.io/chat/?dragonschain",
       "icons": [
         {
-          "src": "https://spotme-caching.github.io/chat/icons/shortcut-new.png",
+          "src": "https://spotme-caching.github.io/chat/icons/icon-192x192.png",
           "sizes": "96x96",
           "type": "image/png"
         }
