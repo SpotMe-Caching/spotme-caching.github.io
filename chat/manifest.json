@@ -4,7 +4,7 @@
   "description": "Verschlüsselter P2P-Messanger  für iSee.Q – privat, mobil, offline-fähig.",
   "start_url": "https://spotme-caching.github.io/chat/index.html",
   "scope": "https://spotme-caching.github.io/chat/",
-  "display": "standalone",
+  "display": "fullscreen",
   "orientation": "landscape",
   "theme_color": "#0a0d12",
   "background_color": "#0a0d12",
