@@ -1,7 +1,7 @@
 {
-  "name": "iSee-Q",
+  "name": "iSee.Q",
   "short_name": "SpotMe",
-  "description": "Verschlüsselter P2P-Messanger  für SpotMe – privat, mobil, offline-fähig.",
+  "description": "Verschlüsselter P2P-Messanger  für iSee.Q – privat, mobil, offline-fähig.",
   "start_url": "https://spotme-caching.github.io/chat/index.html",
   "scope": "https://spotme-caching.github.io/chat/",
   "display": "fullscreen",
@@ -30,10 +30,10 @@
   ],
   "shortcuts": [
     {
-      "name": "Neuer Chat",
-      "short_name": "Neuer Chat",
-      "description": "Neuen Chat mit Code starten",
-      "url": "https://spotme-caching.github.io/chat/index.html?action=new",
+      "name": "Support",
+      "short_name": "Support",
+      "description": "Verbinde Dich mit dem Support",
+      "url": "https://spotme-caching.github.io/chat/?dragonschain",
       "icons": [
         {
           "src": "https://spotme-caching.github.io/chat/icons/shortcut-new.png",
