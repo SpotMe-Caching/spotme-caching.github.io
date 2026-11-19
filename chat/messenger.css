@@ -915,3 +915,34 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
 .vc-btns .vc-ghost{background:transparent;border:1px solid #2ecc7188;color:#9be6b8}
 .vc-btns .vc-no{background:#ff6b5e;color:#2a0500}
 .vc-wait,.vc-note{color:#9be6b8;font-size:.8rem}
+
+/* ── HUB (Facelifting v1.0.25) ── */
+.hub-layer{align-items:stretch;justify-content:center;padding:0;background:#080b10}
+.hub-wrap{width:100%;max-width:480px;display:flex;flex-direction:column;height:100%;margin:0 auto}
+.hub-top{display:flex;align-items:center;justify-content:space-between;padding:.9rem 1rem;border-bottom:1px solid #1c232d}
+.hub-logo{font:700 .95rem 'Space Mono',monospace;color:#ff9f00;display:flex;align-items:center;gap:.5rem}
+.hub-logo i{width:7px;height:7px;border-radius:50%;background:#ff9f00;display:inline-block}
+.hub-logo b{color:#9fb6c6;font-weight:700}
+.hub-x{width:38px;height:38px;border-radius:50%;border:1px solid #2a3340;background:#121820;color:#fff;font-size:1rem;cursor:pointer}
+.hub-tabs{display:flex;gap:.5rem;overflow-x:auto;padding:.7rem 1rem;border-bottom:1px solid #1c232d;scrollbar-width:none}
+.hub-tabs button{flex:0 0 auto;padding:.45rem .85rem;border-radius:999px;border:1px solid #2a3340;background:#0e1319;color:#c6d4de;font-size:.82rem;cursor:pointer;white-space:nowrap}
+.hub-tabs button.on{border-color:#ff9f00;color:#ff9f00;background:#1a1408}
+.hub-body{flex:1;overflow-y:auto;padding:1rem 1rem 2rem}
+.hub-body h2{color:#fff;font-size:1.15rem;margin:0 0 .3rem}
+.hub-sub{color:#7a98aa;font-size:.82rem;line-height:1.4;margin:0 0 1rem}
+.hub-tiles{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:1.2rem}
+.hub-tile{background:#0e1319;border:1px solid #232c38;border-radius:14px;padding:.8rem .9rem}
+.hub-tile b{display:block;font-size:1.5rem;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hub-tile span{font-size:.72rem;color:#7a98aa}
+.hub-h{font:.7rem 'Space Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#6a8394;margin:1.1rem 0 .4rem}
+.hub-note{font-size:.72rem;color:#7a98aa;margin:0 0 .5rem;line-height:1.4}
+.hub-full{width:100%;text-align:center}
+.hub-body details{border:1px solid #232c38;border-radius:12px;padding:.6rem .8rem;background:#0e1319}
+.hub-body summary{font-size:.8rem;color:#9fb6c6;cursor:pointer}
+.hub-body pre{font-size:.62rem;white-space:pre-wrap;color:#7a98aa;max-height:260px;overflow:auto;margin:.5rem 0}
+.hub-body .hidden{display:none}
+.hub-body .link-btn{display:block;width:100%;box-sizing:border-box;text-align:center;padding:.65rem .8rem !important;margin:0 0 .5rem !important;border:1px solid #2a3340 !important;border-radius:10px !important;background:#0e1319 !important;color:#ff9f00;font-size:.85rem;text-decoration:none !important;cursor:pointer}
+.hub-tile b{font-size:1.3rem}
+#tHd{font-size:.95rem;line-height:1.9rem}
+.hub-body .link-btn{width:100% !important;display:block !important}
+.hub-body .link-btn.danger{color:#ff4f7b !important;border-color:#5a2433 !important}

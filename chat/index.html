@@ -58,7 +58,7 @@
     <div class="chat-list-header">
       <h2>💬 Chats</h2>
       <button class="new-chat-btn" onclick="showNewChatLayer()" title="Neuer Chat">+</button>
-      <button class="logout-btn" onclick="showSettings()" style="background:none;border:none;color:#ff4f7b;cursor:pointer;font-size:0.85rem;flex-shrink:0;">⚙︎ Profil</button>
+      <button class="logout-btn" onclick="showSettings()" style="background:none;border:none;color:#ff4f7b;cursor:pointer;font-size:0.85rem;flex-shrink:0;">⚙︎ Hub</button>
     </div>
     <div id="backupBar" class="backup-bar hidden"></div>
     <div id="comicHint" class="backup-bar hidden"></div>
@@ -106,43 +106,69 @@
     </div>
   </div>
 
-  <div id="settingsLayer" class="hidden overlay">
-    <div class="overlay-card">
-      <h2>👤 Dein Profil</h2>
-      <p style="font-size:0.7rem;color:#7a98aa;margin:-0.4rem 0 0.6rem;">Chat-Version <span id="chatVer">…</span><br><span id="diagInfo"></span></p>
-      <details style="margin:-0.2rem 0 0.8rem;"><summary style="font-size:0.72rem;color:#7a98aa;cursor:pointer;">Verbindungsprotokoll</summary><pre id="diagLog" style="font-size:0.62rem;white-space:pre-wrap;color:#7a98aa;max-height:160px;overflow:auto;margin:0.4rem 0;"></pre><button class="link-btn" style="width:100%;text-align:center;" onclick="copyDiag()">Protokoll kopieren</button></details>
-      <label>Deine ID (gib sie weiter, damit dich andere hinzufügen)</label>
-      <div class="copy-row">
-        <input type="text" id="setId" readonly>
-        <button onclick="copyId()">Kopieren</button>
+  <div id="settingsLayer" class="hidden overlay hub-layer">
+    <div class="hub-wrap">
+      <div class="hub-top"><span class="hub-logo"><i></i>SPOT<b>ME</b> Messenger</span><button class="hub-x" onclick="hideSettings()" aria-label="Schließen">✕</button></div>
+      <div class="hub-tabs" id="hubTabs">
+        <button data-tab="ich" class="on" onclick="hubTab('ich')">👤 Ich</button>
+        <button data-tab="look" onclick="hubTab('look')">🗯️ Aussehen</button>
+        <button data-tab="safe" onclick="hubTab('safe')">🔒 Sicherheit</button>
+        <button data-tab="conn" onclick="hubTab('conn')">📡 Verbindung</button>
       </div>
-      <button class="link-btn" style="width:100%;text-align:center;" onclick="shareId()">🔗 Link teilen</button>
-      <label>Dein @Handle (Kurzlink)</label>
-      <p id="hdInfo" style="font-size:0.72rem;color:#7a98aa;margin:-0.2rem 0 0.5rem;"></p>
-      <div class="copy-row" id="hdRow">
-        <input type="text" id="hdInput" maxlength="21" placeholder="@DeinName" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false">
-        <button onclick="claimHandle()">Speichern</button>
+      <div class="hub-body">
+        <section data-pane="ich">
+          <h2>🧭 Mein Messenger</h2>
+          <p class="hub-sub">Alles an einem Ort – dein Profil, dein Look, deine Sicherheit.</p>
+          <div class="hub-tiles">
+            <div class="hub-tile"><b id="tChats">0</b><span>💬 Chats</span></div>
+            <div class="hub-tile"><b id="tVer">0</b><span>✔ Verifizierte</span></div>
+            <div class="hub-tile"><b id="tHd">–</b><span>@ Handle</span></div>
+            <div class="hub-tile"><b id="tBk">–</b><span>💾 Sicherung</span></div>
+          </div>
+          <div class="hub-h">Deine ID</div>
+          <div class="copy-row"><input type="text" id="setId" readonly><button onclick="copyId()">Kopieren</button></div>
+          <button class="link-btn hub-full" onclick="shareId()">🔗 Link teilen</button>
+          <div class="hub-h">Dein @Handle (Kurzlink)</div>
+          <p id="hdInfo" class="hub-note"></p>
+          <div class="copy-row" id="hdRow">
+            <input type="text" id="hdInput" maxlength="21" placeholder="@DeinName" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false">
+            <button onclick="claimHandle()">Speichern</button>
+          </div>
+          <button class="link-btn hub-full" id="hdShare" style="display:none;" onclick="shareHandle()">🔗 Kurzlink teilen</button>
+          <button class="link-btn hub-full" id="hdFree" style="display:none;" onclick="releaseHandle()">Handle freigeben</button>
+          <div class="hub-h">Dein Name (die ID bleibt gleich)</div>
+          <div class="copy-row">
+            <input type="text" id="setName" maxlength="40">
+            <button onclick="saveName()">Speichern</button>
+          </div>
+        </section>
+        <section data-pane="look" class="hidden">
+          <h2>🗯️ Aussehen &amp; Sound</h2>
+          <p class="hub-sub">Wie dein Chat aussieht und klingt.</p>
+          <label class="comic-row"><input type="checkbox" id="comicToggle" onchange="setComic(this.checked)"> 🗯️ Comic-Stil im Chat (Sprechblasen)</label>
+          <label class="comic-row"><input type="checkbox" id="sndToggle" onchange="setSnd(this.checked)"> 🔊 Töne zu den Sprechblasen</label>
+          <div class="copy-row snd-row"><select id="sndVol" onchange="setSndVol(this.value)"><option value="1">leise</option><option value="2">mittel</option><option value="3">laut</option></select><button onclick="testSnd()">▶ Testen</button></div>
+        </section>
+        <section data-pane="safe" class="hidden">
+          <h2>🔒 Sicherheit &amp; Daten</h2>
+          <p class="hub-sub">Deine Chats liegen auf deinem Gerät. Sicherung = deine Versicherung.</p>
+          <div class="hub-h">Sicherung (Chats + Zugang) – für Gerätewechsel</div>
+          <p id="bkLast" class="hub-note"></p>
+          <div class="copy-row">
+            <button onclick="openBackupDialog()">Sichern</button>
+            <button onclick="document.getElementById('restoreFile').click()">Wiederherstellen</button>
+            <input type="file" id="restoreFile" accept=".json,application/json" class="hidden" onchange="importBackup(this)">
+          </div>
+          <div class="hub-h">Gefahrenzone</div>
+          <button class="link-btn hub-full danger" onclick="deleteEverything()">🗑 Alles von mir löschen</button>
+        </section>
+        <section data-pane="conn" class="hidden">
+          <h2>📡 Verbindung</h2>
+          <p class="hub-sub">Chat-Version <span id="chatVer">…</span><br><span id="diagInfo"></span></p>
+          <details open><summary>Verbindungsprotokoll</summary><pre id="diagLog"></pre><button class="link-btn hub-full" onclick="copyDiag()">Protokoll kopieren</button></details>
+        </section>
+        <p id="setMsg" class="copy-feedback"></p>
       </div>
-      <button class="link-btn" id="hdShare" style="width:100%;text-align:center;display:none;" onclick="shareHandle()">🔗 Kurzlink teilen</button>
-      <button class="link-btn" id="hdFree" style="width:100%;text-align:center;display:none;" onclick="releaseHandle()">Handle freigeben</button>
-      <label>Dein Name (die ID bleibt gleich)</label>
-      <div class="copy-row">
-        <input type="text" id="setName" maxlength="40">
-        <button onclick="saveName()">Speichern</button>
-      </div>
-      <p id="setMsg" class="copy-feedback"></p>
-      <label class="comic-row"><input type="checkbox" id="comicToggle" onchange="setComic(this.checked)"> 🗯️ Comic-Stil im Chat (Sprechblasen)</label>
-      <label class="comic-row"><input type="checkbox" id="sndToggle" onchange="setSnd(this.checked)"> 🔊 Töne zu den Sprechblasen</label>
-      <div class="copy-row snd-row"><select id="sndVol" onchange="setSndVol(this.value)"><option value="1">leise</option><option value="2">mittel</option><option value="3">laut</option></select><button onclick="testSnd()">▶ Testen</button></div>
-      <label>Sicherung (Chats + Zugang) – für Gerätewechsel</label>
-      <p id="bkLast" style="font-size:0.7rem;color:#7a98aa;margin:-0.2rem 0 0.5rem;"></p>
-      <div class="copy-row">
-        <button onclick="openBackupDialog()">Sichern</button>
-        <button onclick="document.getElementById('restoreFile').click()">Wiederherstellen</button>
-        <input type="file" id="restoreFile" accept=".json,application/json" class="hidden" onchange="importBackup(this)">
-      </div>
-      <button class="link-btn" style="width:100%;text-align:center;color:#ff4f7b;" onclick="deleteEverything()">🗑 Alles von mir löschen</button>
-      <button class="primary-btn" onclick="hideSettings()">Schließen</button>
     </div>
   </div>
 
@@ -698,8 +724,23 @@ function showSettings() {
   document.getElementById('sndToggle').checked = sndOn();
   document.getElementById('sndVol').value = sndVol();
   { const b = bkInfo(); document.getElementById('bkLast').textContent = b.ts ? `Letzte Sicherung: ${fmtDay(b.ts)}${changesSince() ? ' · seitdem Neues' : ' · alles gesichert'}` : 'Noch keine Sicherung'; }
+  hubTab('ich'); hubTiles();
   document.getElementById('settingsLayer').classList.remove('hidden');
   loadHandleInfo();
+}
+function hubTab(t) {
+  document.querySelectorAll('#hubTabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  document.querySelectorAll('#settingsLayer [data-pane]').forEach(x => x.classList.toggle('hidden', x.dataset.pane !== t));
+  const bd = document.querySelector('#settingsLayer .hub-body'); if (bd) bd.scrollTop = 0;
+}
+function hubTiles() {
+  try {
+    const set = (i, v) => { const e = document.getElementById(i); if (e) e.textContent = v; };
+    set('tChats', Object.keys(getContacts()).length);
+    set('tVer', HD.count || 0);
+    set('tHd', HD.handle ? '@' + HD.handle : '–');
+    const b = bkInfo(); set('tBk', b.ts ? (changesSince() ? 'neu!' : '✓') : 'fehlt');
+  } catch (e) {}
 }
 function hideSettings() { document.getElementById('settingsLayer').classList.add('hidden'); }
 function setMsg(t) { const el = document.getElementById('setMsg'); el.textContent = t; setTimeout(() => { if (el.textContent === t) el.textContent = ''; }, 3000); }
@@ -723,6 +764,7 @@ async function loadHandleInfo() {
   renderHandleInfo();
 }
 function renderHandleInfo() {
+  hubTiles();
   const info = document.getElementById('hdInfo'), row = document.getElementById('hdRow');
   const share = document.getElementById('hdShare'), free = document.getElementById('hdFree'), inp = document.getElementById('hdInput');
   if (!info) return;
