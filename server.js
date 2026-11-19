@@ -1042,7 +1042,13 @@ app.get("/api/profile/:code", async (req, res) => {
       [code, spot],
     );
     if (!rows.length) return res.status(404).json({ error: "Nicht gefunden" });
-    res.json(decryptProfile(rows[0]));
+    const out = decryptProfile(rows[0]);
+    if (spot === "messenger") {
+      // @Handle (öffentlich, freiwillig gewählt) – damit Kontakte ihn im Chat anzeigen können
+      const h = await pool.query("SELECT display FROM messenger_handles WHERE code=$1", [code]);
+      out.handle = h.rows[0]?.display || null;
+    }
+    res.json(out);
   } catch (e) {
     console.error("GET /api/profile/:code:", e.message);
     res.status(500).json({ error: "Datenbankfehler" });
