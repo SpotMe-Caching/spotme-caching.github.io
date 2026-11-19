@@ -143,6 +143,9 @@
           </div>
           <button class="link-btn hub-full" id="hdShare" style="display:none;" onclick="shareHandle()">🔗 Kurzlink teilen</button>
           <button class="link-btn hub-full" id="hdFree" style="display:none;" onclick="releaseHandle()">Handle freigeben</button>
+          <div class="hub-h">Empfehlungen</div>
+          <label class="comic-row"><input type="checkbox" id="recToggle" onchange="setRec(this.checked)"> 🤝 Meine Verifizierten dürfen mich weiterempfehlen</label>
+          <p class="hub-note">Nur Kontakte mit grünem Haken, und nur an deren eigene Verifizierte. Wer eine Empfehlung bekommt, schickt dir nur eine normale Anfrage – du entscheidest. Jederzeit abschaltbar.</p>
           <div class="hub-h">Dein Name (die ID bleibt gleich)</div>
           <div class="copy-row">
             <input type="text" id="setName" maxlength="40">
@@ -206,6 +209,7 @@
   <div id="messages" class="messages-container"></div>
   
   <div id="verCard" class="ver-card hidden"></div>
+  <div id="recCard" class="ver-card rec-card hidden"></div>
   <div id="chatNote" class="hidden"></div>
   <div id="imgHint" class="img-hint off">📷 Bilder nur, wenn ihr beide online seid</div>
   <div id="moodTray" class="mood-tray hidden">
@@ -749,6 +753,7 @@ function hubTab(t) {
 }
 function hubTiles() {
   try {
+    const rt = document.getElementById('recToggle'); if (rt) rt.checked = lsGet('sm_chat_rec') === '1';
     const set = (i, v) => { const e = document.getElementById(i); if (e) e.textContent = v; };
     set('tChats', Object.keys(getContacts()).length);
     set('tVer', HD.count || 0);
@@ -773,7 +778,7 @@ async function loadHandleInfo() {
   await syncVerified(true);
   try {
     const r = await tfetch(`${API}/messenger/verified/${CODE}?token=${encodeURIComponent(TOKEN)}`, {}, 10000);
-    if (r.ok) HD = await r.json();
+    if (r.ok) { HD = await r.json(); if (typeof HD.rec === 'boolean') lsSet('sm_chat_rec', HD.rec ? '1' : '0'); }
   } catch (e) {}
   renderHandleInfo();
 }
@@ -1251,7 +1256,7 @@ async function renderChatList() {
       <div class="avatar">${escapeHtml((c.partnerName[0] || '?').toUpperCase())}</div>
       <div class="chat-info">
         <div class="chat-name">${escapeHtml(c.partnerName)}${(metaAll[c.partnerCode] || {}).ver ? ' <span class="ver-tick" title="Verifiziert">✔</span>' : ''}</div>
-        <div class="chat-preview">${((metaAll[c.partnerCode] || {}).vp && ['ask-in', 'judge'].includes(metaAll[c.partnerCode].vp.st)) ? '<span class="chat-tag ver">🔏 Frage wartet</span> ' : ''}${(metaAll[c.partnerCode] || {}).paused ? '<span class="chat-tag">⏸ pausiert</span> ' : (metaAll[c.partnerCode] || {}).req ? '<span class="chat-tag req">📨 Anfrage</span> ' : ''}${escapeHtml(c.lastText)}</div>
+        <div class="chat-preview">${((metaAll[c.partnerCode] || {}).vp && ['ask-in', 'judge'].includes(metaAll[c.partnerCode].vp.st)) ? '<span class="chat-tag ver">🔏 Frage wartet</span> ' : ''}${((metaAll[c.partnerCode] || {}).rc || []).length ? '<span class="chat-tag ver">🤝 Empfehlung</span> ' : ''}${(metaAll[c.partnerCode] || {}).paused ? '<span class="chat-tag">⏸ pausiert</span> ' : (metaAll[c.partnerCode] || {}).req ? '<span class="chat-tag req">📨 Anfrage</span> ' : ''}${escapeHtml(c.lastText)}</div>
       </div>
       <div class="chat-meta"><div class="chat-time">${c.timeStr}</div>${c.unread ? `<div class="unread-badge">${c.unread}</div>` : ''}</div>
       <button class="chat-del" data-del="${escapeHtml(c.room)}" aria-label="Kontakt beenden" title="Kontakt beenden">🗑</button>
@@ -1364,7 +1369,7 @@ async function openChat(room, partnerCode, partnerName) {
   updateP2PUI(canSendImage(), canSendImage() ? 'P2P Aktiv' : 'Server-Modus');
   applyChatState();
   updateHeaderVer();
-  renderVerCard();
+  renderVerCard(); REC_PICK = false; renderRecCard();
 
   await renderMessages();
 
@@ -1658,7 +1663,7 @@ function playIncoming(text) { playMood(parseMood(text).mood, 'in'); }
 // Ablauf: A stellt eine Frage → B antwortet → A bestätigt ("Stimmt") → beide bekommen ✔.
 // Die Schritte laufen als unsichtbare Steuer-Nachrichten (🔏…) über das normale Postfach.
 const VCTRL = '🔏';
-const VCTRL_RE = /^🔏(Q|A|OK|NO|X|UN)\|([a-z0-9]{4,12})(?:\|([\s\S]*))?$/u;
+const VCTRL_RE = /^🔏(Q|A|OK|NO|X|UN|R)\|([a-z0-9]{4,12})(?:\|([\s\S]*))?$/u;
 let VC_OPEN = false;
 function vpOf(code) { return metaOf(code).vp || null; }
 function verRid() { return Math.random().toString(36).slice(2, 8).padEnd(6, 'x'); }
@@ -1699,7 +1704,16 @@ function handleControl(from, text) {
   const mt = metaOf(from);
   if (!getContacts()[from] || mt.req) return true; // nur von bekannten Kontakten
   const vp = mt.vp || null;
-  if (t === 'Q') {
+  if (t === 'R') {
+    // Empfehlung: nur von Verifizierten, nie sich selbst / schon bekannte Kontakte
+    const rm = body.match(/^([a-z]{6})\|([\s\S]*)$/);
+    if (rm && mt.ver && rm[1] !== CODE && rm[1] !== from && !getContacts()[rm[1]] && !getClosedByMe()[rm[1]]) {
+      const list = (mt.rc || []).filter(x => x.code !== rm[1]);
+      list.push({ id, code: rm[1], name: rm[2].replace(/[\r\n]/g, ' ').trim().slice(0, 30) || fmtId(rm[1]), ts: Date.now() });
+      setMeta(from, { rc: list.slice(-5) });
+      playMood('question', 'in');
+    }
+  } else if (t === 'Q') {
     if (!mt.ver) { setMeta(from, { vp: { id, role: 'answerer', q: body, st: 'ask-in' }, vnote: '' }); playMood('question', 'in'); }
   } else if (t === 'A') {
     if (vp && vp.role === 'asker' && vp.id === id && vp.st === 'asked') { setMeta(from, { vp: Object.assign({}, vp, { st: 'judge', a: body }) }); playMood('question', 'in'); }
@@ -1716,7 +1730,7 @@ function handleControl(from, text) {
   return true;
 }
 function refreshVerUI(from) {
-  if (CURRENT_ROOM && from === PARTNER_CODE) { updateHeaderVer(); renderVerCard(); }
+  if (CURRENT_ROOM && from === PARTNER_CODE) { updateHeaderVer(); renderVerCard(); renderRecCard(); }
   renderChatList();
 }
 function updateHeaderCode() {
@@ -1765,7 +1779,7 @@ function renderVerCard() {
     else if (vp.st === 'judge') html = `<b>🔏 ${nm} antwortet</b><p>Deine Frage: <i>„${escapeHtml(vp.q)}“</i><br>Antwort: <i>„${escapeHtml(vp.a || '')}“</i></p><p>Ist das die richtige Antwort?</p><div class="vc-btns"><button onclick="verJudge(true)">✔ Stimmt</button><button class="vc-no" onclick="verJudge(false)">✖ Stimmt nicht</button><button class="vc-ghost" onclick="verCancel()">Abbrechen</button></div>`;
   } else if (m.ver) {
     if (!VC_OPEN) { el.className = 'ver-card hidden'; return; }
-    html = `<b>✔ Verifiziert</b><p>Du und ${nm} habt euch gegenseitig bestätigt. Der grüne Haken bleibt am Namen.</p><div class="vc-btns"><button class="vc-ghost" onclick="verUnverify()">Verifizierung aufheben</button><button class="vc-ghost" onclick="toggleVerCard()">Schließen</button></div>`;
+    html = `<b>✔ Verifiziert</b><p>Du und ${nm} habt euch gegenseitig bestätigt. Der grüne Haken bleibt am Namen.</p><div class="vc-btns"><button onclick="recPick()">🤝 Kontakt empfehlen</button><button class="vc-ghost" onclick="verUnverify()">Verifizierung aufheben</button><button class="vc-ghost" onclick="toggleVerCard()">Schließen</button></div>`;
   } else {
     const note = { no: 'Die Antwort wurde nicht bestätigt – keine Verifizierung.', x: 'Die Verifizierung wurde abgebrochen.', un: 'Die Verifizierung wurde aufgehoben.' }[m.vnote || ''];
     if (!VC_OPEN && !note) { el.className = 'ver-card hidden'; return; }
@@ -1776,6 +1790,77 @@ function renderVerCard() {
   }
   el.className = 'ver-card';
   el.innerHTML = html;
+}
+// ── EMPFEHLEN ──────────────────────────────────────────────────────────────
+// A (verifiziert mit C) empfiehlt B an C. B muss "darf empfohlen werden" aktiviert haben (Server-Flag).
+// C bekommt eine Karte und kann B eine ganz normale Anfrage schicken – B entscheidet dann selbst.
+const REC_KEY = 'sm_chat_rec';
+let REC_PICK = false, REC_CACHE = {};
+function recOn() { return lsGet(REC_KEY) === '1'; }
+function setRec(on) {
+  lsSet(REC_KEY, on ? '1' : '0');
+  tfetch(`${API}/messenger/rec`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: CODE, token: TOKEN, on: !!on })
+  }, 15000).then(r => { if (!r.ok) throw 0; setMsg(on ? '✅ Empfehlungen erlaubt' : 'Empfehlungen aus'); }).catch(() => setMsg('Keine Verbindung – bitte später erneut umschalten'));
+}
+async function recFlag(code) {
+  const c = REC_CACHE[code];
+  if (c && Date.now() - c.ts < 60000) return c;
+  try {
+    const r = await tfetch(`${API}/profile/${code}?spot=messenger`, {}, 10000);
+    if (!r.ok) return { ok: false, rec: false, ts: Date.now() };
+    const j = await r.json();
+    return (REC_CACHE[code] = { ok: true, rec: !!j.rec, name: j.name || '', handle: j.handle || '', ts: Date.now() });
+  } catch (e) { return { ok: false, rec: false, ts: Date.now() }; }
+}
+async function recPick() {
+  REC_PICK = true; VC_OPEN = false; renderVerCard();
+  const el = document.getElementById('recCard'); el.className = 'ver-card rec-card';
+  el.innerHTML = '<b>🤝 Wen empfiehlst du?</b><p class="vc-wait">Prüfe, wer Empfehlungen erlaubt …</p>';
+  const m = getMeta(), cs = getContacts();
+  const cands = Object.keys(m).filter(k => m[k] && m[k].ver && cs[k] && k !== PARTNER_CODE);
+  if (!cands.length) { el.innerHTML = '<b>🤝 Empfehlen</b><p>Du hast keinen weiteren verifizierten Kontakt (grüner Haken), den du empfehlen könntest.</p><div class="vc-btns"><button class="vc-ghost" onclick="recClose()">Schließen</button></div>'; return; }
+  const fl = await Promise.all(cands.map(k => recFlag(k)));
+  if (!REC_PICK) return;
+  el.innerHTML = '<b>🤝 Wen empfiehlst du ' + escapeHtml(PARTNER_NAME || '') + '?</b><p>Nur Kontakte, die Empfehlungen erlaubt haben, können gewählt werden.</p>' +
+    cands.map((k, i) => `<div class="rec-row"><span>${escapeHtml(cs[k])} <small>${fmtId(k)}</small></span>${fl[i].rec ? `<button onclick="recSend('${k}')">Empfehlen</button>` : '<em>erlaubt es nicht</em>'}</div>`).join('') +
+    '<div class="vc-btns"><button class="vc-ghost" onclick="recClose()">Schließen</button></div>';
+}
+function recClose() { REC_PICK = false; renderRecCard(); }
+async function recSend(code) {
+  const cs = getContacts(), mt = metaOf(code);
+  if (!PARTNER_CODE || !cs[code] || !mt.ver) return;
+  const f = await recFlag(code);
+  if (!f.rec) { renderRecCard('Dieser Kontakt erlaubt keine Empfehlungen (mehr).'); return; }
+  const ok = await sendCtrl(PARTNER_CODE, `${VCTRL}R|${verRid()}|${code}|${String(cs[code]).slice(0, 30)}`);
+  REC_PICK = false;
+  renderRecCard(ok ? '✅ Empfehlung an ' + escapeHtml(PARTNER_NAME || '') + ' gesendet.' : 'Nicht gesendet – bitte später erneut versuchen.');
+}
+function renderRecCard(note) {
+  const el = document.getElementById('recCard');
+  if (!el) return;
+  if (REC_PICK) return;
+  const rc = PARTNER_CODE ? (metaOf(PARTNER_CODE).rc || []) : [];
+  const r = rc[0], nm = escapeHtml(PARTNER_NAME || '');
+  let html = note ? `<p class="vc-note">${note}</p>` : '';
+  if (r) html += `<b>🤝 ${nm} empfiehlt dir ${escapeHtml(r.name)}</b><p>${nm} hat dich mit <b>${escapeHtml(r.name)}</b> (${fmtId(r.code)}) bekannt gemacht – ${escapeHtml(r.name)} hat Empfehlungen erlaubt. Du schickst nur eine normale Anfrage, ${escapeHtml(r.name)} entscheidet selbst.</p><div class="vc-btns"><button onclick="recAccept('${r.code}')">💬 Anfrage schicken</button><button class="vc-ghost" onclick="recDismiss('${r.code}')">Nein danke</button></div>`;
+  if (!html) { el.className = 'ver-card rec-card hidden'; el.innerHTML = ''; return; }
+  el.className = 'ver-card rec-card'; el.innerHTML = html;
+}
+function recDismiss(code) {
+  const rc = (metaOf(PARTNER_CODE).rc || []).filter(x => x.code !== code);
+  setMeta(PARTNER_CODE, { rc }); renderRecCard(); renderChatList();
+}
+async function recAccept(code) {
+  const f = await recFlag(code);
+  if (!f.ok) return renderRecCard('Server gerade nicht erreichbar – bitte später erneut versuchen.');
+  if (!f.rec) { recDismiss(code); return renderRecCard('Diese Person erlaubt keine Empfehlungen (mehr) – es wurde nichts gesendet.'); }
+  const from = PARTNER_CODE;
+  setMeta(from, { rc: (metaOf(from).rc || []).filter(x => x.code !== code) });
+  addContact(code, f.name || fmtId(code));
+  if (f.handle) setMeta(code, { h: f.handle });
+  await openChat([CODE, code].sort().join('-'), code, f.name || fmtId(code));
 }
 function verNoteClose() { setMeta(PARTNER_CODE, { vnote: '' }); renderVerCard(); }
 async function verSend() {

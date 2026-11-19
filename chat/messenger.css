@@ -975,3 +975,10 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
 .ls-facts{display:flex;gap:1.6rem;justify-content:center;margin-top:1.8rem;padding-top:1.2rem;border-top:1px solid rgba(255,255,255,.09);width:100%}
 .ls-facts div{font-size:.72rem;color:#8793ab}.ls-facts b{display:block;font-size:1.4rem;color:#e8edf5;font-weight:800}
 .ls-more{margin-top:1.2rem;color:#f59e0b;font-size:.85rem}
+
+/* ── Empfehlen (v1.0.28) ── */
+.rec-card{border-color:rgba(34,211,238,.35)}
+.rec-row{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.45rem 0;border-top:1px solid rgba(255,255,255,.07);font-size:.9rem}
+.rec-row small{color:#7a98aa;font-family:'Space Mono',monospace;font-size:.7rem;margin-left:.3rem}
+.rec-row em{color:#7a98aa;font-size:.75rem}
+.rec-row button{width:auto !important;margin:0 !important;padding:.4rem .8rem !important}
