@@ -1,0 +1,99 @@
+/* ══════════════════════════════════════════════════════════════
+   SPOT MESSENGER · Facelift Chatfenster
+   Laden NACH messenger.css und theme-vars.css.
+   Idee: Fokus auf den Chat. Status = ein Punkt am Avatar,
+   Hinweise nur, wenn sie gebraucht werden, ruhige Farben.
+   Nur im dunklen Theme aktiv (helles Theme behält den alten Look).
+   Entfernen = alter Look kommt zurück.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Palette: Mitternachtsblau, warm für „ich“, kühl für „du“ ── */
+:root:not([data-theme="light"]) #chatDetailScreen {
+  --bg: #0b0f1a;
+  --card: #151b2b;
+  --bord2: rgba(255, 255, 255, 0.08);
+  --text: #e8edf8;
+  --muted2: #8d9ab3;
+  --acc: #ffb347;      /* Bernstein */
+  --acc2: #ff7a59;     /* Koralle */
+  --cool: #3dd6c6;     /* Türkis für das Gegenüber */
+  --ok: #3ddc84;
+  background: var(--bg);
+}
+
+/* ── Kopfzeile: Banner weg, Status als Punkt am Avatar ──────── */
+:root:not([data-theme="light"]) #p2pBanner { display: none; }
+:root:not([data-theme="light"]) .chat-header {
+  padding: max(0.6rem, calc(env(safe-area-inset-top) + 0.35rem)) 0.9rem 0.6rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--bord2);
+  gap: 0.65rem;
+}
+:root:not([data-theme="light"]) .header-code { font-size: 0.68rem; color: var(--muted2); opacity: 0.8; }   /* @Handle + ID bleiben sichtbar, nur leiser */
+.hd-avatar { position: relative; }
+:root:not([data-theme="light"]) .hd-avatar::after {
+  content: ""; position: absolute; right: -1px; bottom: -1px;
+  width: 11px; height: 11px; border-radius: 50%;
+  background: #5b6578; border: 2px solid var(--bg);
+}
+:root:not([data-theme="light"]) .chat-header:has(.p2p-active) .hd-avatar::after { background: var(--ok); }
+:root:not([data-theme="light"]) .header-status { margin: 0; font-size: 0.68rem; }
+:root:not([data-theme="light"]) .header-status .p2p-indicator,:root:not([data-theme="light"]) .header-status .p2p-active,:root:not([data-theme="light"]) .header-status .p2p-inactive {
+  background: none; border: 0; padding: 0; color: var(--muted2);
+}
+:root:not([data-theme="light"]) .header-status .p2p-active { color: var(--ok); }
+:root:not([data-theme="light"]) .header-status .p2p-dot { display: none; }
+:root:not([data-theme="light"]) .chat-header .ver-btn,:root:not([data-theme="light"]) .chat-header .back-btn { width: 34px; height: 34px; font-size: 1rem; }
+:root:not([data-theme="light"]) .chat-header .back-btn { border-color: transparent; background: transparent; color: var(--muted2); }
+
+/* ── Hinweisleiste nur noch, wenn nötig (nach Antippen von 📷) ─ */
+:root:not([data-theme="light"]) .img-hint.off,:root:not([data-theme="light"]) .img-hint.on { display: none; }
+
+/* ── Nachrichtenfläche: ruhiger Hintergrund ──────────────────── */
+:root:not([data-theme="light"]) .messages-container { background: var(--bg); }
+:root:not([data-theme="light"]) #messages.comic {
+  background-color: var(--bg);
+  background-image: radial-gradient(rgba(255, 255, 255, 0.035) 1.2px, transparent 1.4px);
+}
+
+/* normale Blasen (ohne Comic-Modus) */
+:root:not([data-theme="light"]) .message.mine {
+  background: linear-gradient(135deg, var(--acc), var(--acc2));
+  color: #1c1208;
+}
+:root:not([data-theme="light"]) .message.other {
+  background: var(--card); border: 0; color: var(--text);
+}
+
+/* Comic-Blasen: warmer Schatten für mich, kühler für das Gegenüber */
+:root:not([data-theme="light"]) #messages.comic .message.cm.mine { --sh: var(--acc2); }
+:root:not([data-theme="light"]) #messages.comic .message.cm.other { --sh: var(--cool); }
+:root:not([data-theme="light"]) #messages.comic .cm .msg-time { opacity: 0.4; }
+:root:not([data-theme="light"]) #messages.comic .message.has-img { box-shadow: 4px 4px 0 var(--acc2); }
+
+/* ── Eingabeleiste: Icons leise, Senden im Verlauf ───────────── */
+:root:not([data-theme="light"]) .input-bar {
+  background: var(--bg);
+  border-top: 1px solid var(--bord2);
+  gap: 0.35rem;
+}
+:root:not([data-theme="light"]) .input-bar .img-btn {
+  width: 38px; height: 38px;
+  background: transparent; border: 0; opacity: 0.6;
+}
+:root:not([data-theme="light"]) .input-bar .img-btn.on { opacity: 1; box-shadow: inset 0 0 0 1.5px var(--ok); }
+:root:not([data-theme="light"]) #moodBtn.on { box-shadow: inset 0 0 0 1.5px var(--acc); }
+:root:not([data-theme="light"]) .input-bar textarea {
+  background: var(--card); border: 0; color: var(--text);
+}
+:root:not([data-theme="light"]) .input-bar textarea:focus { outline: 1.5px solid var(--acc); }
+:root:not([data-theme="light"]) .input-bar button:not(.img-btn) {
+  background: linear-gradient(135deg, var(--acc), var(--acc2)); color: #1c1208;
+}
+
+/* ── Stimmungsleiste im gleichen Ton ─────────────────────────── */
+:root:not([data-theme="light"]) .mood-tray { background: var(--bg); border-top: 1px solid var(--bord2); }
+:root:not([data-theme="light"]) .mood-tray button { background: var(--card); border-color: var(--bord2); }
+:root:not([data-theme="light"]) .mood-tray button.sel { background: var(--card); border-color: var(--acc); color: var(--acc); }
+:root:not([data-theme="light"]) .mood-tray button.more { color: var(--acc); }
+
