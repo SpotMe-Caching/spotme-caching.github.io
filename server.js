@@ -444,6 +444,8 @@ async function initDB() {
     // Messenger: @Handle als Kurzlink (/chat/?Name). Eindeutig (ohne Groß/Klein), je Profil genau einer.
     await pool.query(`CREATE TABLE IF NOT EXISTS messenger_handles (
       handle TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, display TEXT NOT NULL, updated_at BIGINT NOT NULL)`);
+    // Messenger: "darf von meinen Verifizierten empfohlen werden" (nur wer hier steht, kann empfohlen werden)
+    await pool.query(`CREATE TABLE IF NOT EXISTS messenger_rec (code TEXT PRIMARY KEY, created_at BIGINT NOT NULL)`);
     await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_visit BIGINT`);
     // Länder getrennt (ES/DE/…): Bestand ist Spanien → Default 'ES'
     await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS country TEXT DEFAULT 'ES'`);
@@ -1047,6 +1049,8 @@ app.get("/api/profile/:code", async (req, res) => {
       // @Handle (öffentlich, freiwillig gewählt) – damit Kontakte ihn im Chat anzeigen können
       const h = await pool.query("SELECT display FROM messenger_handles WHERE code=$1", [code]);
       out.handle = h.rows[0]?.display || null;
+      const rc = await pool.query("SELECT 1 FROM messenger_rec WHERE code=$1", [code]);
+      out.rec = rc.rows.length > 0;
     }
     res.json(out);
   } catch (e) {
@@ -1328,6 +1332,22 @@ app.delete("/api/messenger/handle", async (req, res) => {
   }
 });
 
+// Empfehlbar an/aus (Einwilligung: nur dann darf mich ein Verifizierter weiterempfehlen)
+app.post("/api/messenger/rec", async (req, res) => {
+  const code = normCode(req.body?.code);
+  const token = String(req.body?.token || "");
+  if (!isMsgCode(code) || !token) return res.status(400).json({ error: "code und token erforderlich" });
+  try {
+    if (!(await authCheck(code, token))) return res.status(403).json({ error: "Ungültiger Token" });
+    if (req.body?.on) await pool.query("INSERT INTO messenger_rec (code, created_at) VALUES ($1,$2) ON CONFLICT (code) DO NOTHING", [code, Date.now()]);
+    else await pool.query("DELETE FROM messenger_rec WHERE code=$1", [code]);
+    res.json({ success: true, rec: !!req.body?.on });
+  } catch (e) {
+    console.error("POST /api/messenger/rec:", e.message);
+    res.status(500).json({ error: "Datenbankfehler" });
+  }
+});
+
 // Anzahl gegenseitig verifizierter Kontakte + eigener Handle (für das Profil)
 app.get("/api/messenger/verified/:code", async (req, res) => {
   const code = normCode(req.params.code);
@@ -1337,7 +1357,8 @@ app.get("/api/messenger/verified/:code", async (req, res) => {
     if (!(await authCheck(code, token))) return res.status(403).json({ error: "Ungültiger Token" });
     const count = await msgrVerifiedCount(code);
     const h = await pool.query("SELECT display FROM messenger_handles WHERE code=$1", [code]);
-    res.json({ count, min: MSGR_HANDLE_MIN, handle: h.rows[0]?.display || null });
+    const rc = await pool.query("SELECT 1 FROM messenger_rec WHERE code=$1", [code]);
+    res.json({ count, min: MSGR_HANDLE_MIN, handle: h.rows[0]?.display || null, rec: rc.rows.length > 0 });
   } catch (e) {
     console.error("GET /api/messenger/verified:", e.message);
     res.status(500).json({ error: "Datenbankfehler" });
@@ -1651,6 +1672,7 @@ app.delete("/api/account/:code", async (req, res) => {
       await run("messenger_paare", "DELETE FROM messenger_pairs WHERE lo=$1 OR hi=$1", [code]);
       await run("messenger_verifiziert", "DELETE FROM messenger_verified WHERE lo=$1 OR hi=$1", [code]);
       await run("messenger_handle", "DELETE FROM messenger_handles WHERE code=$1", [code]);
+      await run("messenger_rec", "DELETE FROM messenger_rec WHERE code=$1", [code]);
       await run("live_folgen", "DELETE FROM live_followers WHERE follower_code=$1", [code]);
       await run("kommentare", "DELETE FROM profile_comments WHERE profile_code=$1 OR sender_code=$1", [code]);
       await run("bluesky", "DELETE FROM bluesky_accounts WHERE code=$1", [code]);
