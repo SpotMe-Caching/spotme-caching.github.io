@@ -1,6 +1,6 @@
 {
   "name": "iSee.Q",
-  "short_name": "SpotMe",
+  "short_name": "iSee.Q",
   "description": "Verschlüsselter P2P-Messanger  für iSee.Q – privat, mobil, offline-fähig.",
   "start_url": "https://spotme-caching.github.io/chat/index.html",
   "scope": "https://spotme-caching.github.io/chat/",
