@@ -982,3 +982,22 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
 .rec-row small{color:#7a98aa;font-family:'Space Mono',monospace;font-size:.7rem;margin-left:.3rem}
 .rec-row em{color:#7a98aa;font-size:.75rem}
 .rec-row button{width:auto !important;margin:0 !important;padding:.4rem .8rem !important}
+
+/* ── iSee.Q: Splash + "I see you"-Moment (v1.0.30) ── */
+#splash{position:fixed;inset:0;z-index:99999;background:#0c0e12;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .45s}
+#splash.out{opacity:0;pointer-events:none}
+#splash img{width:min(52vw,230px);height:auto;animation:splPulse 1.6s ease-in-out infinite;filter:drop-shadow(0 0 22px rgba(255,160,40,.35))}
+#splash p{margin:1.2rem 0 0;font:700 .85rem 'Space Mono',monospace;letter-spacing:.18em;color:#ffb347;opacity:0;animation:splTxt 1.2s .35s forwards}
+@keyframes splPulse{0%,100%{transform:scale(1);filter:drop-shadow(0 0 14px rgba(255,160,40,.25))}50%{transform:scale(1.045);filter:drop-shadow(0 0 34px rgba(255,160,40,.6))}}
+@keyframes splTxt{to{opacity:.9}}
+#seeFx{position:fixed;inset:0;z-index:9999;background:rgba(6,8,12,.82);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.4rem;color:#fff;text-align:center;cursor:pointer}
+#seeFx.hidden{display:none}
+#seeFx b{font:800 1.9rem 'Outfit',system-ui,sans-serif;letter-spacing:.02em;color:#ffd58a;opacity:0}
+#seeFx span{font-size:1rem;color:#9fe8b8;opacity:0}
+#seeFx .see-star{width:150px;height:150px;filter:drop-shadow(0 0 26px rgba(255,170,50,.7));transform:scale(.2) rotate(-40deg);opacity:0}
+#seeFx.go .see-star{animation:seeStar 1s cubic-bezier(.2,1.4,.4,1) forwards}
+#seeFx.go b{animation:seeTxt .6s .55s forwards}
+#seeFx.go span{animation:seeTxt .6s .8s forwards}
+@keyframes seeStar{60%{opacity:1}to{transform:scale(1) rotate(0);opacity:1}}
+@keyframes seeTxt{from{transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){#splash img{animation:none}#seeFx.go .see-star,#seeFx.go b,#seeFx.go span{animation:none;opacity:1;transform:none}#splash p{animation:none;opacity:.9}}
