@@ -3,7 +3,7 @@
   "appName": "iSee.Q",
   "webDir": "www",
   "server": {
-    "url": "https://spotme-caching.github.io/chat/",
+    "url": "https://spotme-caching.github.io",
     "allowNavigation": [
       "spotme-caching.github.io",
       "spotme-chat-obom.onrender.com"
