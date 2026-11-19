@@ -1302,7 +1302,8 @@ async function openChat(room, partnerCode, partnerName) {
 
   document.getElementById('headerName').textContent = partnerName;
   VC_OPEN = false;
-  { const hh = metaOf(partnerCode).h; document.getElementById('headerCode').textContent = (hh ? '@' + hh + ' · ' : '') + fmtId(partnerCode); }
+  updateHeaderCode();
+  refreshPartnerHandle(partnerCode);
   document.getElementById('headerAvatar').textContent = (partnerName[0] || '?').toUpperCase();
   updateP2PUI(canSendImage(), canSendImage() ? 'P2P Aktiv' : 'Server-Modus');
   applyChatState();
@@ -1661,6 +1662,24 @@ function handleControl(from, text) {
 function refreshVerUI(from) {
   if (CURRENT_ROOM && from === PARTNER_CODE) { updateHeaderVer(); renderVerCard(); }
   renderChatList();
+}
+function updateHeaderCode() {
+  const el = document.getElementById('headerCode');
+  if (!el || !PARTNER_CODE) return;
+  const hh = metaOf(PARTNER_CODE).h;
+  el.textContent = (hh ? '@' + hh + ' · ' : '') + fmtId(PARTNER_CODE);
+}
+// @Handle des Kontakts vom Server holen (höchstens stündlich je Kontakt) – auch wenn er per ID hinzugefügt wurde
+async function refreshPartnerHandle(code) {
+  try {
+    const mt = metaOf(code);
+    if (Date.now() - (mt.hts || 0) < 3600 * 1000) return;
+    const r = await tfetch(`${API}/profile/${code}?spot=messenger`, {}, 10000);
+    if (!r.ok) return;
+    const j = await r.json();
+    setMeta(code, { h: j.handle || '', hts: Date.now() });
+    if (PARTNER_CODE === code) updateHeaderCode();
+  } catch (e) {}
 }
 function updateHeaderVer() {
   const b = document.getElementById('verBtn');
