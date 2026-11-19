@@ -946,3 +946,32 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
 #tHd{font-size:.95rem;line-height:1.9rem}
 .hub-body .link-btn{width:100% !important;display:block !important}
 .hub-body .link-btn.danger{color:#ff4f7b !important;border-color:#5a2433 !important}
+
+/* ── LOGIN im Landing-Look (v1.0.27) ── */
+#loginScreen{height:auto;min-height:100vh;min-height:100svh;padding:0;background:#080c10;color:#e8edf5;justify-content:center;position:relative;overflow:hidden}
+#loginScreen::before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(245,158,11,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(245,158,11,.035) 1px,transparent 1px);background-size:48px 48px;pointer-events:none}
+#loginScreen::after{content:'';position:absolute;top:22%;left:50%;transform:translate(-50%,-50%);width:min(900px,140vw);height:520px;background:radial-gradient(ellipse,rgba(245,158,11,.09),rgba(34,211,238,.04) 50%,transparent 70%);pointer-events:none}
+.ls-wrap{position:relative;z-index:1;width:100%;max-width:420px;margin:0 auto;padding:2rem 1.25rem;display:flex;flex-direction:column;align-items:center;text-align:center}
+.ls-badge{display:inline-flex;align-items:center;gap:.5rem;background:rgba(245,158,11,.09);border:1px solid rgba(245,158,11,.25);border-radius:100px;padding:.35rem 1rem;font-size:.8rem;color:#f59e0b;margin-bottom:1.2rem}
+.ls-badge i{width:7px;height:7px;border-radius:50%;background:#f59e0b;animation:lsb 1.5s ease infinite}
+@keyframes lsb{0%,100%{opacity:1}50%{opacity:.3}}
+#loginScreen .logo{font-size:2.6rem;margin-bottom:.6rem}
+#loginScreen h1{color:#e8edf5;font-weight:800;font-size:clamp(1.7rem,7vw,2.3rem);line-height:1.12;letter-spacing:-.02em;margin:0 0 1rem}
+#loginScreen h1 .c2{color:#22d3ee}#loginScreen h1 .a{color:#f59e0b}
+#loginScreen .subtitle{color:#8793ab;font-size:.95rem;line-height:1.55;margin:0 0 1.4rem;font-weight:300}
+#loginScreen .subtitle b{color:#e8edf5;font-weight:500}
+.ls-invite{background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.3);color:#22d3ee;border-radius:14px;padding:.7rem 1rem;font-size:.88rem;margin:0 0 1.1rem;line-height:1.45}
+#loginScreen #registerForm{width:100%;display:flex;flex-direction:column;align-items:center}
+.ls-label{align-self:flex-start;font:700 .72rem 'Space Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#f59e0b;margin-bottom:.4rem}
+#loginScreen input{max-width:none;background:#111827;border:1px solid rgba(255,255,255,.12);border-radius:14px;text-align:left;padding:.9rem 1rem;color:#e8edf5}
+#loginScreen input:focus{outline:2px solid #22d3ee;outline-offset:2px}
+#loginScreen button{max-width:none;background:#f59e0b;color:#080c10;border-radius:14px;font-weight:700;font-size:1rem;padding:.9rem}
+#loginScreen button:hover{box-shadow:0 0 30px rgba(245,158,11,.35)}
+#loginScreen button:disabled{opacity:.6}
+#loginScreen .ls-ghost{background:transparent;color:#e8edf5;border:1px solid rgba(255,255,255,.14);margin-top:0;font-weight:600}
+#loginScreen .ls-ghost:hover{background:rgba(255,255,255,.05);box-shadow:none}
+#loginScreen .restore-sep{color:#8793ab;margin:1rem 0 .8rem}
+#loginScreen .error{color:#ff6b8a;min-height:1.1rem;font-size:.85rem;margin:.5rem 0 0}
+.ls-facts{display:flex;gap:1.6rem;justify-content:center;margin-top:1.8rem;padding-top:1.2rem;border-top:1px solid rgba(255,255,255,.09);width:100%}
+.ls-facts div{font-size:.72rem;color:#8793ab}.ls-facts b{display:block;font-size:1.4rem;color:#e8edf5;font-weight:800}
+.ls-more{margin-top:1.2rem;color:#f59e0b;font-size:.85rem}
