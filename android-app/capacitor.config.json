@@ -1,6 +1,6 @@
 {
   "appId": "io.github.spotmecaching.app",
-  "appName": "iSee-Q",
+  "appName": "SpotMe - Messenger",
   "webDir": "www",
   "server": {
     "url": "https://spotme-caching.github.io/chat/",
