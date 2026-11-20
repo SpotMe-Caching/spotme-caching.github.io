@@ -11,7 +11,7 @@
 //   • Externe Ressourcen      → Stale-While-Revalidate
 // ══════════════════════════════════════════════════════════════════════════════
 
-const CACHE_VERSION = "chat-v1.0.30";
+const CACHE_VERSION = "chat-v1.0.31";
 const CACHE_STATIC = `spot-static-${CACHE_VERSION}`;
 const CACHE_API = `spot-api-${CACHE_VERSION}`;
 const CACHE_RUNTIME = `spot-runtime-${CACHE_VERSION}`;
@@ -60,8 +60,10 @@ self.addEventListener("install", (event) => {
         // allSettled: einzelne Fehler brechen nicht alles ab
         return Promise.allSettled(
           STATIC_ASSETS.map((url) =>
+            // cache:'reload' → am HTTP-Cache des Browsers vorbei (GitHub Pages cached ~10 min,
+            // sonst landet beim Update die ALTE index.html im neuen Cache)
             cache
-              .add(url)
+              .add(new Request(url, { cache: "reload" }))
               .catch((err) =>
                 console.warn(`[Chat SW] Konnte nicht cachen: ${url}`, err),
               ),
