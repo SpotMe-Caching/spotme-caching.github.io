@@ -1004,3 +1004,5 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
 
 #updBar{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 14px);transform:translateX(-50%);z-index:99998;background:#ffb347;color:#1c1208;font-weight:700;font-size:.85rem;padding:.65rem 1.1rem;border-radius:999px;box-shadow:0 6px 24px rgba(0,0,0,.45);cursor:pointer;white-space:nowrap}
 #updBar.hidden{display:none}
+
+.hd-seen{font-size:.66rem;opacity:.75}.hd-seen.hidden{display:none}

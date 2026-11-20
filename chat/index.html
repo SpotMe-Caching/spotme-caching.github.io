@@ -150,6 +150,8 @@
           <div class="hub-h">Empfehlungen</div>
           <label class="comic-row"><input type="checkbox" id="recToggle" onchange="setRec(this.checked)"> 🤝 Meine Verifizierten dürfen mich weiterempfehlen</label>
           <p class="hub-note">Nur Kontakte mit grünem Haken, und nur an deren eigene Verifizierte. Wer eine Empfehlung bekommt, schickt dir nur eine normale Anfrage – du entscheidest. Jederzeit abschaltbar.</p>
+          <label class="comic-row"><input type="checkbox" id="seenToggle" onchange="setSeen(this.checked)"> 👁 Grobes „zuletzt online“ (heute / diese Woche / länger her)</label>
+          <p class="hub-note">Nur gegenseitig: Du siehst es bei Chatpartnern nur, wenn du es selbst einschaltest und sie es auch an haben. Es gibt nie eine Uhrzeit, nur drei Stufen. Aus = du siehst nichts und wirst nicht angezeigt.</p>
           <div class="hub-h">Dein Name (die ID bleibt gleich)</div>
           <div class="copy-row">
             <input type="text" id="setName" maxlength="40">
@@ -199,6 +201,7 @@
     <div class="header-info">
       <div class="header-name" id="headerName">...</div>
       <div class="header-code" id="headerCode"></div>
+      <div class="header-code hd-seen hidden" id="hdSeen"></div>
       <div class="header-status" id="headerStatus">
         <span class="p2p-indicator p2p-inactive" id="p2pIndicator">
           <span class="p2p-dot"></span>
@@ -758,6 +761,7 @@ function hubTab(t) {
 function hubTiles() {
   try {
     const rt = document.getElementById('recToggle'); if (rt) rt.checked = lsGet('sm_chat_rec') === '1';
+    const st = document.getElementById('seenToggle'); if (st) st.checked = lsGet('sm_chat_seen') === '1';
     const set = (i, v) => { const e = document.getElementById(i); if (e) e.textContent = v; };
     set('tChats', Object.keys(getContacts()).length);
     set('tVer', HD.count || 0);
@@ -782,7 +786,7 @@ async function loadHandleInfo() {
   await syncVerified(true);
   try {
     const r = await tfetch(`${API}/messenger/verified/${CODE}?token=${encodeURIComponent(TOKEN)}`, {}, 10000);
-    if (r.ok) { HD = await r.json(); if (typeof HD.rec === 'boolean') lsSet('sm_chat_rec', HD.rec ? '1' : '0'); }
+    if (r.ok) { HD = await r.json(); if (typeof HD.rec === 'boolean') lsSet('sm_chat_rec', HD.rec ? '1' : '0'); if (typeof HD.seen === 'boolean') lsSet('sm_chat_seen', HD.seen ? '1' : '0'); }
   } catch (e) {}
   renderHandleInfo();
 }
@@ -1368,7 +1372,7 @@ async function openChat(room, partnerCode, partnerName) {
   document.getElementById('headerName').textContent = partnerName;
   VC_OPEN = false;
   updateHeaderCode();
-  refreshPartnerHandle(partnerCode);
+  refreshPartnerHandle(partnerCode); loadPartnerSeen(partnerCode);
   document.getElementById('headerAvatar').textContent = (partnerName[0] || '?').toUpperCase();
   updateP2PUI(canSendImage(), canSendImage() ? 'P2P Aktiv' : 'Server-Modus');
   applyChatState();
@@ -1751,6 +1755,29 @@ function updateHeaderCode() {
   if (!el || !PARTNER_CODE) return;
   const hh = metaOf(PARTNER_CODE).h;
   el.textContent = (hh ? '@' + hh + ' · ' : '') + fmtId(PARTNER_CODE);
+}
+// ── Grobes "zuletzt online" (gegenseitig, nur 3 Stufen) ───────────────────
+const SEEN_TXT = { today: 'zuletzt online: heute', week: 'zuletzt online: diese Woche', older: 'zuletzt online: länger her' };
+let SEEN_CACHE = {};
+function setSeen(on) {
+  lsSet('sm_chat_seen', on ? '1' : '0'); SEEN_CACHE = {};
+  tfetch(`${API}/messenger/seen`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: CODE, token: TOKEN, on: !!on }) }, 15000)
+    .then(r => { if (!r.ok) throw 0; setMsg(on ? '✅ „Zuletzt online“ an (gegenseitig)' : '„Zuletzt online“ aus'); })
+    .catch(() => setMsg('Keine Verbindung – bitte später erneut umschalten'));
+}
+async function loadPartnerSeen(code) {
+  const el = document.getElementById('hdSeen'); if (!el) return;
+  el.classList.add('hidden'); el.textContent = '';
+  if (lsGet('sm_chat_seen') !== '1' || !code) return;
+  try {
+    let c = SEEN_CACHE[code];
+    if (!c || Date.now() - c.ts > 5 * 60 * 1000) {
+      const r = await tfetch(`${API}/messenger/seen/${code}?code=${CODE}&token=${encodeURIComponent(TOKEN)}`, {}, 10000);
+      if (!r.ok) return;
+      c = SEEN_CACHE[code] = { ...(await r.json()), ts: Date.now() };
+    }
+    if (c.on && SEEN_TXT[c.bucket] && code === PARTNER_CODE) { el.textContent = SEEN_TXT[c.bucket]; el.classList.remove('hidden'); }
+  } catch (e) {}
 }
 // @Handle des Kontakts vom Server holen (höchstens stündlich je Kontakt) – auch wenn er per ID hinzugefügt wurde
 async function refreshPartnerHandle(code) {
