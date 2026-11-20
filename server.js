@@ -446,6 +446,8 @@ async function initDB() {
       handle TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, display TEXT NOT NULL, updated_at BIGINT NOT NULL)`);
     // Messenger: "darf von meinen Verifizierten empfohlen werden" (nur wer hier steht, kann empfohlen werden)
     await pool.query(`CREATE TABLE IF NOT EXISTS messenger_rec (code TEXT PRIMARY KEY, created_at BIGINT NOT NULL)`);
+    // Messenger: grobes "zuletzt online" – nur für Profile, die es selbst eingeschaltet haben (gegenseitig).
+    await pool.query(`CREATE TABLE IF NOT EXISTS messenger_seen (code TEXT PRIMARY KEY, last_ms BIGINT NOT NULL)`);
     await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_visit BIGINT`);
     // Länder getrennt (ES/DE/…): Bestand ist Spanien → Default 'ES'
     await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS country TEXT DEFAULT 'ES'`);
@@ -1110,6 +1112,15 @@ function msgrRegAllowed(ip, now = Date.now()) {
 }
 // Aktiver Chat: wer gerade im Chatfenster mit X ist (kommt beim Abholen mit), bekommt von X keinen Push
 const msgrActive = new Map(); // code -> { partner, ts }
+// "zuletzt online": höchstens alle 10 Min. je Profil schreiben, und nur wenn der Nutzer es eingeschaltet hat (Zeile existiert)
+const msgrSeenTouched = new Map();
+function msgrTouchSeen(code) {
+  const now = Date.now();
+  if (now - (msgrSeenTouched.get(code) || 0) < 10 * 60 * 1000) return;
+  msgrSeenTouched.set(code, now);
+  pool.query("UPDATE messenger_seen SET last_ms=$2 WHERE code=$1", [code, now]).catch(() => {});
+}
+setInterval(() => { const n = Date.now(); for (const [k, v] of msgrSeenTouched) if (n - v > 3600000) msgrSeenTouched.delete(k); }, 3600000).unref();
 const MSGR_ACTIVE_TTL = 15000;
 function msgrIsActiveWith(code, partner) {
   const a = msgrActive.get(code);
@@ -1348,6 +1359,49 @@ app.post("/api/messenger/rec", async (req, res) => {
   }
 });
 
+// "Zuletzt online" an/aus (gegenseitig: wer es ausschaltet, sieht auch nichts)
+app.post("/api/messenger/seen", async (req, res) => {
+  const code = normCode(req.body?.code);
+  const token = String(req.body?.token || "");
+  if (!isMsgCode(code) || !token) return res.status(400).json({ error: "code und token erforderlich" });
+  try {
+    if (!(await authCheck(code, token))) return res.status(403).json({ error: "Ungültiger Token" });
+    if (req.body?.on) {
+      const now = Date.now();
+      await pool.query("INSERT INTO messenger_seen (code, last_ms) VALUES ($1,$2) ON CONFLICT (code) DO UPDATE SET last_ms=$2", [code, now]);
+      msgrSeenTouched.set(code, now);
+    } else await pool.query("DELETE FROM messenger_seen WHERE code=$1", [code]);
+    res.json({ success: true, seen: !!req.body?.on });
+  } catch (e) {
+    console.error("POST /api/messenger/seen:", e.message);
+    res.status(500).json({ error: "Datenbankfehler" });
+  }
+});
+
+// Grobes "zuletzt online" des Chatpartners: nur wenn BEIDE es eingeschaltet haben und die zwei schon miteinander schreiben.
+// Antwort nur als Stufe (today < 24 h, week < 7 Tage, older) – nie eine Uhrzeit.
+app.get("/api/messenger/seen/:partner", async (req, res) => {
+  const code = normCode(req.query.code);
+  const partner = normCode(req.params.partner);
+  const token = String(req.query.token || req.headers["x-spotme-token"] || "");
+  if (!isMsgCode(code) || !isMsgCode(partner) || !token || code === partner) return res.status(400).json({ error: "ungültig" });
+  try {
+    if (!(await authCheck(code, token))) return res.status(403).json({ error: "Ungültiger Token" });
+    const lo = code < partner ? code : partner, hi = code < partner ? partner : code;
+    const q = await pool.query(
+      `SELECT (SELECT 1 FROM messenger_seen WHERE code=$1) AS me,
+              (SELECT last_ms FROM messenger_seen WHERE code=$2) AS pl,
+              (SELECT 1 FROM messenger_pairs WHERE lo=$3 AND hi=$4) AS pr`, [code, partner, lo, hi]);
+    const r = q.rows[0] || {};
+    if (!r.me || r.pl == null || !r.pr) return res.json({ on: false });
+    const age = Date.now() - Number(r.pl);
+    res.json({ on: true, bucket: age < 24 * 3600e3 ? "today" : age < 7 * 24 * 3600e3 ? "week" : "older" });
+  } catch (e) {
+    console.error("GET /api/messenger/seen:", e.message);
+    res.status(500).json({ error: "Datenbankfehler" });
+  }
+});
+
 // Anzahl gegenseitig verifizierter Kontakte + eigener Handle (für das Profil)
 app.get("/api/messenger/verified/:code", async (req, res) => {
   const code = normCode(req.params.code);
@@ -1358,7 +1412,8 @@ app.get("/api/messenger/verified/:code", async (req, res) => {
     const count = await msgrVerifiedCount(code);
     const h = await pool.query("SELECT display FROM messenger_handles WHERE code=$1", [code]);
     const rc = await pool.query("SELECT 1 FROM messenger_rec WHERE code=$1", [code]);
-    res.json({ count, min: MSGR_HANDLE_MIN, handle: h.rows[0]?.display || null, rec: rc.rows.length > 0 });
+    const sn = await pool.query("SELECT 1 FROM messenger_seen WHERE code=$1", [code]);
+    res.json({ count, min: MSGR_HANDLE_MIN, handle: h.rows[0]?.display || null, rec: rc.rows.length > 0, seen: sn.rows.length > 0 });
   } catch (e) {
     console.error("GET /api/messenger/verified:", e.message);
     res.status(500).json({ error: "Datenbankfehler" });
@@ -1673,6 +1728,7 @@ app.delete("/api/account/:code", async (req, res) => {
       await run("messenger_verifiziert", "DELETE FROM messenger_verified WHERE lo=$1 OR hi=$1", [code]);
       await run("messenger_handle", "DELETE FROM messenger_handles WHERE code=$1", [code]);
       await run("messenger_rec", "DELETE FROM messenger_rec WHERE code=$1", [code]);
+      await run("messenger_seen", "DELETE FROM messenger_seen WHERE code=$1", [code]);
       await run("live_folgen", "DELETE FROM live_followers WHERE follower_code=$1", [code]);
       await run("kommentare", "DELETE FROM profile_comments WHERE profile_code=$1 OR sender_code=$1", [code]);
       await run("bluesky", "DELETE FROM bluesky_accounts WHERE code=$1", [code]);
@@ -2082,6 +2138,7 @@ app.get("/api/messages/:code", async (req, res) => {
       const act = req.query.active ? normCode(String(req.query.active)) : "";
       if (act && isMsgCode(act)) msgrActive.set(code, { partner: act, ts: Date.now() });
       else msgrActive.delete(code);
+      msgrTouchSeen(code); // nur wirksam, wenn der Nutzer "zuletzt online" eingeschaltet hat
     }
 
     // Nachrichten der letzten 48 Stunden. NICHT mehr beim Abruf als gelesen
