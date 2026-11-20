@@ -356,6 +356,7 @@ footer{border-top:1px solid var(--bord);padding:2.4rem 1.25rem;max-width:1100px;
             <li><span>Tippe oben rechts auf das Menü <span class="kbd">⋮</span>.</span></li>
             <li><span>Wähle <span class="kbd">App installieren</span> oder <span class="kbd">Zum Startbildschirm hinzufügen</span> und bestätige.</span></li>
           </ol>
+          <div id="apkOpt" hidden><p class="note" style="margin-top:.9rem">📲 <b>Lieber als echte App?</b> Die Android-App (APK) gibt es auch direkt von GitHub – ohne Play Store. Die PWA oben bleibt der empfohlene Weg. <a id="apkOptLink" href="#" rel="noopener" style="color:inherit;text-decoration:underline">APK laden</a></p></div>
           <p class="note">Samsung Internet: Menü <span class="kbd">☰</span> → <span class="kbd">Seite hinzufügen zu</span> → <span class="kbd">Startbildschirm</span>.</p>
         </div>
         <div id="p-ios" role="tabpanel" aria-labelledby="tab-ios" hidden>
@@ -449,6 +450,11 @@ footer{border-top:1px solid var(--bord);padding:2.4rem 1.25rem;max-width:1100px;
   pick(isIOS ? 'ios' : 'android');
   if (standalone) { var ok = document.getElementById('installed'); if (ok) ok.style.display = 'block'; }
 
+  if (/Android/i.test(navigator.userAgent) && !standalone) {
+    fetch('app-version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      if (j && /^https:\/\/github\.com\//.test(j.apk || '')) { var a = document.getElementById('apkOptLink'); a.href = j.apk; document.getElementById('apkOpt').hidden = false; }
+    }).catch(function () {});
+  }
   var deferred = null, btn = document.getElementById('installNow');
   window.addEventListener('beforeinstallprompt', function (e) {
     e.preventDefault(); deferred = e;

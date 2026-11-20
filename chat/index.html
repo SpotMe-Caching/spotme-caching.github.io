@@ -183,6 +183,13 @@
           <p class="hub-sub">Chat-Version <span id="chatVer">…</span><br><span id="diagInfo"></span></p>
           <div class="hub-h">App-Status</div>
           <p id="instInfo" class="hub-note"></p>
+          <div id="apkBox" class="hidden">
+            <details><summary>📲 Optional: als echte App (APK) installieren</summary>
+              <p class="hub-note"><b>Empfohlen bleibt die PWA</b> (Browser-Menü ⋮ → „App installieren“). Wer lieber eine App möchte: Die APK kommt direkt von GitHub, ohne Play Store. Android fragt dabei nach „Installation aus dieser Quelle erlauben“, und Play Protect kann „unbekannter Entwickler“ melden – das ist bei Apps außerhalb des Stores normal. Der Messenger selbst bleibt immer live und aktuell.</p>
+              <a class="link-btn" id="apkLink" href="#" target="_blank" rel="noopener">⬇ SpotMe-Messenger.apk laden</a>
+              <p class="hub-note"><a id="apkPage" href="#" target="_blank" rel="noopener" style="color:#9fb6c6">Alle Versionen &amp; Prüfsumme</a></p>
+            </details>
+          </div>
           <details><summary>🔋 Tipps: App wird gelöscht / schläft ein (Xiaomi / HyperOS)</summary>
             <p class="hub-note">Einstellungen → Apps → Apps verwalten → Spot (oder Chrome/Edge): <b>Autostart an</b>, Akkusparmodus <b>„Keine Einschränkungen“</b>. Im App-Wechsler die App lange drücken → <b>Sperren</b>. Unter Sicherheit → Speicher bereinigen die App/Chrome <b>nicht</b> mit aufräumen. Browser-Daten nie komplett löschen – sonst verschwindet die installierte App. Und: Sicherung nicht vergessen 💾</p>
           </details>
@@ -2309,6 +2316,37 @@ async function initPersist() {
   if (el) el.innerHTML = `Installiert als App: <b>${app ? 'ja ✓' : 'nein – nur Browser-Tab oder Verknüpfung'}</b><br>Speicher geschützt: <b>${pers === null ? 'unbekannt' : pers ? 'ja ✓' : 'nein (Browser kann bei Platzmangel aufräumen)'}</b>`;
 }
 initPersist();
+// ── Android-App (APK): in der App Version/Update-Hinweis, im Browser (Android) optional anbieten ──
+async function initApk() {
+  const um = navigator.userAgent.match(/SpotMeApp\/(\d+)\.(\d+)\.(\d+)/);
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const standalone = (window.matchMedia && matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches) || navigator.standalone === true;
+  if (!um && (!isAndroid || standalone)) return;
+  let info = null;
+  try { const r = await fetch('/chat/app-version.json?t=' + Date.now(), { cache: 'no-store' }); if (r.ok) info = await r.json(); } catch (e) {}
+  if (!info || !/^\d+\.\d+\.\d+$/.test(info.version || '')) return; // noch kein APK veröffentlicht → nichts anbieten
+  const cmp = (a, b) => { for (let i = 0; i < 3; i++) { if (a[i] !== b[i]) return a[i] - b[i]; } return 0; };
+  if (um) {
+    const cur = [+um[1], +um[2], +um[3]], lat = info.version.split('.').map(Number);
+    const el = document.getElementById('instInfo');
+    if (el) el.innerHTML += `<br>SpotMe-App (APK): <b>Version ${cur.join('.')}</b>`;
+    if (cmp(lat, cur) > 0) {
+      const bar = document.getElementById('updBar');
+      if (bar && info.page && /^https:\/\/github\.com\//.test(info.page)) {
+        bar.textContent = '📲 Neue App-Version ' + info.version + ' – tippen zum Download';
+        bar.onclick = () => { window.open(info.page, '_blank'); };
+        bar.classList.remove('hidden');
+      }
+    }
+    return;
+  }
+  const box = document.getElementById('apkBox');
+  if (box && /^https:\/\/github\.com\//.test(info.apk || '')) {
+    document.getElementById('apkLink').href = info.apk; document.getElementById('apkPage').href = info.page || info.apk;
+    box.classList.remove('hidden');
+  }
+}
+initApk();
 
 // ── INIT ──────────────────────────────────────────────────────────────────
 // Autologin versuchen
