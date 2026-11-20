@@ -1,15 +1,28 @@
-name: Build Debug APK
+name: Build APK (Release)
 
-# Baut eine Debug-APK der SpotMe-Hülle (Capacitor).
-# Start: Actions -> "Build Debug APK" -> Run workflow
-# Die PWA selbst wird live von der Website geladen, ein Rebuild ist nur
-# nötig, wenn sich android-app/ ändert.
+# Baut die SpotMe-Messenger-App (Capacitor-Hülle um die PWA).
+#
+#  • Release:  Tag "v1.0.0" pushen ODER Actions -> "Build APK (Release)" -> Run workflow
+#              (Version eintragen, z. B. 1.0.0). Ergebnis: GitHub-Release mit
+#              SpotMe-Messenger.apk (signiert), Prüfsumme und chat/app-version.json.
+#  • Signatur: kommt aus den Secrets KEYSTORE_BASE64, KEYSTORE_PASSWORD,
+#              KEY_ALIAS, KEY_PASSWORD. Fehlen sie, wird nur eine Debug-APK als
+#              Artefakt gebaut (nicht zum Verteilen, Updates wären nicht möglich).
+#  • Die PWA selbst wird live von der Website geladen; ein neues APK ist nur
+#    nötig, wenn sich android-app/ ändert.
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version der App (z. B. 1.0.0)"
+        required: true
+        default: "1.0.0"
   push:
-    paths:
-      - "android-app/**"
-      - ".github/workflows/build-apk.yml"
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -26,13 +39,37 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - name: Version bestimmen
+        run: |
+          RAW="${{ github.event.inputs.version || github.ref_name }}"
+          VERSION="${RAW#v}"
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Version '$VERSION' ist ungültig – erwartet z. B. 1.0.0"; exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "Version: $VERSION (Build ${{ github.run_number }})"
+
       - name: Abhängigkeiten installieren
         working-directory: android-app
         run: npm install
 
+      - name: App-Version in den User-Agent schreiben
+        working-directory: android-app
+        run: |
+          # Die Web-Seite erkennt daran, dass sie in der App läuft (und welche Version)
+          python3 - <<'PY'
+          import json, os
+          p = "capacitor.config.json"
+          c = json.load(open(p, encoding="utf-8"))
+          c["appendUserAgent"] = "SpotMeApp/" + os.environ["VERSION"]
+          json.dump(c, open(p, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
+          PY
+          cat capacitor.config.json
+
       - name: Android-Projekt erzeugen
         working-directory: android-app
         run: |
+          mkdir -p www && [ -f www/index.html ] || echo '<!doctype html><title>SpotMe</title>' > www/index.html
           npx cap add android
           npx cap sync android
 
@@ -84,15 +121,105 @@ jobs:
           echo "--- Manifest-Berechtigungen:"
           grep "uses-permission" "$MAN"
 
-      - name: Debug-APK bauen
+      - name: App-Icon einbauen
+        working-directory: android-app
+        run: |
+          RES=android/app/src/main/res
+          cp -r icons/* "$RES"/
+          printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#0C0E12</color>\n</resources>\n' > "$RES/values/ic_launcher_background.xml"
+          ls "$RES"/mipmap-xxxhdpi
+
+      - name: Signatur-Schlüssel vorbereiten
+        working-directory: android-app
+        env:
+          KS_B64: ${{ secrets.KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KS_KEYPASS: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KS_B64" ] && [ -n "$KS_PASS" ] && [ -n "$KS_ALIAS" ] && [ -n "$KS_KEYPASS" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/spotme-release.p12"
+            {
+              echo "SIGN=1"
+              echo "KEYSTORE_PATH=$RUNNER_TEMP/spotme-release.p12"
+              echo "KEYSTORE_PASSWORD=$KS_PASS"
+              echo "KEY_ALIAS=$KS_ALIAS"
+              echo "KEY_PASSWORD=$KS_KEYPASS"
+            } >> "$GITHUB_ENV"
+            echo "Signatur-Schlüssel gefunden – es wird eine signierte Release-APK gebaut."
+          else
+            echo "SIGN=0" >> "$GITHUB_ENV"
+            echo "::warning::Keine Signatur-Secrets gefunden – es wird nur eine Debug-APK gebaut (kein Release)."
+          fi
+
+      - name: Version und Signatur in build.gradle eintragen
+        working-directory: android-app
+        run: python3 patch_gradle.py android/app/build.gradle "$VERSION" "${{ github.run_number }}" "$SIGN"
+
+      - name: APK bauen
         working-directory: android-app/android
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon
+          if [ "$SIGN" = "1" ]; then
+            ./gradlew assembleRelease --no-daemon
+            cp app/build/outputs/apk/release/app-release.apk ../SpotMe-Messenger.apk
+          else
+            ./gradlew assembleDebug --no-daemon
+            cp app/build/outputs/apk/debug/app-debug.apk ../SpotMe-Messenger-debug.apk
+          fi
 
-      - name: APK als Download bereitstellen
+      - name: Signatur prüfen und Prüfsumme erzeugen
+        if: env.SIGN == '1'
+        working-directory: android-app
+        run: |
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --print-certs SpotMe-Messenger.apk | tee cert.txt
+          sha256sum SpotMe-Messenger.apk | tee SpotMe-Messenger.apk.sha256
+
+      - name: Debug-APK als Artefakt (ohne Signatur-Schlüssel)
+        if: env.SIGN != '1'
         uses: actions/upload-artifact@v4
         with:
           name: spotme-debug-apk
-          path: android-app/android/app/build/outputs/apk/debug/app-debug.apk
+          path: android-app/SpotMe-Messenger-debug.apk
           if-no-files-found: error
+
+      - name: GitHub-Release veröffentlichen
+        if: env.SIGN == '1'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          name: SpotMe Messenger ${{ env.VERSION }}
+          body: |
+            **SpotMe Messenger – Android-App (APK)**
+
+            Die PWA bleibt der Hauptweg. Diese App ist die Alternative für alle, die sie lieber als App installieren – ohne Play Store.
+
+            Installation: APK laden → öffnen → „Aus dieser Quelle installieren“ erlauben. Play Protect meldet evtl. „unbekannter Entwickler“ – das ist bei Apps außerhalb des Stores normal.
+            Updates: Die App lädt den Messenger live von der Website. Ein neues APK ist nur bei App-Änderungen nötig – du wirst im Messenger darauf hingewiesen.
+          files: |
+            android-app/SpotMe-Messenger.apk
+            android-app/SpotMe-Messenger.apk.sha256
+          fail_on_unmatched_files: true
+
+      - name: Versions-Datei für die Web-Seite aktualisieren
+        if: env.SIGN == '1'
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B main origin/main
+          mkdir -p chat
+          REPO="${{ github.repository }}"
+          cat > chat/app-version.json <<JSON
+          {
+            "version": "$VERSION",
+            "apk": "https://github.com/$REPO/releases/latest/download/SpotMe-Messenger.apk",
+            "page": "https://github.com/$REPO/releases/latest",
+            "date": "$(date -u +%Y-%m-%d)"
+          }
+          JSON
+          git add chat/app-version.json
+          git commit -m "App-Version $VERSION" || echo "keine Änderung"
+          git push origin main
