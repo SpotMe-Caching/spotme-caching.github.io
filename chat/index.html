@@ -373,6 +373,15 @@ function tfetch(url, opts, ms) {
   const tm = setTimeout(() => ctl.abort(), ms || 10000);
   return fetch(url, Object.assign({}, opts || {}, { signal: ctl.signal })).finally(() => clearTimeout(tm));
 }
+// Altlast (v1.0.32): "zuletzt online"-Schalter hatte versehentlich den Schlüssel der Gelesen-Markierung überschrieben → alles "ungelesen".
+let SEEN_REPAIRED = false;
+function repairSeenKey() {
+  try {
+    const raw = lsGet('sm_chat_seen');
+    if (raw === '0' || raw === '1') { lsSet('sm_chat_lastseen', raw); lsSet('sm_chat_seen', '{}'); SEEN_REPAIRED = true; }
+  } catch (e) {}
+}
+repairSeenKey();
 function getSeen() { try { return JSON.parse(lsGet('sm_chat_seen') || '{}') || {}; } catch (e) { return {}; } }
 function markSeen(room) {
   if (!room) return;
@@ -766,7 +775,7 @@ function hubTab(t) {
 function hubTiles() {
   try {
     const rt = document.getElementById('recToggle'); if (rt) rt.checked = lsGet('sm_chat_rec') === '1';
-    const st = document.getElementById('seenToggle'); if (st) st.checked = lsGet('sm_chat_seen') === '1';
+    const st = document.getElementById('seenToggle'); if (st) st.checked = lsGet('sm_chat_lastseen') === '1';
     const set = (i, v) => { const e = document.getElementById(i); if (e) e.textContent = v; };
     set('tChats', Object.keys(getContacts()).length);
     set('tVer', HD.count || 0);
@@ -791,7 +800,7 @@ async function loadHandleInfo() {
   await syncVerified(true);
   try {
     const r = await tfetch(`${API}/messenger/verified/${CODE}?token=${encodeURIComponent(TOKEN)}`, {}, 10000);
-    if (r.ok) { HD = await r.json(); if (typeof HD.rec === 'boolean') lsSet('sm_chat_rec', HD.rec ? '1' : '0'); if (typeof HD.seen === 'boolean') lsSet('sm_chat_seen', HD.seen ? '1' : '0'); }
+    if (r.ok) { HD = await r.json(); if (typeof HD.rec === 'boolean') lsSet('sm_chat_rec', HD.rec ? '1' : '0'); if (typeof HD.seen === 'boolean') lsSet('sm_chat_lastseen', HD.seen ? '1' : '0'); }
   } catch (e) {}
   renderHandleInfo();
 }
@@ -1262,6 +1271,12 @@ async function renderChatList() {
       unread: msgs.filter(m => m.from !== CODE && (m.ts || 0) > (seen[room] || 0)).length,
       timeStr: new Date(last.ts).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
     };
+  }
+  if (SEEN_REPAIRED) { // einmalig: alles, was nur wegen des Fehlers als ungelesen galt, als gelesen setzen
+    SEEN_REPAIRED = false;
+    const sn = getSeen(), now = Date.now();
+    for (const [room, c] of Object.entries(byRoom)) { sn[room] = Math.max(now, c.lastTs || 0); c.unread = 0; }
+    lsSet('sm_chat_seen', JSON.stringify(sn));
   }
   const chats = Object.entries(byRoom).map(([room, c]) => Object.assign({ room }, c)).sort((a, b) => b.lastTs - a.lastTs);
   container.innerHTML = chats.map(c => `
@@ -1765,7 +1780,7 @@ function updateHeaderCode() {
 const SEEN_TXT = { today: 'zuletzt online: heute', week: 'zuletzt online: diese Woche', older: 'zuletzt online: länger her' };
 let SEEN_CACHE = {};
 function setSeen(on) {
-  lsSet('sm_chat_seen', on ? '1' : '0'); SEEN_CACHE = {};
+  lsSet('sm_chat_lastseen', on ? '1' : '0'); SEEN_CACHE = {};
   tfetch(`${API}/messenger/seen`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: CODE, token: TOKEN, on: !!on }) }, 15000)
     .then(r => { if (!r.ok) throw 0; setMsg(on ? '✅ „Zuletzt online“ an (gegenseitig)' : '„Zuletzt online“ aus'); })
     .catch(() => setMsg('Keine Verbindung – bitte später erneut umschalten'));
@@ -1773,7 +1788,7 @@ function setSeen(on) {
 async function loadPartnerSeen(code) {
   const el = document.getElementById('hdSeen'); if (!el) return;
   el.classList.add('hidden'); el.textContent = '';
-  if (lsGet('sm_chat_seen') !== '1' || !code) return;
+  if (lsGet('sm_chat_lastseen') !== '1' || !code) return;
   try {
     let c = SEEN_CACHE[code];
     if (!c || Date.now() - c.ts > 5 * 60 * 1000) {
