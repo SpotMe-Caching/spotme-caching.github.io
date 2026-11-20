@@ -181,6 +181,11 @@
         <section data-pane="conn" class="hidden">
           <h2>📡 Verbindung</h2>
           <p class="hub-sub">Chat-Version <span id="chatVer">…</span><br><span id="diagInfo"></span></p>
+          <div class="hub-h">App-Status</div>
+          <p id="instInfo" class="hub-note"></p>
+          <details><summary>🔋 Tipps: App wird gelöscht / schläft ein (Xiaomi / HyperOS)</summary>
+            <p class="hub-note">Einstellungen → Apps → Apps verwalten → Spot (oder Chrome/Edge): <b>Autostart an</b>, Akkusparmodus <b>„Keine Einschränkungen“</b>. Im App-Wechsler die App lange drücken → <b>Sperren</b>. Unter Sicherheit → Speicher bereinigen die App/Chrome <b>nicht</b> mit aufräumen. Browser-Daten nie komplett löschen – sonst verschwindet die installierte App. Und: Sicherung nicht vergessen 💾</p>
+          </details>
           <details open><summary>Verbindungsprotokoll</summary><pre id="diagLog"></pre><button class="link-btn hub-full" onclick="copyDiag()">Protokoll kopieren</button></details>
         </section>
         <p id="setMsg" class="copy-feedback"></p>
@@ -2280,6 +2285,15 @@ if ('serviceWorker' in navigator) {
   });
 }
 function applyUpdate() { location.reload(); }
+// Speicher gegen automatisches Aufräumen schützen (Chat-Daten + Sicherung) und Installationsstatus anzeigen
+async function initPersist() {
+  let pers = null;
+  try { if (navigator.storage && navigator.storage.persist) { pers = await navigator.storage.persisted(); if (!pers) pers = await navigator.storage.persist(); } } catch (e) {}
+  const app = (window.matchMedia && ['standalone', 'fullscreen', 'minimal-ui'].some(m => matchMedia(`(display-mode: ${m})`).matches)) || navigator.standalone === true;
+  const el = document.getElementById('instInfo');
+  if (el) el.innerHTML = `Installiert als App: <b>${app ? 'ja ✓' : 'nein – nur Browser-Tab oder Verknüpfung'}</b><br>Speicher geschützt: <b>${pers === null ? 'unbekannt' : pers ? 'ja ✓' : 'nein (Browser kann bei Platzmangel aufräumen)'}</b>`;
+}
+initPersist();
 
 // ── INIT ──────────────────────────────────────────────────────────────────
 // Autologin versuchen
