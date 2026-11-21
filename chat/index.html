@@ -280,6 +280,8 @@
     <button class="mx" data-mood="📜" onclick="pickMood('📜')">📜<span>Erzähler</span></button>
     <button class="more" id="moodMore" onclick="toggleMoodMore()">▸<span>mehr</span></button>
   </div>
+  <div id="replyBar" class="reply-bar hidden"><div class="rb-txt"><b id="replyWho"></b><span id="replyTxt"></span></div><button type="button" onclick="cancelReply()" aria-label="Antwort abbrechen">✕</button></div>
+  <div id="msgMenu" class="msg-menu hidden"><button type="button" onclick="menuReply()">↩ Antworten</button><button type="button" onclick="menuCopy()">📋 Kopieren</button></div>
   <div class="input-bar">
     <button id="moodBtn" class="img-btn" onclick="toggleMoodTray()" aria-label="Stimmung" title="Stimmung der Sprechblase">💬</button>
     <button id="imgBtn" class="img-btn" onclick="pickImage()" aria-label="Bild senden" title="Bild senden">📷</button>
@@ -1310,7 +1312,7 @@ async function renderChatList() {
     try { msgs = await decryptLocalData(localStorage.getItem(key)); } catch (e) { msgs = []; }
     if (!Array.isArray(msgs) || !msgs.length) continue;
     const last = msgs[msgs.length - 1];
-    const pv = parseMood(last.text || '');
+    const pv = parseMood(stripQuoteText(last.text || ''));
     const pvt = pv.text.length > 30 ? pv.text.slice(0, 30) + '…' : pv.text;
     const prev = (pv.mood !== 'speech' && pv.mood !== 'question' ? MOOD_ICON[pv.mood] + ' ' : '') + pvt;
     const other = [...msgs].reverse().find(m => m.from !== CODE);
@@ -1447,6 +1449,7 @@ async function openChat(room, partnerCode, partnerName) {
   fitChatToViewport();
 
   document.getElementById('headerName').textContent = partnerName;
+  cancelReply();
   VC_OPEN = false;
   updateHeaderCode();
   refreshPartnerHandle(partnerCode); loadPartnerSeen(partnerCode);
@@ -1579,6 +1582,9 @@ async function renderMessages(appendOnly = false) {
 
   const renderMsg = (m) => {
     const isMine = m.from === CODE;
+    const qq = m.kind === 'image' ? null : parseQuote(m.text);
+    const txt = qq ? qq.body : m.text;
+    const qHtml = qq ? quoteHtml(m, qq, msgs) : '';
     // Nur "gesendet" (✓) vs. "zugestellt" (✓✓) – bewusst KEIN Lesestatus
     // und KEINE zusätzliche Uhrzeit dafür (würde Online-Zeiten verraten).
     const statusTick = isMine
@@ -1589,15 +1595,15 @@ async function renderMessages(appendOnly = false) {
     const time = new Date(m.ts).toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'});
     const body = m.kind === 'image'
       ? `<img class="chat-img ${isMine ? '' : 'blur'}" data-iid="${escapeHtml(m.iid)}" alt="Bild">${isMine ? '' : '<div class="img-tap">Tippen zum Anzeigen</div>'}`
-      : escapeHtml(m.text);
+      : qHtml + escapeHtml(txt);
     if (m.kind !== 'image' && comicOn()) {
-      const pm = parseMood(m.text);
+      const pm = parseMood(txt);
       const BADGES = { question: '?', shout: '!', love: '♥', whisper: '…', scare: '!?', anger: '#@!', laugh: 'HA', sad: '💧', tired: 'Zzz', idea: '💡', cool: '😎' };
       const badge = BADGES[pm.mood] || '';
       const tilt = ((m.ts % 5) - 2) * 0.35;
-      return `<div class="message ${isMine ? 'mine' : 'other'} cm cm-${pm.mood}" style="--tilt:${tilt}deg">${badge ? `<span class="cm-badge${/^[?!♥…]$/.test(badge) || /\p{Extended_Pictographic}/u.test(badge) ? '' : ' w'}">${badge}</span>` : ''}<span class="cm-txt">${escapeHtml(pm.text)}</span><div class="msg-time">${time}${statusTick}</div></div>`;
+      return `<div class="message ${isMine ? 'mine' : 'other'} cm cm-${pm.mood}" data-ts="${m.ts}" style="--tilt:${tilt}deg">${badge ? `<span class="cm-badge${/^[?!♥…]$/.test(badge) || /\p{Extended_Pictographic}/u.test(badge) ? '' : ' w'}">${badge}</span>` : ''}${qHtml}<span class="cm-txt">${escapeHtml(pm.text)}</span><div class="msg-time">${time}${statusTick}</div></div>`;
     }
-    return `<div class="message ${isMine ? 'mine' : 'other'}${m.kind === 'image' ? ' has-img' : ''}">${body}<div class="msg-time">${time}${statusTick}</div></div>`;
+    return `<div class="message ${isMine ? 'mine' : 'other'}${m.kind === 'image' ? ' has-img' : ''}" data-ts="${m.ts}">${body}<div class="msg-time">${time}${statusTick}</div></div>`;
   };
 
   // FIX: Bei jeder eingehenden Nachricht wurde vorher die komplette Liste
@@ -1741,7 +1747,7 @@ function playMood(mood, dir, force) {
   master.connect(c.destination);
   try { fn(c, master, c.currentTime + 0.02); } catch (e) {}
 }
-function playIncoming(text) { playMood(parseMood(text).mood, 'in'); }
+function playIncoming(text) { playMood(parseMood(stripQuoteText(text)).mood, 'in'); }
 
 
 // ── VERIFIZIERUNG (grüner Haken) – immer zwischen genau 2 Chatpartnern ─────
@@ -2063,6 +2069,8 @@ async function sendMessage() {
 
   const st0 = metaOf(PARTNER_CODE);
   if (isDead(st0)) return;
+  const plainText = text;
+  if (REPLY_TO) { text = '↩ ' + REPLY_TO.excerpt + ' ⟨' + (REPLY_TO.byMe ? 'm' : 'o') + '⟩\n' + text; cancelReply(); }
   if (!st0.heard && (st0.out || 0) >= FIRST_LIMIT) { applyChatState(); return; }
   const myName = PROFILE?.name || CODE;
   const ts = Date.now(); // EIN Timestamp für lokale Bubble + P2P-Ack-Matching
@@ -2075,7 +2083,7 @@ async function sendMessage() {
   await renderMessages(true);
   input.value = '';
   input.style.height = 'auto';
-  playMood(parseMood(text).mood, 'out');
+  playMood(parseMood(stripQuoteText(text)).mood, 'out');
 
   // Priority: P2P → Server Fallback
   // P2P nur nach der ersten Antwort (beide kennen sich) – die erste Runde läuft über den Server (Limits)
@@ -2118,7 +2126,7 @@ async function sendMessage() {
         if (CURRENT_ROOM) await renderMessages();
         if (err.code === 'closed') setMeta(PARTNER_CODE, { paused: true });
         else if (err.code === 'limit') setMeta(PARTNER_CODE, { out: FIRST_LIMIT });
-        if (err.code !== 'closed') { const i = document.getElementById('msgInput'); if (!i.value) i.value = text; }
+        if (err.code !== 'closed') { const i = document.getElementById('msgInput'); if (!i.value) i.value = plainText; }
         applyChatState(err.code === 'daily' ? 'Heute hast du schon viele neue Kontakte angeschrieben – bitte später wieder.' : null);
       }
     } else {
@@ -2357,6 +2365,107 @@ if ('serviceWorker' in navigator) {
   });
 }
 function applyUpdate() { location.reload(); }
+// ── ANTWORT / ZITAT ─────────────────────────────────────────────────────────
+// Wire-Format (nur Text, kein Server-Umbau): erste Zeile "↩ <Auszug> ⟨m|o⟩", danach die Antwort.
+// m = zitierte Nachricht stammt vom Absender, o = vom Empfänger. Alte Versionen zeigen es einfach als Text.
+// Angezeigt wird, wenn möglich, der lokal gespeicherte Original-Text (nicht der übermittelte Auszug).
+const QUOTE_RE = /^↩ ([^\n]{0,100}?) ⟨([mo])⟩\n([\s\S]*)$/;
+let REPLY_TO = null; // { byMe, excerpt, who }
+function parseQuote(text) { const q = String(text || '').match(QUOTE_RE); return q ? { excerpt: q[1], senderIsAuthor: q[2] === 'm', body: q[3] } : null; }
+function stripQuoteText(text) { const q = parseQuote(text); return q ? q.body : String(text || ''); }
+function quoteExcerpt(m) {
+  if (!m) return '';
+  if (m.kind === 'image') return '📷 Bild';
+  return parseMood(stripQuoteText(m.text)).text.replace(/\s+/g, ' ').trim().slice(0, 80);
+}
+function findQuoted(msgs, m, q) {
+  const idx = msgs.indexOf(m);
+  const author = q.senderIsAuthor ? m.from : (m.from === CODE ? PARTNER_CODE : CODE);
+  for (let i = idx - 1; i >= 0; i--) { const o = msgs[i]; if (o.from === author && quoteExcerpt(o) === q.excerpt) return o; }
+  return null;
+}
+function quoteHtml(m, q, msgs) {
+  const orig = findQuoted(msgs, m, q);
+  const authorIsMe = (q.senderIsAuthor ? m.from : (m.from === CODE ? PARTNER_CODE : CODE)) === CODE;
+  const who = authorIsMe ? 'Du' : (PARTNER_NAME || fmtId(PARTNER_CODE));
+  return `<div class="qt" ${orig ? `data-qts="${orig.ts}"` : ''}><b>${escapeHtml(who)}</b><span>${escapeHtml(orig ? quoteExcerpt(orig) : q.excerpt)}</span></div>`;
+}
+async function startReplyTo(el) {
+  const input = document.getElementById('msgInput');
+  if (!el || !input || input.disabled || !PARTNER_CODE) return;
+  const byMe = el.classList.contains('mine');
+  const m = (await getMessages()).find(x => String(x.ts) === el.dataset.ts && (x.from === CODE) === byMe);
+  if (!m) return;
+  REPLY_TO = { byMe, excerpt: quoteExcerpt(m) };
+  document.getElementById('replyWho').textContent = byMe ? 'Du' : (PARTNER_NAME || fmtId(PARTNER_CODE));
+  document.getElementById('replyTxt').textContent = REPLY_TO.excerpt;
+  document.getElementById('replyBar').classList.remove('hidden');
+  try { navigator.vibrate && navigator.vibrate(12); } catch (e) {}
+  input.focus();
+}
+function cancelReply() { REPLY_TO = null; const b = document.getElementById('replyBar'); if (b) b.classList.add('hidden'); }
+let MENU_EL = null;
+function showMsgMenu(el, x, y) {
+  MENU_EL = el;
+  const mn = document.getElementById('msgMenu'); if (!mn) return;
+  mn.classList.remove('hidden');
+  const w = mn.offsetWidth || 170, h = mn.offsetHeight || 90;
+  mn.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, x - w / 2)) + 'px';
+  mn.style.top = Math.max(8, Math.min(window.innerHeight - h - 8, y - h - 14)) + 'px';
+  try { navigator.vibrate && navigator.vibrate(15); } catch (e) {}
+}
+function hideMsgMenu() { const mn = document.getElementById('msgMenu'); if (mn) mn.classList.add('hidden'); }
+function menuReply() { const el = MENU_EL; hideMsgMenu(); startReplyTo(el); }
+async function menuCopy() {
+  const el = MENU_EL; hideMsgMenu(); if (!el) return;
+  const t = (el.querySelector('.cm-txt') || el.cloneNode(true)).textContent;
+  let body = t;
+  if (!el.querySelector('.cm-txt')) { const c = el.cloneNode(true); c.querySelectorAll('.qt,.msg-time,.img-tap').forEach(n => n.remove()); body = c.textContent; }
+  try { await navigator.clipboard.writeText(String(body).trim()); } catch (e) {}
+}
+function jumpToQuoted(ts) {
+  const t = document.querySelector(`#messages .message[data-ts="${ts}"]`);
+  if (!t) return;
+  t.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash');
+  setTimeout(() => t.classList.remove('flash'), 1400);
+}
+(function initReplyGestures() {
+  const c = document.getElementById('messages'); if (!c) return;
+  let st = null, lp = null;
+  const reset = () => { clearTimeout(lp); if (st && st.el) { st.el.style.translate = ''; st.el.classList.remove('swiping'); } st = null; };
+  c.addEventListener('touchstart', (e) => {
+    const el = e.target.closest && e.target.closest('.message');
+    if (!el || e.touches.length !== 1) { reset(); return; }
+    const t = e.touches[0]; st = { el, x: t.clientX, y: t.clientY, dx: 0, drag: false };
+    clearTimeout(lp);
+    lp = setTimeout(() => { if (st && !st.drag) { const s0 = st; st = null; showMsgMenu(s0.el, s0.x, s0.y); } }, 550);
+  }, { passive: true });
+  c.addEventListener('touchmove', (e) => {
+    if (!st) return;
+    const t = e.touches[0], dx = t.clientX - st.x, dy = t.clientY - st.y;
+    if (!st.drag && (Math.abs(dy) > 12 || dx < -12) && Math.abs(dy) > Math.abs(dx) * 0.7) { reset(); return; }
+    if (!st.drag && dx > 10 && dx > Math.abs(dy) * 1.5) { st.drag = true; clearTimeout(lp); st.el.classList.add('swiping'); }
+    if (st.drag) { st.dx = dx; st.el.style.translate = Math.max(0, Math.min(dx, 72)) + 'px'; }
+  }, { passive: true });
+  c.addEventListener('touchend', () => {
+    if (st && st.drag && st.dx > 55) startReplyTo(st.el);
+    reset();
+  }, { passive: true });
+  c.addEventListener('touchcancel', reset, { passive: true });
+  c.addEventListener('click', (e) => {
+    const q = e.target.closest && e.target.closest('.qt');
+    if (q && q.dataset.qts) jumpToQuoted(q.dataset.qts);
+  });
+  c.addEventListener('dblclick', (e) => { const el = e.target.closest && e.target.closest('.message'); if (el && !('ontouchstart' in window)) startReplyTo(el); });
+  c.addEventListener('contextmenu', (e) => {
+    const el = e.target.closest && e.target.closest('.message'); if (!el) return;
+    if ('ontouchstart' in window) { e.preventDefault(); return; }
+    e.preventDefault(); showMsgMenu(el, e.clientX, e.clientY);
+  });
+  document.addEventListener('pointerdown', (e) => { if (!(e.target.closest && e.target.closest('#msgMenu'))) hideMsgMenu(); }, true);
+})();
+
 // ── Kontakt hat sein Konto gelöscht: Hinweis am Profil-Icon, Chat bleibt (nur lesen / selbst löschen) ──
 async function goneCheck() {
   if (!CODE || !TOKEN) return;
