@@ -442,6 +442,8 @@ function addContact(code, name) {
 const CLOSED_MARK = '__SM_CLOSED__', FIRST_LIMIT = 3;
 function getMeta() { try { return JSON.parse(lsGet('sm_chat_meta') || '{}') || {}; } catch (e) { return {}; } }
 function metaOf(code) { return getMeta()[code] || {}; }
+// pausiert (Gegenüber hat beendet) ODER Konto des Gegenübers gelöscht → nichts mehr senden, Verlauf bleibt lesbar
+function isDead(m) { return !!(m && (m.paused || m.gone)); }
 function setMeta(code, patch) { if (!code) return; const m = getMeta(); m[code] = Object.assign({}, m[code] || {}, patch); lsSet('sm_chat_meta', JSON.stringify(m)); }
 function delMeta(code) { const m = getMeta(); delete m[code]; lsSet('sm_chat_meta', JSON.stringify(m)); }
 function getClosedByMe() { try { return JSON.parse(lsGet('sm_chat_closed') || '{}') || {}; } catch (e) { return {}; } }
@@ -479,7 +481,7 @@ function migrateMeta() {
 // Nur Kontakte, die ich kenne und angenommen habe, dürfen direkt (P2P) Text/Bilder schicken
 function acceptP2PFrom(code) {
   const m = metaOf(code);
-  return !!getContacts()[code] && !m.req && !m.paused && !getClosedByMe()[code];
+  return !!getContacts()[code] && !m.req && !isDead(m) && !getClosedByMe()[code];
 }
 
 function showSetup(prefill, msg) {
@@ -541,6 +543,7 @@ function startApp() {
   syncVerified(false);
   bgSync();
   devStart();
+  goneCheck();
   const hq = handleFromSearch(location.search);
   if (hq) {
     try { history.replaceState(null, '', location.pathname); } catch (e) {}
@@ -661,7 +664,7 @@ function imgDeleteAll() { try { indexedDB.deleteDatabase(IMG_DB); } catch (e) {}
 // Kanal zum aktuellen Gegenüber offen? → beide sind online und direkt verbunden
 function canSendImage() {
   const m = metaOf(PARTNER_CODE);
-  return !!(webrtc && PARTNER_CODE && !m.paused && !m.req && m.heard && typeof webrtc.isConnectedTo === 'function' && webrtc.isConnectedTo(PARTNER_CODE));
+  return !!(webrtc && PARTNER_CODE && !isDead(m) && !m.req && m.heard && typeof webrtc.isConnectedTo === 'function' && webrtc.isConnectedTo(PARTNER_CODE));
 }
 function refreshImageState() {
   const btn = document.getElementById('imgBtn'), hint = document.getElementById('imgHint');
@@ -671,9 +674,9 @@ function refreshImageState() {
   hint.className = 'img-hint ' + (on ? 'on' : 'off');
   // Nach 25 s ohne P2P: häufigster Grund ist die Energiesparfunktion des Browsers (friert Hintergrund-Apps ein)
   const mm = metaOf(PARTNER_CODE);
-  if (!on && (mm.req || mm.paused || !mm.heard)) {
+  if (!on && (mm.req || isDead(mm) || !mm.heard)) {
     hint.className = 'img-hint off';
-    hint.textContent = mm.paused ? '📷 Chat pausiert' : '📷 Bilder gehen erst, nachdem dein Kontakt geantwortet hat';
+    hint.textContent = mm.gone ? '📷 Konto gelöscht' : mm.paused ? '📷 Chat pausiert' : '📷 Bilder gehen erst, nachdem dein Kontakt geantwortet hat';
     return;
   }
   const slow = !on && CHAT_OPENED_AT && (Date.now() - CHAT_OPENED_AT > 25000);
@@ -1328,10 +1331,10 @@ async function renderChatList() {
   const chats = Object.entries(byRoom).map(([room, c]) => Object.assign({ room }, c)).sort((a, b) => b.lastTs - a.lastTs);
   container.innerHTML = chats.map(c => `
     <div class="chat-item" data-room="${escapeHtml(c.room)}" data-code="${escapeHtml(c.partnerCode)}" data-name="${escapeHtml(c.partnerName)}">
-      <div class="avatar">${escapeHtml((c.partnerName[0] || '?').toUpperCase())}</div>
+      <div class="avatar${(metaAll[c.partnerCode] || {}).gone ? ' gone' : ''}">${escapeHtml((c.partnerName[0] || '?').toUpperCase())}</div>
       <div class="chat-info">
         <div class="chat-name">${escapeHtml(c.partnerName)}${(metaAll[c.partnerCode] || {}).ver ? ' <span class="ver-tick" title="Verifiziert">✔</span>' : ''}</div>
-        <div class="chat-preview">${((metaAll[c.partnerCode] || {}).vp && ['ask-in', 'judge'].includes(metaAll[c.partnerCode].vp.st)) ? '<span class="chat-tag ver">🔏 Frage wartet</span> ' : ''}${((metaAll[c.partnerCode] || {}).rc || []).length ? '<span class="chat-tag ver">🤝 Empfehlung</span> ' : ''}${(metaAll[c.partnerCode] || {}).paused ? '<span class="chat-tag">⏸ pausiert</span> ' : (metaAll[c.partnerCode] || {}).req ? '<span class="chat-tag req">📨 Anfrage</span> ' : ''}${escapeHtml(c.lastText)}</div>
+        <div class="chat-preview">${((metaAll[c.partnerCode] || {}).vp && ['ask-in', 'judge'].includes(metaAll[c.partnerCode].vp.st)) ? '<span class="chat-tag ver">🔏 Frage wartet</span> ' : ''}${((metaAll[c.partnerCode] || {}).rc || []).length ? '<span class="chat-tag ver">🤝 Empfehlung</span> ' : ''}${(metaAll[c.partnerCode] || {}).gone ? '<span class="chat-tag gone">🗑 Konto gelöscht</span> ' : (metaAll[c.partnerCode] || {}).paused ? '<span class="chat-tag">⏸ pausiert</span> ' : (metaAll[c.partnerCode] || {}).req ? '<span class="chat-tag req">📨 Anfrage</span> ' : ''}${escapeHtml(c.lastText)}</div>
       </div>
       <div class="chat-meta"><div class="chat-time">${c.timeStr}</div>${c.unread ? `<div class="unread-badge">${c.unread}</div>` : ''}</div>
       <button class="chat-del" data-del="${escapeHtml(c.room)}" aria-label="Kontakt beenden" title="Kontakt beenden">🗑</button>
@@ -1349,9 +1352,12 @@ document.addEventListener('click', (e) => {
 // Wieder öffnen: einfach selbst eine Nachricht schreiben.
 async function deleteChat(room, name, decline) {
   const partner = room.split('-').find(c => c !== CODE);
-  const paused = !!metaOf(partner).paused; // Gegenüber hat selbst beendet → nur aufräumen
+  const gone = !!metaOf(partner).gone;
+  const paused = isDead(metaOf(partner)); // Gegenüber hat selbst beendet oder Konto gelöscht → nur aufräumen
   const label = name || 'diesem Kontakt';
-  const q = paused
+  const q = gone
+    ? `Chat mit ${label} löschen? Das Konto wurde gelöscht. Der Verlauf wird auf diesem Gerät entfernt.`
+    : paused
     ? `Chat mit ${label} löschen? Der Verlauf wird auf diesem Gerät entfernt.`
     : decline
       ? `Anfrage von ${label} ablehnen? ${label} sieht, dass du den Kontakt nicht weiterführen möchtest, und kann dir nicht mehr schreiben.`
@@ -1389,7 +1395,10 @@ function applyChatState(extra) {
   if (!note || !input || !PARTNER_CODE) return;
   const m = metaOf(PARTNER_CODE), nm = escapeHtml(PARTNER_NAME || fmtId(PARTNER_CODE));
   let html = '', cls = 'hidden', lock = false, ph = 'Nachricht...';
-  if (m.paused) {
+  if (m.gone) {
+    html = `🗑 ${nm} hat das Konto gelöscht. Der Chat bleibt hier erhalten – du kannst den Verlauf lesen und ihn selbst löschen. <button class="note-btn" onclick="deleteGoneChat()">Chat löschen</button>`;
+    cls = 'chat-note paused'; lock = true; ph = 'Konto gelöscht';
+  } else if (m.paused) {
     html = `🕊️ ${nm} möchte den Kontakt gerade nicht weiterführen. Der Chat ist pausiert – du kannst den Verlauf weiterhin lesen.`;
     cls = 'chat-note paused'; lock = true; ph = 'Chat pausiert';
   } else if (m.req) {
@@ -1407,6 +1416,7 @@ function applyChatState(extra) {
   }
   if (extra) { html = escapeHtml(extra); cls = 'chat-note wait'; }
   note.innerHTML = html; note.className = cls;
+  const hav = document.getElementById('headerAvatar'); if (hav) hav.classList.toggle('gone', !!m.gone);
   input.disabled = lock; input.placeholder = ph;
   if (send) send.disabled = lock;
   if (cam) cam.disabled = lock;
@@ -1890,7 +1900,7 @@ function renderVerCard() {
   } else {
     const note = { no: 'Die Antwort wurde nicht bestätigt – keine Verifizierung.', x: 'Die Verifizierung wurde abgebrochen.', un: 'Die Verifizierung wurde aufgehoben.' }[m.vnote || ''];
     if (!VC_OPEN && !note) { el.className = 'ver-card hidden'; return; }
-    const can = m.heard && m.talk && !m.req && !m.paused;
+    const can = m.heard && m.talk && !m.req && !isDead(m);
     html = `${note ? `<p class="vc-note">${note}</p>` : ''}` + (VC_OPEN ? (can
       ? `<b>🔏 ${nm} verifizieren</b><p>Stelle eine Frage, die nur dein echter Kontakt beantworten kann (z. B. „Wo haben wir uns zuerst gesehen?“). Bestätigst du die Antwort, bekommt ihr beide einen grünen Haken.</p><input id="vcInput" maxlength="120" placeholder="Deine Frage" autocomplete="off"><div class="vc-btns"><button onclick="verSend()">Frage senden</button><button class="vc-ghost" onclick="toggleVerCard()">Abbrechen</button></div>`
       : `<b>🔏 Verifizieren</b><p>Das geht, sobald ihr euch gegenseitig geschrieben habt.</p><div class="vc-btns"><button class="vc-ghost" onclick="toggleVerCard()">Schließen</button></div>`) : `<div class="vc-btns"><button class="vc-ghost" onclick="verNoteClose()">OK</button></div>`);
@@ -2052,7 +2062,7 @@ async function sendMessage() {
   }
 
   const st0 = metaOf(PARTNER_CODE);
-  if (st0.paused) return;
+  if (isDead(st0)) return;
   if (!st0.heard && (st0.out || 0) >= FIRST_LIMIT) { applyChatState(); return; }
   const myName = PROFILE?.name || CODE;
   const ts = Date.now(); // EIN Timestamp für lokale Bubble + P2P-Ack-Matching
@@ -2347,6 +2357,34 @@ if ('serviceWorker' in navigator) {
   });
 }
 function applyUpdate() { location.reload(); }
+// ── Kontakt hat sein Konto gelöscht: Hinweis am Profil-Icon, Chat bleibt (nur lesen / selbst löschen) ──
+async function goneCheck() {
+  if (!CODE || !TOKEN) return;
+  const codes = Object.keys(getContacts());
+  if (!codes.length) return;
+  let gone;
+  try {
+    const res = await tfetch(`${API}/messenger/gone`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: CODE, token: TOKEN, codes }) });
+    if (!res.ok) return;
+    gone = (await res.json()).gone || [];
+  } catch (e) { return; }
+  let changed = false;
+  for (const c of codes) {
+    const isGone = gone.includes(c), was = !!metaOf(c).gone;
+    if (isGone !== was) { setMeta(c, { gone: isGone }); changed = true; }
+  }
+  if (!changed) return;
+  try { renderChatList(); } catch (e) {}
+  if (PARTNER_CODE) applyChatState();
+}
+async function deleteGoneChat() {
+  if (!CURRENT_ROOM) return;
+  if (await deleteChat(CURRENT_ROOM, PARTNER_NAME, false)) goBackToList();
+}
+setInterval(() => { if (!document.hidden) goneCheck(); }, 300000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) goneCheck(); });
+
 // ── Geräte-Abgleich: dieselbe ID auf mehreren Geräten/Apps (PWA, Browser, APK) ──
 let DEV_REPLACED = false;
 function devId() {

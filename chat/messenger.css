@@ -1026,3 +1026,7 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
 
 .hub-steps{margin:.2rem 0 .6rem 1.1rem;padding:0;font-size:.78rem;color:#9fb6c6;line-height:1.5}
 .hub-steps li{margin:.35rem 0}
+
+.avatar.gone,.hd-avatar.gone{position:relative;background:#4a5160!important;color:#b9c0cc!important}
+.avatar.gone::after,.hd-avatar.gone::after{content:"🗑";position:absolute;right:-4px;bottom:-4px;font-size:.7rem;line-height:1;background:#1b2230;border:1px solid #3a4558;border-radius:50%;padding:2px}
+.chat-tag.gone{background:rgba(255,120,120,.14);color:#ff9d9d}
