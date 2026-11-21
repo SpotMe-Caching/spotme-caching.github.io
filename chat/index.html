@@ -36,6 +36,19 @@
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('sm_theme')==='light'?'light':'dark')}catch(e){}</script>
 </head>
 <body>
+  <div id="devBar" class="hidden">
+    <b>⚠ Diese ID ist auch auf einem anderen Gerät oder in einer anderen App angemeldet.</b> Neue Nachrichten verteilen sich dann auf beide, und Bilder gehen nur dort, wo die ID gerade verbunden ist.
+    <small>Umziehen mit allen Chats: Auf dem alten Gerät <i>Hub → Sicherheit → Sichern</i>, hier beim Anmelden <i>Sicherung einspielen</i>.</small>
+    <div class="dev-btns"><button onclick="devClaim()">Hier weiterverwenden</button><button onclick="devDismiss()">Später</button></div>
+  </div>
+  <div id="devGone" class="hidden">
+    <div class="dev-card">
+      <h2>Dieses Gerät wurde ersetzt</h2>
+      <p>Deine ID läuft jetzt auf einem anderen Gerät oder in einer anderen App. Hier kommen deshalb keine Nachrichten mehr an – damit nichts verloren geht oder doppelt verteilt wird.</p>
+      <p class="dev-small">Die Chats auf diesem Gerät bleiben erhalten. Willst du doch hier weitermachen, übernimm die ID wieder – dann wird das andere Gerät ersetzt.</p>
+      <button onclick="devClaim()">Hier wieder übernehmen</button>
+    </div>
+  </div>
   <div id="idBar" class="hidden">⚠ Dein Messenger ist schon in einem anderen Fenster oder auf einem anderen Gerät offen. Nur dort funktionieren Bilder. Dort schließen – hier verbindet es sich dann von selbst.</div>
   <div id="updBar" class="hidden" onclick="applyUpdate()">🔄 Neue Version bereit – tippen zum Neuladen</div>
   <div id="splash" aria-hidden="true"><img src="icons/spot_512.png" alt=""><p>i see you …</p></div>
@@ -57,7 +70,8 @@
         <button id="setupBtn" onclick="createProfile()">💬 Los geht's</button>
         <p id="registerError" class="error"></p>
         <div class="restore-sep">oder</div>
-        <button type="button" id="restoreSetupBtn" class="ls-ghost" onclick="document.getElementById('restoreFileSetup').click()">💾 Aus Sicherung wiederherstellen</button>
+        <button type="button" id="restoreSetupBtn" class="ls-ghost" onclick="document.getElementById('restoreFileSetup').click()">📲 Ich habe schon einen Messenger – Sicherung einspielen</button>
+        <p class="restore-hint">Wechsel von PWA/Browser zur App (oder umgekehrt): Dort erst <b>Hub → Sicherheit → Sichern</b>, hier einspielen. Dann bleiben alle Chats erhalten.</p>
         <input type="file" id="restoreFileSetup" accept=".json,application/json" class="hidden" onchange="importBackup(this, true)">
       </div>
       <div class="ls-facts"><div><b>0</b>E-Mail / Nummer</div><div><b>0</b>Werbung</div><div><b>1</b>Name genügt</div></div>
@@ -517,6 +531,7 @@ function startApp() {
   pingVisit();
   syncVerified(false);
   bgSync();
+  devStart();
   const hq = handleFromSearch(location.search);
   if (hq) {
     try { history.replaceState(null, '', location.pathname); } catch (e) {}
@@ -1008,9 +1023,10 @@ async function importBackup(input, fromSetup) {
     }
     const items = data && data.app === 'spot-chat' && data.items;
     if (!items || !items.sm_chat_code || !items.sm_chat_token) throw new Error();
-    if (!fromSetup && !confirm('Aktuelles Profil auf diesem Gerät durch die Sicherung ersetzen?')) return;
+    if (!fromSetup && !confirm('Aktuelles Profil und alle Chats auf diesem Gerät durch die Sicherung ersetzen? Dieses Gerät übernimmt danach die ID, andere Geräte mit derselben ID werden ersetzt.')) return;
     stopRuntime(); wipeLocal();
     Object.keys(items).forEach(k => { if (k.startsWith('sm_chat_')) lsSet(k, String(items[k])); });
+    lsSet('sm_dev_claim', '1'); // dieses Gerät übernimmt die ID, andere Geräte gelten dann als ersetzt
     location.reload();
   } catch (e) { say('Datei nicht lesbar – bitte die Sicherungsdatei (.json) wählen'); }
 }
@@ -2138,7 +2154,7 @@ window.addEventListener('online', () => pollOnce());
 window.addEventListener('focus', () => pollOnce());
 
 async function pollOnce() {
-    if (!CODE || POLLING) return;
+    if (!CODE || POLLING || DEV_REPLACED) return;
     POLLING = true;
 
     try {
@@ -2322,6 +2338,56 @@ if ('serviceWorker' in navigator) {
   });
 }
 function applyUpdate() { location.reload(); }
+// ── Geräte-Abgleich: dieselbe ID auf mehreren Geräten/Apps (PWA, Browser, APK) ──
+let DEV_REPLACED = false;
+function devId() {
+  let d = null; try { d = localStorage.getItem('sm_dev'); } catch (e) {}
+  if (!d || !/^[a-z0-9]{12,40}$/.test(d)) {
+    const a = new Uint8Array(12); (window.crypto || window.msCrypto).getRandomValues(a);
+    d = Array.from(a, x => (x % 36).toString(36)).join('');
+    try { localStorage.setItem('sm_dev', d); } catch (e) {}
+  }
+  return d;
+}
+async function devCheck(claim) {
+  if (!CODE || !TOKEN) return null;
+  let r = null;
+  try {
+    const res = await tfetch(`${API}/messenger/device`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: CODE, token: TOKEN, dev: devId(), claim: claim === true }) });
+    if (!res.ok) return null;
+    r = await res.json();
+  } catch (e) { return null; }
+  const bar = document.getElementById('devBar'), gone = document.getElementById('devGone');
+  if (r.replaced) {
+    DEV_REPLACED = true;
+    stopRuntime();
+    try { const pl = bgPlugin(); if (pl) pl.stop(); } catch (e) {}
+    if (bar) bar.classList.add('hidden');
+    if (gone) gone.classList.remove('hidden');
+  } else {
+    if (DEV_REPLACED) { DEV_REPLACED = false; location.reload(); return r; } // wieder übernommen → sauber neu starten
+    if (gone) gone.classList.add('hidden');
+    let dis = false; try { dis = sessionStorage.getItem('sm_dev_dis') === '1'; } catch (e) {}
+    if (bar) bar.classList.toggle('hidden', !(r.others > 0) || dis);
+  }
+  return r;
+}
+async function devClaim() {
+  const r = await devCheck(true);
+  if (!r) { const m = document.getElementById('setMsg'); if (m) m.textContent = 'Keine Verbindung – bitte später erneut.'; return; }
+  try { sessionStorage.removeItem('sm_dev_dis'); } catch (e) {}
+  const bar = document.getElementById('devBar'); if (bar) bar.classList.add('hidden');
+}
+function devDismiss() { try { sessionStorage.setItem('sm_dev_dis', '1'); } catch (e) {} const b = document.getElementById('devBar'); if (b) b.classList.add('hidden'); }
+function devStart() {
+  // frisch aus einer Sicherung eingespielt → dieses Gerät übernimmt, alte werden ersetzt
+  let claim = false; try { claim = localStorage.getItem('sm_dev_claim') === '1'; localStorage.removeItem('sm_dev_claim'); } catch (e) {}
+  devCheck(claim);
+}
+setInterval(() => { if (!document.hidden) devCheck(false); }, 300000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) devCheck(false); });
+
 // ── Hintergrund-Benachrichtigung (nur in der Android-App, ohne Google/FCM) ──
 function bgPlugin() {
   try { return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SpotMeBackground) || null; } catch (e) { return null; }
