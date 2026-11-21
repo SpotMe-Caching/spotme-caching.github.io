@@ -36,6 +36,7 @@
   <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('sm_theme')==='light'?'light':'dark')}catch(e){}</script>
 </head>
 <body>
+  <div id="idBar" class="hidden">⚠ Dein Messenger ist schon in einem anderen Fenster oder auf einem anderen Gerät offen. Nur dort funktionieren Bilder. Dort schließen – hier verbindet es sich dann von selbst.</div>
   <div id="updBar" class="hidden" onclick="applyUpdate()">🔄 Neue Version bereit – tippen zum Neuladen</div>
   <div id="splash" aria-hidden="true"><img src="icons/spot_512.png" alt=""><p>i see you …</p></div>
   <div id="seeFx" class="hidden" onclick="hideSee()" role="status"><svg viewBox="-60 -60 120 120" class="see-star" aria-hidden="true"><defs><radialGradient id="seeG"><stop offset="0" stop-color="#fff6d8"/><stop offset=".45" stop-color="#ffb347"/><stop offset="1" stop-color="#ff7a59" stop-opacity="0"/></radialGradient></defs><circle r="55" fill="url(#seeG)" opacity=".55"/><path d="M0-50 9-9 50 0 9 9 0 50-9 9-50 0-9-9Z" fill="#ffc861"/><path d="M0-30 5-5 30 0 5 5 0 30-5 5-30 0-5-5Z" fill="#fff"/></svg><b>I see you</b><span id="seeName"></span></div>
@@ -1109,6 +1110,9 @@ async function initWebRTC() {
   webrtc.onPeerReady = (id) => {
     console.log('[Chat] Peer registriert beim Server, ID:', id);
   };
+
+  webrtc.onIdTaken = () => { const b = document.getElementById('idBar'); if (b) b.classList.remove('hidden'); };
+  webrtc.onIdFree = () => { const b = document.getElementById('idBar'); if (b) b.classList.add('hidden'); };
 
   // ── P2P Datenkanal geöffnet ──
   webrtc.onConnect = (peerId) => {

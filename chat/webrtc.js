@@ -108,6 +108,7 @@ window.SpotMeWebRTC = class SpotMeWebRTC {
       this._registering = false;
       this.lastError = null;
       this.reconnectAttempts = 0;
+      if (this.idTaken) { this.idTaken = 0; if (this.onIdFree) { try { this.onIdFree(); } catch (e) {} } }
       if (this.onPeerReady) this.onPeerReady(id);
     });
 
@@ -138,7 +139,11 @@ window.SpotMeWebRTC = class SpotMeWebRTC {
       this._log("Fehler: " + (err.type || err.message || "unbekannt"));
 
       // ID noch vom alten Eintrag belegt → später neu
-      if (err.type === "unavailable-id") { lost(); return; }
+      if (err.type === "unavailable-id") {
+        this.idTaken = (this.idTaken || 0) + 1;
+        if (this.idTaken >= 2 && this.onIdTaken) { try { this.onIdTaken(); } catch (e) {} }
+        lost(); return;
+      }
 
       // Signalserver weg / Socket zu → neu anmelden
       if (["network", "server-error", "socket-error", "socket-closed"].includes(err.type)) { lost(); return; }
