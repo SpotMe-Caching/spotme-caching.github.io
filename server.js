@@ -448,6 +448,10 @@ async function initDB() {
     await pool.query(`CREATE TABLE IF NOT EXISTS messenger_rec (code TEXT PRIMARY KEY, created_at BIGINT NOT NULL)`);
     // Messenger: grobes "zuletzt online" – nur für Profile, die es selbst eingeschaltet haben (gegenseitig).
     await pool.query(`CREATE TABLE IF NOT EXISTS messenger_seen (code TEXT PRIMARY KEY, last_ms BIGINT NOT NULL)`);
+    // Messenger: auf welchen Geräten/Apps ist diese ID gerade angemeldet (nur zufällige Geräte-Kennung, keine Gerätedaten)
+    await pool.query(`CREATE TABLE IF NOT EXISTS messenger_devices (
+      code TEXT NOT NULL, dev TEXT NOT NULL, last_ms BIGINT NOT NULL, replaced BOOLEAN NOT NULL DEFAULT FALSE,
+      PRIMARY KEY (code, dev))`);
     await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_visit BIGINT`);
     // Länder getrennt (ES/DE/…): Bestand ist Spanien → Default 'ES'
     await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS country TEXT DEFAULT 'ES'`);
@@ -1389,6 +1393,39 @@ app.post("/api/messenger/seen", async (req, res) => {
   }
 });
 
+// Geräte-Abgleich: meldet, ob diese ID noch auf einem anderen Gerät/einer anderen App aktiv ist,
+// bzw. ob DIESES Gerät inzwischen ersetzt wurde. claim=true → dieses Gerät übernimmt, alle anderen gelten als ersetzt.
+app.post("/api/messenger/device", async (req, res) => {
+  const code = normCode(req.body?.code);
+  const token = String(req.body?.token || "");
+  const dev = String(req.body?.dev || "");
+  if (!isMsgCode(code) || !token || !/^[a-z0-9]{12,40}$/.test(dev)) return res.status(400).json({ error: "code, token und dev erforderlich" });
+  try {
+    if (!(await authCheck(code, token))) return res.status(403).json({ error: "Ungültiger Token" });
+    const now = Date.now();
+    const cur = await pool.query("SELECT replaced FROM messenger_devices WHERE code=$1 AND dev=$2", [code, dev]);
+    const claim = req.body?.claim === true;
+    if (cur.rows.length && cur.rows[0].replaced && !claim) {
+      return res.json({ replaced: true, others: 0 }); // ersetzt: last_ms bleibt alt, damit es nicht als aktiv zählt
+    }
+    await pool.query(
+      `INSERT INTO messenger_devices (code, dev, last_ms, replaced) VALUES ($1,$2,$3,FALSE)
+       ON CONFLICT (code, dev) DO UPDATE SET last_ms=$3, replaced=FALSE`,
+      [code, dev, now],
+    );
+    if (claim) await pool.query("UPDATE messenger_devices SET replaced=TRUE WHERE code=$1 AND dev<>$2", [code, dev]);
+    const o = await pool.query(
+      "SELECT COUNT(*) AS n FROM messenger_devices WHERE code=$1 AND dev<>$2 AND replaced=FALSE AND last_ms > $3",
+      [code, dev, now - 3 * 86400000],
+    );
+    pool.query("DELETE FROM messenger_devices WHERE last_ms < $1", [now - 30 * 86400000]).catch(() => {});
+    res.json({ replaced: false, others: Number(o.rows[0].n) });
+  } catch (e) {
+    console.error("POST /api/messenger/device:", e.message);
+    res.status(500).json({ error: "Datenbankfehler" });
+  }
+});
+
 // Grobes "zuletzt online" des Chatpartners: nur wenn BEIDE es eingeschaltet haben und die zwei schon miteinander schreiben.
 // Antwort nur als Stufe (today < 24 h, week < 7 Tage, older) – nie eine Uhrzeit.
 app.get("/api/messenger/seen/:partner", async (req, res) => {
@@ -1740,6 +1777,7 @@ app.delete("/api/account/:code", async (req, res) => {
       await run("messenger_handle", "DELETE FROM messenger_handles WHERE code=$1", [code]);
       await run("messenger_rec", "DELETE FROM messenger_rec WHERE code=$1", [code]);
       await run("messenger_seen", "DELETE FROM messenger_seen WHERE code=$1", [code]);
+      await run("messenger_devices", "DELETE FROM messenger_devices WHERE code=$1", [code]);
       await run("live_folgen", "DELETE FROM live_followers WHERE follower_code=$1", [code]);
       await run("kommentare", "DELETE FROM profile_comments WHERE profile_code=$1 OR sender_code=$1", [code]);
       await run("bluesky", "DELETE FROM bluesky_accounts WHERE code=$1", [code]);
