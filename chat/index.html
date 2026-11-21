@@ -1030,7 +1030,8 @@ async function releaseHandle() {
 }
 async function shareHandle() {
   if (!HD.handle) return;
-  const url = handleLink(HD.handle);
+  // Teilen über den Server-Link (/s/<Handle>): liefert die Vorschau mit Bild + @Handle und leitet Menschen sofort weiter
+  const url = `${API.replace(/\/api\/?$/, '')}/s/${HD.handle}`;
   const text = `Schreib mir im Spot-Chat: @${HD.handle}`;
   try {
     if (navigator.share) { await navigator.share({ title: 'Spot-Chat', text, url }); return; }
