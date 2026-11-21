@@ -262,7 +262,7 @@
   <div id="verCard" class="ver-card hidden"></div>
   <div id="recCard" class="ver-card rec-card hidden"></div>
   <div id="chatNote" class="hidden"></div>
-  <div id="imgHint" class="img-hint off">📷 Bilder nur, wenn ihr beide online seid</div>
+  <div id="imgHint" class="img-hint off">📷 Bilder gehen nach der Verifizierung</div>
   <div id="moodTray" class="mood-tray hidden">
     <button data-mood="" onclick="pickMood('')">💬<span>Sagen</span></button>
     <button data-mood="🗯️" onclick="pickMood('🗯️')">🗯️<span>Denken</span></button>
@@ -546,6 +546,7 @@ function startApp() {
   bgSync();
   devStart();
   goneCheck();
+  publishPub();
   const hq = handleFromSearch(location.search);
   if (hq) {
     try { history.replaceState(null, '', location.pathname); } catch (e) {}
@@ -625,7 +626,7 @@ function wipeLocal() {
   clearLocalCryptoKey();
 }
 
-// ── BILDER (nur P2P, nur wenn beide online) ──────────────────────────────
+// ── BILDER (über den Server, Ende-zu-Ende verschlüsselt, nur an verifizierte Kontakte) ──
 const IMG_DB = 'SpotChatImg';
 function imgDb() {
   return new Promise((res, rej) => {
@@ -663,41 +664,92 @@ async function imgDeleteRoom(room) {
 }
 function imgDeleteAll() { try { indexedDB.deleteDatabase(IMG_DB); } catch (e) {} }
 
-// Kanal zum aktuellen Gegenüber offen? → beide sind online und direkt verbunden
+// Bilder gehen über den Server, Ende-zu-Ende verschlüsselt – nur an verifizierte Kontakte, auch wenn diese offline sind
 function canSendImage() {
   const m = metaOf(PARTNER_CODE);
-  return !!(webrtc && PARTNER_CODE && !isDead(m) && !m.req && m.heard && typeof webrtc.isConnectedTo === 'function' && webrtc.isConnectedTo(PARTNER_CODE));
+  return !!(PARTNER_CODE && !isDead(m) && !m.req && m.heard && m.ver);
 }
 function refreshImageState() {
   const btn = document.getElementById('imgBtn'), hint = document.getElementById('imgHint');
   if (!btn || !hint) return;
   const on = canSendImage();
+  const mm = metaOf(PARTNER_CODE);
   btn.classList.toggle('on', on);
   hint.className = 'img-hint ' + (on ? 'on' : 'off');
-  // Nach 25 s ohne P2P: häufigster Grund ist die Energiesparfunktion des Browsers (friert Hintergrund-Apps ein)
-  const mm = metaOf(PARTNER_CODE);
-  if (!on && (mm.req || isDead(mm) || !mm.heard)) {
-    hint.className = 'img-hint off';
-    hint.textContent = mm.gone ? '📷 Konto gelöscht' : mm.paused ? '📷 Chat pausiert' : '📷 Bilder gehen erst, nachdem dein Kontakt geantwortet hat';
-    return;
-  }
-  const slow = !on && CHAT_OPENED_AT && (Date.now() - CHAT_OPENED_AT > 25000);
-  hint.textContent = on
-    ? '📷 Ihr seid beide online – Bilder möglich'
-    : slow
-      ? '📷 Noch kein P2P. Beide müssen den Chat offen haben. Tipp: Akku-/Energiespar-Einstellung des Browsers auf „Keine Beschränkungen“ stellen.'
-      : '📷 Bilder nur, wenn ihr beide online seid (grünes P2P)';
+  if (on) { hint.textContent = '📷 Bilder an deinen verifizierten Kontakt – verschlüsselt, auch wenn er offline ist'; return; }
+  hint.textContent = mm.gone ? '📷 Konto gelöscht'
+    : mm.paused ? '📷 Chat pausiert'
+    : (mm.req || !mm.heard) ? '📷 Bilder gehen erst, nachdem dein Kontakt geantwortet hat'
+    : '📷 Bilder gehen nach der Verifizierung (🔏 oben im Chat) – dann auch an Offline-Kontakte';
 }
 let CHAT_OPENED_AT = 0;
 setInterval(refreshImageState, 1500);
+
+// ── Schlüssel für Bilder (Ende-zu-Ende): ECDH P-256, nur der öffentliche Teil liegt auf dem Server ──
+const ECDH_KEY = 'sm_chat_ecdh', PUBPUB_KEY = 'sm_chat_pubpub', IMG_MARK = '🖼IMG|';
+let _ecdh = null; const PARTNER_KEYS = new Map();
+async function myEcdh() {
+  if (_ecdh) return _ecdh;
+  let jw = null; try { jw = JSON.parse(lsGet(ECDH_KEY) || 'null'); } catch (e) {}
+  if (!jw || !jw.priv || !jw.pub) {
+    const kp = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+    jw = { priv: await crypto.subtle.exportKey('jwk', kp.privateKey), pub: await crypto.subtle.exportKey('jwk', kp.publicKey) };
+    lsSet(ECDH_KEY, JSON.stringify(jw)); // Teil der Sicherung → Schlüssel zieht beim Geräte-Umzug mit
+  }
+  const priv = await crypto.subtle.importKey('jwk', jw.priv, { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']);
+  _ecdh = { priv, pub: { kty: 'EC', crv: 'P-256', x: jw.pub.x, y: jw.pub.y } };
+  return _ecdh;
+}
+const imgHdr = () => ({ 'x-spotme-code': CODE, 'x-spotme-token': TOKEN });
+async function publishPub() {
+  if (!CODE || !TOKEN || !window.crypto || !crypto.subtle) return;
+  try {
+    const k = await myEcdh(), pub = JSON.stringify(k.pub), fp = CODE + '|' + pub;
+    if (lsGet(PUBPUB_KEY) === fp) return;
+    const r = await tfetch(`${API}/messenger/pubkey`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...imgHdr() }, body: JSON.stringify({ pub }) });
+    if (r.ok) lsSet(PUBPUB_KEY, fp);
+  } catch (e) {}
+}
+async function sharedKeyWith(partner, refetch) {
+  let pub = refetch ? null : PARTNER_KEYS.get(partner);
+  if (!pub) {
+    const r = await tfetch(`${API}/messenger/pubkey/${partner}`, { headers: imgHdr() });
+    if (r.status === 404) throw new Error('nokey');
+    if (r.status === 403) throw new Error('unverified');
+    if (!r.ok) throw new Error('net');
+    pub = JSON.parse((await r.json()).pub); PARTNER_KEYS.set(partner, pub);
+  }
+  const me = await myEcdh();
+  const pk = await crypto.subtle.importKey('jwk', pub, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+  const bits = await crypto.subtle.deriveBits({ name: 'ECDH', public: pk }, me.priv, 256);
+  const hk = await crypto.subtle.importKey('raw', bits, 'HKDF', false, ['deriveKey']);
+  const te = new TextEncoder();
+  return crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: te.encode('spotme-img-v1'), info: te.encode([CODE, partner].sort().join('|')) },
+    hk, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+function dataUrlToBytes(u) { const b = atob(u.slice(u.indexOf(',') + 1)); const a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+function bytesToDataUrl(a) { let s = ''; for (let i = 0; i < a.length; i += 8192) s += String.fromCharCode.apply(null, a.subarray(i, i + 8192)); return 'data:image/jpeg;base64,' + btoa(s); }
+async function encryptImage(partner, dataUrl) {
+  const key = await sharedKeyWith(partner);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, dataUrlToBytes(dataUrl)));
+  const out = new Uint8Array(12 + ct.length); out.set(iv, 0); out.set(ct, 12);
+  return out;
+}
+async function decryptImage(partner, blob) {
+  const go = async (refetch) => {
+    const key = await sharedKeyWith(partner, refetch);
+    return bytesToDataUrl(new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: blob.slice(0, 12) }, key, blob.slice(12))));
+  };
+  try { return await go(false); } catch (e) { return await go(true); } // Schlüssel evtl. neu (Gerätewechsel des Kontakts)
+}
 
 let PICKED_IMG = null;
 function pickImage() {
   if (!canSendImage()) {
     const h = document.getElementById('imgHint');
-    h.textContent = '⚠️ Gerade nicht möglich: Bilder gehen nur direkt, wenn ihr BEIDE im Chat online seid. Bleibt es so: Akku-Einstellung des Browsers auf „Keine Beschränkungen“.';
+    refreshImageState();
     h.className = 'img-hint warn';
-    setTimeout(refreshImageState, 6000);
     return;
   }
   document.getElementById('imgFile').click();
@@ -728,21 +780,79 @@ async function onImagePicked(input) {
 }
 function closeImgPreview() { PICKED_IMG = null; document.getElementById('imgPreviewLayer').classList.add('hidden'); }
 
+const IMG_ERR = {
+  nokey: 'Dein Kontakt muss den Messenger einmal öffnen (neue Version), dann geht es.',
+  unverified: 'Bilder gehen nur an verifizierte Kontakte.',
+  size: 'Das Bild ist zu groß.',
+  daily: 'Heute hast du schon viele Bilder gesendet – bitte später wieder.',
+  pending: 'Dein Kontakt hat noch zu viele ungeöffnete Bilder. Bitte später erneut.',
+  gone: 'Dieses Konto gibt es nicht mehr.',
+  closed: 'Der Chat wurde beendet.',
+  net: 'Keine Verbindung – Bild nicht gesendet. Bitte erneut versuchen.'
+};
 async function sendPickedImage() {
   const dataUrl = PICKED_IMG, room = CURRENT_ROOM, partner = PARTNER_CODE;
-  if (!dataUrl || !room) return;
+  if (!dataUrl || !room || !partner) return;
   const msgEl = document.getElementById('imgPreviewMsg'), btn = document.getElementById('imgSendBtn');
-  if (!canSendImage()) { msgEl.textContent = 'Dein Gegenüber ist nicht mehr direkt verbunden – Bild nicht gesendet.'; return; }
-  btn.disabled = true; msgEl.textContent = 'Sende …';
-  const ts = Date.now(), iid = 'i' + ts.toString(36) + Math.random().toString(36).slice(2, 7);
-  const ok = await webrtc.sendImage(dataUrl, ts, iid);
-  if (!ok) { msgEl.textContent = 'Nicht gesendet – die Verbindung ist weg. Bitte später erneut versuchen.'; btn.disabled = false; return; }
-  await imgPut(room, iid, dataUrl);
+  if (!canSendImage()) { msgEl.textContent = IMG_ERR.unverified; return; }
+  btn.disabled = true; msgEl.textContent = 'Verschlüssele und sende …';
+  const ts = Date.now();
+  try {
+    const blob = await encryptImage(partner, dataUrl);
+    const up = await tfetch(`${API}/messenger/image/${partner}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', ...imgHdr() }, body: blob }, 60000);
+    if (!up.ok) { const e = await up.json().catch(() => ({})); throw new Error(e.code || 'net'); }
+    const { id } = await up.json();
+    const res = await tfetch(`${API}/message`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recipient: partner, sender_code: CODE, sender_name: PROFILE?.name || CODE, message: IMG_MARK + id + '|' + ts, spot_type: 'messenger_chat', token: TOKEN }) }, 30000);
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      fetch(`${API}/messenger/image/${id}`, { method: 'DELETE', headers: imgHdr() }).catch(() => {});
+      if (e.code === 'closed') setMeta(partner, { paused: true });
+      throw new Error(e.code || 'net');
+    }
+    const d = await res.json().catch(() => ({}));
+    await imgPut(room, id, dataUrl);
+    const msgs = await loadRoomMessages(room);
+    msgs.push({ from: CODE, fromName: PROFILE?.name || CODE, kind: 'image', iid: id, text: '📷 Bild', ts, status: d.delivered ? 'delivered' : 'sent' });
+    await saveRoomMessages(room, msgs);
+    closeImgPreview();
+    if (room === CURRENT_ROOM) await renderMessages(true);
+    renderChatList();
+  } catch (e) {
+    msgEl.textContent = IMG_ERR[e.message] || IMG_ERR.net;
+    btn.disabled = false;
+  }
+}
+
+// Bild vom Server abholen, entschlüsseln und lokal speichern. → 'ok' | 'gone' | 'retry'
+const IMG_RETRY = new Map();
+async function receiveServerImage(m, room) {
+  const mt = String(m.message).match(/^🖼IMG\|([a-f0-9]{32})\|\d+$/);
+  if (!mt) return 'gone';
+  const id = mt[1];
   const msgs = await loadRoomMessages(room);
-  msgs.push({ from: CODE, fromName: PROFILE?.name || CODE, kind: 'image', iid, text: '📷 Bild', ts, status: 'sent' });
-  await saveRoomMessages(room, msgs);
-  closeImgPreview();
-  if (room === CURRENT_ROOM) await renderMessages(true);
+  if (msgs.some(e => e.sid === m.id || e.iid === id)) return 'ok';
+  let status = 'gone', stored = false;
+  try {
+    const r = await tfetch(`${API}/messenger/image/${id}`, { headers: imgHdr() }, 60000);
+    if (r.status === 404) status = 'gone';
+    else if (!r.ok) status = 'retry';
+    else {
+      const dataUrl = await decryptImage(m.sender_code, new Uint8Array(await r.arrayBuffer()));
+      await imgPut(room, id, dataUrl); stored = true; status = 'ok';
+      fetch(`${API}/messenger/image/${id}`, { method: 'DELETE', headers: imgHdr() }).catch(() => {});
+    }
+  } catch (e) { status = (e && (e.message === 'nokey' || e.message === 'unverified')) ? 'gone' : (e && e.name === 'OperationError') ? 'gone' : 'retry'; }
+  if (status === 'retry') {
+    const n = (IMG_RETRY.get(m.id) || 0) + 1; IMG_RETRY.set(m.id, n);
+    if (n < 6) return 'retry';
+    status = 'gone';
+  }
+  if (!stored && status !== 'gone') return status;
+  const cur = await loadRoomMessages(room);
+  cur.push({ from: m.sender_code, fromName: m.sender_name, kind: 'image', iid: id, sid: m.id, text: '📷 Bild', ts: new Date(m.created_at).getTime() });
+  await saveRoomMessages(room, cur);
+  return 'ok';
 }
 
 // Bild per P2P angekommen
@@ -2194,6 +2304,7 @@ async function pollOnce() {
           let renderedAny = false;
           let listNeedsUpdate = false;
           let sndText = null;
+          const retryIds = new Set();
 
           for (const m of newMsgs) {
             const room = [CODE, m.sender_code].sort().join('-');
@@ -2209,6 +2320,16 @@ async function pollOnce() {
             }
             // Von mir beendete Kontakte: nichts annehmen
             if (getClosedByMe()[m.sender_code]) continue;
+            // Bild über den Server (nur von verifizierten Kontakten)
+            if (String(m.message).startsWith(IMG_MARK)) {
+              if (!metaOf(m.sender_code).ver) { continue; }
+              setMeta(m.sender_code, { heard: true, paused: false, out: 0 });
+              const rr = await receiveServerImage(m, room);
+              if (rr === 'retry') { retryIds.add(m.id); continue; }
+              listNeedsUpdate = true; sndText = '📷 Bild';
+              if (room === CURRENT_ROOM) { markSeen(room); await renderMessages(true); renderedAny = true; applyChatState(); }
+              continue;
+            }
             // Verifizierungs-Schritte: nie als Chat-Nachricht anzeigen
             if (String(m.message).startsWith(VCTRL)) { if (handleControl(m.sender_code, m.message)) listNeedsUpdate = true; continue; }
             const knownBefore = !!getContacts()[m.sender_code];
@@ -2248,7 +2369,7 @@ async function pollOnce() {
           // Empfang bestätigen – erst dann löscht der Server die Nachrichten
           fetch(`${API}/messages/${CODE}/ack`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: TOKEN, ids: newMsgs.map(x => x.id) })
+            body: JSON.stringify({ token: TOKEN, ids: newMsgs.filter(x => !retryIds.has(x.id)).map(x => x.id) })
           }).catch(() => {});
           if (renderedAny && !canSendImage()) {
             updateP2PUI(false, 'Server-Modus');
