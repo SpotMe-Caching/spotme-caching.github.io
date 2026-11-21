@@ -727,6 +727,31 @@ async function sharedKeyWith(partner, refetch) {
   return crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: te.encode('spotme-img-v1'), info: te.encode([CODE, partner].sort().join('|')) },
     hk, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 }
+// Sicherheitsnummer: beide sehen dieselbe Zahl, wenn niemand Schlüssel getauscht hat → am Telefon/persönlich vergleichen
+async function safetyNumber(partner) {
+  let pub = PARTNER_KEYS.get(partner);
+  if (!pub) {
+    const r = await tfetch(`${API}/messenger/pubkey/${partner}`, { headers: imgHdr() });
+    if (!r.ok) return null;
+    pub = JSON.parse((await r.json()).pub); PARTNER_KEYS.set(partner, pub);
+  }
+  const me = await myEcdh();
+  const parts = [[CODE, me.pub], [partner, pub]].sort((a, b) => a[0] < b[0] ? -1 : 1).map(p => p[0] + ':' + p[1].x + '.' + p[1].y);
+  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(parts.join('|'))));
+  const g = []; for (let i = 0; i < 5; i++) g.push(String(((h[4*i]<<24|h[4*i+1]<<16|h[4*i+2]<<8|h[4*i+3])>>>0) % 100000).padStart(5, '0'));
+  const num = g.join(' ');
+  const k = 'sm_chat_pk_' + partner, cur = pub.x + '.' + pub.y, old = lsGet(k);
+  const changed = !!old && old !== cur; lsSet(k, cur);
+  return { num, changed };
+}
+async function fillSafety() {
+  const el = document.getElementById('vcSafe'); if (!el) return;
+  try {
+    const r = await safetyNumber(PARTNER_CODE);
+    if (!r) { el.textContent = 'Sicherheitsnummer erscheint, sobald dein Kontakt die neue Version geöffnet hat.'; return; }
+    el.innerHTML = (r.changed ? '<span class="vc-note">⚠ Der Schlüssel von ' + escapeHtml(PARTNER_NAME || 'deinem Kontakt') + ' hat sich geändert (neues Gerät?). Nummer unbedingt vergleichen!</span><br>' : '') + '🔐 Sicherheitsnummer: <b>' + r.num + '</b><br><small>Muss bei euch beiden gleich sein – vergleicht sie am Telefon oder persönlich. Dann sind Bilder sicher vor dem Server.</small>';
+  } catch (e) { el.textContent = ''; }
+}
 function dataUrlToBytes(u) { const b = atob(u.slice(u.indexOf(',') + 1)); const a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
 function bytesToDataUrl(a) { let s = ''; for (let i = 0; i < a.length; i += 8192) s += String.fromCharCode.apply(null, a.subarray(i, i + 8192)); return 'data:image/jpeg;base64,' + btoa(s); }
 async function encryptImage(partner, dataUrl) {
@@ -2012,7 +2037,7 @@ function renderVerCard() {
     else if (vp.st === 'judge') html = `<b>🔏 ${nm} antwortet</b><p>Deine Frage: <i>„${escapeHtml(vp.q)}“</i><br>Antwort: <i>„${escapeHtml(vp.a || '')}“</i></p><p>Ist das die richtige Antwort?</p><div class="vc-btns"><button onclick="verJudge(true)">✔ Stimmt</button><button class="vc-no" onclick="verJudge(false)">✖ Stimmt nicht</button><button class="vc-ghost" onclick="verCancel()">Abbrechen</button></div>`;
   } else if (m.ver) {
     if (!VC_OPEN) { el.className = 'ver-card hidden'; return; }
-    html = `<b>✔ Verifiziert</b><p>Du und ${nm} habt euch gegenseitig bestätigt. Der grüne Haken bleibt am Namen.</p><div class="vc-btns"><button onclick="recPick()">🤝 Kontakt empfehlen</button><button class="vc-ghost" onclick="verUnverify()">Verifizierung aufheben</button><button class="vc-ghost" onclick="toggleVerCard()">Schließen</button></div>`;
+    html = `<b>✔ Verifiziert</b><p>Du und ${nm} habt euch gegenseitig bestätigt. Der grüne Haken bleibt am Namen.</p><p id="vcSafe" class="vc-wait">🔐 …</p><div class="vc-btns"><button onclick="recPick()">🤝 Kontakt empfehlen</button><button class="vc-ghost" onclick="verUnverify()">Verifizierung aufheben</button><button class="vc-ghost" onclick="toggleVerCard()">Schließen</button></div>`;
   } else {
     const note = { no: 'Die Antwort wurde nicht bestätigt – keine Verifizierung.', x: 'Die Verifizierung wurde abgebrochen.', un: 'Die Verifizierung wurde aufgehoben.' }[m.vnote || ''];
     if (!VC_OPEN && !note) { el.className = 'ver-card hidden'; return; }
@@ -2023,6 +2048,7 @@ function renderVerCard() {
   }
   el.className = 'ver-card';
   el.innerHTML = html;
+  if (m.ver && !vp) fillSafety();
 }
 // ── EMPFEHLEN ──────────────────────────────────────────────────────────────
 // A (verifiziert mit C) empfiehlt B an C. B muss "darf empfohlen werden" aktiviert haben (Server-Flag).
