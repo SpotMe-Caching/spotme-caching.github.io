@@ -454,6 +454,13 @@ async function initDB() {
       PRIMARY KEY (code, dev))`);
     // Messenger: gelöschte IDs (nur der Code + Zeitpunkt), damit Kontakte "Konto gelöscht" sehen und ihren Chat selbst aufräumen können
     await pool.query(`CREATE TABLE IF NOT EXISTS messenger_gone (code TEXT PRIMARY KEY, at BIGINT NOT NULL)`);
+    // Messenger: Bilder über den Server. Der Server speichert nur verschlüsselte Blobs (Ende-zu-Ende, Schlüssel nur auf den Geräten).
+    await pool.query(`CREATE TABLE IF NOT EXISTS messenger_pubkeys (code TEXT PRIMARY KEY, pub TEXT NOT NULL, at BIGINT NOT NULL)`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS messenger_images (
+      id TEXT PRIMARY KEY, sender TEXT NOT NULL, recipient TEXT NOT NULL, blob BYTEA NOT NULL, size INTEGER NOT NULL, created_at BIGINT NOT NULL)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS messenger_images_rcpt ON messenger_images (recipient)`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS messenger_img_log (sender TEXT NOT NULL, at BIGINT NOT NULL)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS messenger_img_log_s ON messenger_img_log (sender, at)`);
     await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_visit BIGINT`);
     // Länder getrennt (ES/DE/…): Bestand ist Spanien → Default 'ES'
     await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS country TEXT DEFAULT 'ES'`);
@@ -769,6 +776,14 @@ setInterval(async () => {
       console.error("Cleanup missed_calls:", e.message);
     }
 
+    // ── Messenger-Bilder: nach 48 h weg, auch wenn nie abgeholt ───────────
+    try {
+      await pool.query("DELETE FROM messenger_images WHERE created_at < $1", [Date.now() - 48 * 3600 * 1000]);
+      await pool.query("DELETE FROM messenger_img_log WHERE at < $1", [Date.now() - 48 * 3600 * 1000]);
+    } catch (e) {
+      console.error("Cleanup messenger_images:", e.message);
+    }
+
     // ── Alte Offline-Nachrichten löschen ──────────────────────────────────
     try {
       const r = await pool.query(
@@ -803,6 +818,7 @@ setInterval(async () => {
 // ---------- Antispam ----------
 // Antwort/Zitat: erste Zeile "↩ <Auszug> ⟨m|o⟩" (m = vom Absender, o = vom Empfänger), danach die eigentliche Nachricht.
 // Auszug (max. 80) und Text werden getrennt begrenzt, damit ein Zitat den Platz für die Antwort nicht auffrisst.
+const MSGR_IMG_MARK = "🖼IMG|"; // Chat-Nachricht mit Verweis auf ein Bild auf dem Server: 🖼IMG|<id>|<ts>
 const QUOTE_RE = /^↩ ([^\n]{0,100}?) ⟨([mo])⟩\n([\s\S]*)$/;
 function sanitizeCore(text, max) {
   return text
@@ -1411,6 +1427,110 @@ app.post("/api/messenger/seen", async (req, res) => {
   }
 });
 
+// ── Bilder über den Server (Ende-zu-Ende verschlüsselt, nur zwischen verifizierten Kontakten) ─────────
+const MSGR_IMG_MAX = 450000;          // Bytes pro Bild (verschlüsselt)
+const MSGR_IMG_DAY = 40;              // Bilder pro Absender und 24 h
+const MSGR_IMG_PEND_PAIR = 10;        // unabgeholte Bilder von einem Absender an einen Empfänger
+const MSGR_IMG_PEND_TOTAL = 30;       // unabgeholte Bilder insgesamt pro Empfänger
+const MSGR_IMG_BYTES_TOTAL = 8 * 1024 * 1024;
+async function msgrAuthHdr(req, res) {
+  const code = normCode(req.headers["x-spotme-code"]);
+  const token = String(req.headers["x-spotme-token"] || "");
+  if (!isMsgCode(code) || !token) { res.status(400).json({ error: "Code und Token erforderlich" }); return null; }
+  if (!(await authCheck(code, token))) { res.status(403).json({ error: "Ungültiger Token" }); return null; }
+  return code;
+}
+async function msgrBothVerified(a, b) {
+  const lo = a < b ? a : b, hi = a < b ? b : a;
+  const r = await pool.query("SELECT 1 FROM messenger_verified WHERE lo=$1 AND hi=$2 AND lo_ok AND hi_ok", [lo, hi]);
+  return r.rows.length > 0;
+}
+// Eigenen öffentlichen Schlüssel hinterlegen (nur der öffentliche Teil)
+app.post("/api/messenger/pubkey", async (req, res) => {
+  try {
+    const code = await msgrAuthHdr(req, res); if (!code) return;
+    const pub = req.body && typeof req.body.pub === "string" ? req.body.pub : "";
+    let j; try { j = JSON.parse(pub); } catch { j = null; }
+    if (!j || j.kty !== "EC" || j.crv !== "P-256" || typeof j.x !== "string" || typeof j.y !== "string" || pub.length > 400 || j.d) {
+      return res.status(400).json({ error: "Ungültiger Schlüssel" });
+    }
+    const clean = JSON.stringify({ kty: "EC", crv: "P-256", x: j.x, y: j.y });
+    await pool.query(
+      "INSERT INTO messenger_pubkeys (code, pub, at) VALUES ($1,$2,$3) ON CONFLICT (code) DO UPDATE SET pub=$2, at=$3",
+      [code, clean, Date.now()],
+    );
+    res.json({ ok: true });
+  } catch (e) { console.error("POST pubkey:", e.message); if (!res.headersSent) res.status(500).json({ error: "Datenbankfehler" }); }
+});
+// Öffentlichen Schlüssel eines verifizierten Kontakts holen
+app.get("/api/messenger/pubkey/:partner", async (req, res) => {
+  try {
+    const code = await msgrAuthHdr(req, res); if (!code) return;
+    const partner = normCode(req.params.partner);
+    if (!isMsgCode(partner) || !(await msgrBothVerified(code, partner))) return res.status(403).json({ error: "Nur mit verifizierten Kontakten" });
+    const r = await pool.query("SELECT pub FROM messenger_pubkeys WHERE code=$1", [partner]);
+    if (!r.rows.length) return res.status(404).json({ error: "Kontakt hat noch keinen Schlüssel" });
+    res.json({ pub: r.rows[0].pub });
+  } catch (e) { console.error("GET pubkey:", e.message); if (!res.headersSent) res.status(500).json({ error: "Datenbankfehler" }); }
+});
+// Verschlüsseltes Bild hochladen → id; der Chat verweist danach per Nachricht "🖼IMG|id|ts" darauf
+app.post("/api/messenger/image/:recipient", express.raw({ type: "application/octet-stream", limit: "480kb" }), async (req, res) => {
+  try {
+    const code = await msgrAuthHdr(req, res); if (!code) return;
+    const rcpt = normCode(req.params.recipient);
+    const buf = req.body;
+    if (!isMsgCode(rcpt) || rcpt === code) return res.status(400).json({ error: "Empfänger ungültig" });
+    if (!Buffer.isBuffer(buf) || buf.length < 29) return res.status(400).json({ error: "Kein Bild" });
+    if (buf.length > MSGR_IMG_MAX) return res.status(413).json({ error: "Bild zu groß", code: "size" });
+    if (!(await msgrBothVerified(code, rcpt))) return res.status(403).json({ error: "Bilder gehen nur an verifizierte Kontakte", code: "unverified" });
+    const exists = await pool.query("SELECT 1 FROM profiles WHERE code=$1 AND spot='messenger'", [rcpt]);
+    if (!exists.rows.length) return res.status(404).json({ error: "Empfänger nicht gefunden", code: "gone" });
+    const now = Date.now();
+    const q = await pool.query(
+      `SELECT
+         (SELECT COUNT(*) FROM messenger_img_log WHERE sender=$1 AND at > $3)::int AS day,
+         COUNT(*) FILTER (WHERE sender=$1 AND recipient=$2)::int AS pair,
+         COUNT(*) FILTER (WHERE recipient=$2)::int AS total,
+         COALESCE(SUM(size) FILTER (WHERE recipient=$2), 0)::bigint AS bytes
+       FROM messenger_images WHERE sender=$1 OR recipient=$2`,
+      [code, rcpt, now - 86400000],
+    );
+    const L = q.rows[0];
+    if (L.day >= MSGR_IMG_DAY) return res.status(429).json({ error: "Tageslimit für Bilder erreicht", code: "daily" });
+    if (L.pair >= MSGR_IMG_PEND_PAIR || L.total >= MSGR_IMG_PEND_TOTAL || Number(L.bytes) + buf.length > MSGR_IMG_BYTES_TOTAL) {
+      return res.status(429).json({ error: "Dein Kontakt hat noch zu viele ungeöffnete Bilder", code: "pending" });
+    }
+    const id = crypto.randomBytes(16).toString("hex");
+    await pool.query(
+      "INSERT INTO messenger_images (id, sender, recipient, blob, size, created_at) VALUES ($1,$2,$3,$4,$5,$6)",
+      [id, code, rcpt, buf, buf.length, now],
+    );
+    await pool.query("INSERT INTO messenger_img_log (sender, at) VALUES ($1,$2)", [code, now]); // zählt auch nach dem Abholen/Löschen
+    res.json({ id });
+  } catch (e) { console.error("POST image:", e.message); if (!res.headersSent) res.status(500).json({ error: "Datenbankfehler" }); }
+});
+// Bild abholen (nur der Empfänger)
+app.get("/api/messenger/image/:id", async (req, res) => {
+  try {
+    const code = await msgrAuthHdr(req, res); if (!code) return;
+    const id = String(req.params.id || "");
+    if (!/^[a-f0-9]{32}$/.test(id)) return res.status(400).json({ error: "id ungültig" });
+    const r = await pool.query("SELECT blob FROM messenger_images WHERE id=$1 AND recipient=$2", [id, code]);
+    if (!r.rows.length) return res.status(404).json({ error: "Bild nicht mehr vorhanden" });
+    res.set("Content-Type", "application/octet-stream").set("Cache-Control", "no-store").send(r.rows[0].blob);
+  } catch (e) { console.error("GET image:", e.message); if (!res.headersSent) res.status(500).json({ error: "Datenbankfehler" }); }
+});
+// Nach dem sicheren Speichern auf dem Gerät: vom Server löschen (Empfänger oder Absender)
+app.delete("/api/messenger/image/:id", async (req, res) => {
+  try {
+    const code = await msgrAuthHdr(req, res); if (!code) return;
+    const id = String(req.params.id || "");
+    if (!/^[a-f0-9]{32}$/.test(id)) return res.status(400).json({ error: "id ungültig" });
+    await pool.query("DELETE FROM messenger_images WHERE id=$1 AND (recipient=$2 OR sender=$2)", [id, code]);
+    res.json({ ok: true });
+  } catch (e) { console.error("DELETE image:", e.message); if (!res.headersSent) res.status(500).json({ error: "Datenbankfehler" }); }
+});
+
 // Welche meiner Kontakte haben ihr Konto gelöscht? Nur für Codes, die ich selbst schicke – es gibt keine Suche über fremde IDs.
 app.post("/api/messenger/gone", async (req, res) => {
   const code = normCode(req.body?.code);
@@ -1822,6 +1942,9 @@ app.delete("/api/account/:code", async (req, res) => {
       await run("kommentare", "DELETE FROM profile_comments WHERE profile_code=$1 OR sender_code=$1", [code]);
       await run("bluesky", "DELETE FROM bluesky_accounts WHERE code=$1", [code]);
       await run("profil", "DELETE FROM profiles WHERE code=$1", [code]);
+      await run("messenger_images", "DELETE FROM messenger_images WHERE sender=$1 OR recipient=$1", [normCode(code)]);
+      await run("messenger_img_log", "DELETE FROM messenger_img_log WHERE sender=$1", [normCode(code)]);
+      await run("messenger_pubkeys", "DELETE FROM messenger_pubkeys WHERE code=$1", [normCode(code)]);
       if (isMsgCode(normCode(code))) await run("messenger_gone", "INSERT INTO messenger_gone (code, at) VALUES ($1,$2) ON CONFLICT (code) DO UPDATE SET at=$2", [normCode(code), Date.now()]);
       await client.query("COMMIT");
     } catch (e) {
@@ -2191,7 +2314,9 @@ app.post("/api/message", async (req, res) => {
           "💬 Neue Nachricht",
           clean.startsWith("🔏")
             ? `${String(sender_name || sender_code).slice(0, 50)}: 🔏 Verifizierung`
-            : `${String(sender_name || sender_code).slice(0, 50)}: ${stripQuote(clean).slice(0, 80)}`,
+            : clean.startsWith(MSGR_IMG_MARK)
+              ? `${String(sender_name || sender_code).slice(0, 50)}: 📷 Bild`
+              : `${String(sender_name || sender_code).slice(0, 50)}: ${stripQuote(clean).slice(0, 80)}`,
           isMsgCode(sender_code) ? "/chat/" : "/",
           "chat",
           `chat-${sender_code}`,
@@ -2307,7 +2432,7 @@ app.get("/api/messenger/wait/:code", async (req, res) => {
       let nm = r.sender_code;
       try { nm = decrypt(r.sender_name); } catch {}
       return { id: r.id, from: r.sender_code, name: nm,
-        text: txt.startsWith("🔏") ? "🔏 Verifizierung" : stripQuote(txt).slice(0, 80), ctrl: txt.startsWith("🔏") };
+        text: txt.startsWith("🔏") ? "🔏 Verifizierung" : txt.startsWith(MSGR_IMG_MARK) ? "📷 Bild" : stripQuote(txt).slice(0, 80), ctrl: txt.startsWith("🔏") };
     });
   };
   try {
