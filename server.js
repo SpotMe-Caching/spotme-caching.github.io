@@ -1121,6 +1121,17 @@ function msgrTouchSeen(code) {
   pool.query("UPDATE messenger_seen SET last_ms=$2 WHERE code=$1", [code, now]).catch(() => {});
 }
 setInterval(() => { const n = Date.now(); for (const [k, v] of msgrSeenTouched) if (n - v > 3600000) msgrSeenTouched.delete(k); }, 3600000).unref();
+// ── Hintergrund-Verbindung der APK (Long-Poll, nur Messenger) ────────────────
+// Der Android-Dienst fragt /api/messenger/wait und bekommt sofort Antwort, sobald eine
+// neue Nachricht eingeht. Es wird nichts als gelesen markiert und "zuletzt online" nicht berührt.
+const msgrWaiters = new Map(); // code -> Set<fn>
+function msgrWake(code) {
+  const set = msgrWaiters.get(code);
+  if (!set) return;
+  msgrWaiters.delete(code);
+  for (const fn of set) { try { fn(); } catch {} }
+}
+const MSGR_WAIT_MS = 25000;
 const MSGR_ACTIVE_TTL = 15000;
 function msgrIsActiveWith(code, partner) {
   const a = msgrActive.get(code);
@@ -2089,6 +2100,7 @@ app.post("/api/message", async (req, res) => {
     );
 
     console.log(`💬 Chat: ${sender_code} → ${recipient}`);
+    if (chatType === "messenger_chat") msgrWake(recipient);
     // Push darf die Antwort nie blockieren oder den Versand fehlschlagen lassen
     let delivered = false;
     // Empfänger hat genau diesen Chat gerade offen → kein Push (Nachricht kommt beim nächsten Abholen)
@@ -2191,6 +2203,72 @@ app.post("/api/messages/:code/ack", async (req, res) => {
   } catch (e) {
     console.error("POST /api/messages/ack:", e.message);
     res.status(500).json({ error: "Datenbankfehler" });
+  }
+});
+
+// Hintergrund-Verbindung: wartet bis zu 25 s auf neue Nachrichten (id > after). Nur Messenger.
+app.get("/api/messenger/wait/:code", async (req, res) => {
+  const code = normCode(req.params.code);
+  const token = req.headers["x-spotme-token"] || req.query.token;
+  if (!isMsgCode(code)) return res.status(400).json({ error: "Nur Messenger" });
+  if (!token) return res.status(401).json({ error: "Token fehlt" });
+  const after = Math.max(0, parseInt(req.query.after, 10) || 0);
+  const fetchNew = async () => {
+    const { rows } = await pool.query(
+      `SELECT id, sender_code, sender_name, message
+       FROM offline_messages
+       WHERE recipient = $1 AND spot_type = 'messenger_chat' AND read = FALSE
+         AND id > $2 AND created_at > NOW() - INTERVAL '48 hours'
+       ORDER BY id ASC LIMIT 20`,
+      [code, after],
+    );
+    return rows.map((r) => {
+      let txt = "";
+      try { txt = decrypt(r.message); } catch {}
+      let nm = r.sender_code;
+      try { nm = decrypt(r.sender_name); } catch {}
+      return { id: r.id, from: r.sender_code, name: nm,
+        text: txt.startsWith("🔏") ? "🔏 Verifizierung" : txt.slice(0, 80), ctrl: txt.startsWith("🔏") };
+    });
+  };
+  try {
+    if (!(await authCheck(code, String(token)))) {
+      return res.status(403).json({ error: "Ungültiger Token" });
+    }
+    const items = await fetchNew();
+    if (items.length) return res.json({ items });
+    // nowait=1: sofort antworten und nur die neueste ungelesene id nennen (Startpunkt für den Dienst)
+    if (req.query.nowait === "1") {
+      const m = await pool.query(
+        `SELECT COALESCE(MAX(id), 0) AS last FROM offline_messages
+         WHERE recipient = $1 AND spot_type = 'messenger_chat' AND read = FALSE
+           AND created_at > NOW() - INTERVAL '48 hours'`,
+        [code],
+      );
+      return res.json({ items: [], last: Number(m.rows[0].last) });
+    }
+    let done = false;
+    let timer;
+    const drop = () => {
+      const st = msgrWaiters.get(code);
+      if (st) { st.delete(finish); if (!st.size) msgrWaiters.delete(code); }
+    };
+    const finish = async () => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      drop();
+      try { res.json({ items: await fetchNew() }); } catch { if (!res.headersSent) res.json({ items: [] }); }
+    };
+    let set = msgrWaiters.get(code);
+    if (!set) { set = new Set(); msgrWaiters.set(code, set); }
+    while (set.size >= 3) { const old = set.values().next().value; set.delete(old); old(); }
+    set.add(finish);
+    timer = setTimeout(finish, MSGR_WAIT_MS);
+    req.on("close", () => { if (done) return; done = true; clearTimeout(timer); drop(); });
+  } catch (e) {
+    console.error("GET /api/messenger/wait:", e.message);
+    if (!res.headersSent) res.status(500).json({ error: "Datenbankfehler" });
   }
 });
 
