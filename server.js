@@ -452,6 +452,8 @@ async function initDB() {
     await pool.query(`CREATE TABLE IF NOT EXISTS messenger_devices (
       code TEXT NOT NULL, dev TEXT NOT NULL, last_ms BIGINT NOT NULL, replaced BOOLEAN NOT NULL DEFAULT FALSE,
       PRIMARY KEY (code, dev))`);
+    // Messenger: gelöschte IDs (nur der Code + Zeitpunkt), damit Kontakte "Konto gelöscht" sehen und ihren Chat selbst aufräumen können
+    await pool.query(`CREATE TABLE IF NOT EXISTS messenger_gone (code TEXT PRIMARY KEY, at BIGINT NOT NULL)`);
     await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_visit BIGINT`);
     // Länder getrennt (ES/DE/…): Bestand ist Spanien → Default 'ES'
     await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS country TEXT DEFAULT 'ES'`);
@@ -1393,6 +1395,27 @@ app.post("/api/messenger/seen", async (req, res) => {
   }
 });
 
+// Welche meiner Kontakte haben ihr Konto gelöscht? Nur für Codes, die ich selbst schicke – es gibt keine Suche über fremde IDs.
+app.post("/api/messenger/gone", async (req, res) => {
+  const code = normCode(req.body?.code);
+  const token = String(req.body?.token || "");
+  const list = Array.isArray(req.body?.codes) ? req.body.codes.map(normCode).filter(isMsgCode).slice(0, 200) : [];
+  if (!isMsgCode(code) || !token) return res.status(400).json({ error: "code und token erforderlich" });
+  try {
+    if (!(await authCheck(code, token))) return res.status(403).json({ error: "Ungültiger Token" });
+    let gone = [];
+    if (list.length) {
+      const r = await pool.query("SELECT code FROM messenger_gone WHERE code = ANY($1::text[])", [list]);
+      gone = r.rows.map((x) => x.code);
+    }
+    pool.query("DELETE FROM messenger_gone WHERE at < $1", [Date.now() - 365 * 86400000]).catch(() => {});
+    res.json({ gone });
+  } catch (e) {
+    console.error("POST /api/messenger/gone:", e.message);
+    res.status(500).json({ error: "Datenbankfehler" });
+  }
+});
+
 // Geräte-Abgleich: meldet, ob diese ID noch auf einem anderen Gerät/einer anderen App aktiv ist,
 // bzw. ob DIESES Gerät inzwischen ersetzt wurde. claim=true → dieses Gerät übernimmt, alle anderen gelten als ersetzt.
 app.post("/api/messenger/device", async (req, res) => {
@@ -1490,6 +1513,7 @@ app.post("/api/messenger/register", async (req, res) => {
        VALUES ($1, 'messenger', $2, '', $3, $4, 0, $4)`,
       [code, encrypt(name), token, now],
     );
+    pool.query("DELETE FROM messenger_gone WHERE code=$1", [code]).catch(() => {});
     res.json({ code, token, name });
   } catch (e) {
     console.error("POST /api/messenger/register:", e.message);
@@ -1782,6 +1806,7 @@ app.delete("/api/account/:code", async (req, res) => {
       await run("kommentare", "DELETE FROM profile_comments WHERE profile_code=$1 OR sender_code=$1", [code]);
       await run("bluesky", "DELETE FROM bluesky_accounts WHERE code=$1", [code]);
       await run("profil", "DELETE FROM profiles WHERE code=$1", [code]);
+      if (isMsgCode(normCode(code))) await run("messenger_gone", "INSERT INTO messenger_gone (code, at) VALUES ($1,$2) ON CONFLICT (code) DO UPDATE SET at=$2", [normCode(code), Date.now()]);
       await client.query("COMMIT");
     } catch (e) {
       try { await client.query("ROLLBACK"); } catch (_) {}
