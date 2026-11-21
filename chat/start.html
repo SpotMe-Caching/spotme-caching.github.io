@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SpotMe Messenger – Einrichten</title>
+<meta name="theme-color" content="#080c10">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icons/spot_192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="../fonts.css">
+<script>
+/* Wer schon ein Profil hat oder die App/PWA nutzt, braucht den Assistenten nicht. */
+(function(){
+  try {
+    var has = !!(localStorage.getItem('sm_chat_code') && localStorage.getItem('sm_chat_token'));
+    var sa = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+    if (has || sa || /SpotMeApp\//.test(navigator.userAgent)) location.replace('index.html' + (location.search || '?neu=1'));
+  } catch (e) {}
+})();
+</script>
+<style>
+:root{--bg:#080c10;--card:#111827;--bord:rgba(255,255,255,.1);--acc:#f59e0b;--p2:#22d3ee;--ok:#10b981;--text:#e8edf5;--muted:#8793ab;--sans:'Outfit',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:16px;line-height:1.5;min-height:100vh;padding:max(16px,env(safe-area-inset-top)) 16px 40px;-webkit-text-size-adjust:100%}
+.wrap{max-width:460px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:.6rem;margin:6px 0 14px}
+.brand img{width:40px;height:40px;border-radius:10px}
+.brand b{font-size:1.15rem;color:var(--acc)}
+h1{font-size:1.5rem;line-height:1.2;margin:.2rem 0 .5rem}
+.lead{color:var(--muted);margin-bottom:1rem}
+.invite{background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.35);border-radius:12px;padding:.7rem .9rem;margin-bottom:1rem;font-size:.92rem}
+.invite b{color:var(--p2)}
+.card{background:var(--card);border:1px solid var(--bord);border-radius:16px;padding:1.1rem;margin-bottom:.9rem}
+.card.main{border-color:rgba(245,158,11,.55);box-shadow:0 0 0 1px rgba(245,158,11,.15),0 10px 30px rgba(0,0,0,.35)}
+.tag{display:inline-block;font-size:.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#1c1208;background:var(--acc);border-radius:99px;padding:.15rem .6rem;margin-bottom:.5rem}
+.card h2{font-size:1.15rem;margin-bottom:.35rem}
+.card p{color:var(--muted);font-size:.92rem}
+.btn{display:block;width:100%;text-align:center;text-decoration:none;border:0;border-radius:12px;padding:.85rem 1rem;font:700 1rem var(--sans);cursor:pointer;margin-top:.8rem}
+.btn-p{background:var(--acc);color:#1c1208}
+.btn-g{background:transparent;color:var(--text);border:1px solid var(--bord)}
+ol.steps{list-style:none;counter-reset:s;margin:.9rem 0 0}
+ol.steps li{counter-increment:s;display:flex;gap:.7rem;padding:.45rem 0;color:var(--text);font-size:.93rem}
+ol.steps li::before{content:counter(s);flex:0 0 1.6rem;height:1.6rem;border-radius:50%;background:rgba(245,158,11,.18);color:var(--acc);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:.85rem}
+.kbd{background:rgba(255,255,255,.08);border-radius:6px;padding:0 .35rem;font-size:.85rem}
+details{margin-top:.8rem;color:var(--muted);font-size:.88rem}
+summary{cursor:pointer;color:var(--text)}
+details p{margin-top:.4rem}
+.why{display:flex;flex-direction:column;gap:.3rem;margin-top:.7rem;font-size:.88rem;color:var(--muted)}
+.why span::before{content:"✓ ";color:var(--ok)}
+.hidden{display:none!important}
+.small{font-size:.8rem;color:var(--muted);margin-top:.6rem;text-align:center}
+.warn{border-color:rgba(255,179,71,.5)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><img src="icons/spot_192.png" alt=""><b>SpotMe Messenger</b></div>
+  <h1 id="h1">Ein Messenger – ein Gerät.</h1>
+  <p class="lead" id="lead">Wähle einen Weg. So bleiben deine Chats an einer Stelle und nichts verteilt sich doppelt.</p>
+  <div id="invite" class="invite hidden">💌 Einladung: <b id="inviteId"></b><br><span style="color:var(--muted)">Merk dir die ID. Nach dem Einrichten tippst du auf <b>+</b> und gibst sie ein.</span> <button class="btn btn-g" id="copyInv" style="margin-top:.5rem;padding:.5rem">ID kopieren</button></div>
+
+  <!-- ANDROID mit App -->
+  <section id="android" class="hidden">
+    <div class="card main">
+      <span class="tag">Empfohlen für Android</span>
+      <h2>📲 Die SpotMe-App</h2>
+      <p>Eigene App mit Benachrichtigungen, auch wenn der Messenger zu ist. Kein Play Store, kein Google-Konto, keine Anmeldung.</p>
+      <a class="btn btn-p" id="apkBtn" href="#" rel="noopener">⬇ App laden<span id="apkVer"></span></a>
+      <ol class="steps">
+        <li><span>Datei öffnen (Download-Meldung oder Ordner „Downloads“). Chrome fragt evtl. „Datei kann schädlich sein“ – mit <b>Trotzdem herunterladen</b> bestätigen.</span></li>
+        <li><span>Android fragt „Installation aus dieser Quelle erlauben“ → <span class="kbd">Erlauben</span>. Play Protect meldet evtl. „unbekannter Entwickler“ – das ist bei Apps außerhalb des Stores normal.</span></li>
+        <li><span><span class="kbd">Installieren</span> → <span class="kbd">Öffnen</span>, Benachrichtigungen erlauben.</span></li>
+        <li><span>In der App einen <b>Namen</b> wählen – fertig. Dieses Browser-Fenster kannst du schließen.</span></li>
+      </ol>
+      <details><summary>🔋 Xiaomi / Samsung: damit nichts verspätet kommt</summary><p>Einstellungen → Apps → SpotMe: <b>Autostart an</b> (Xiaomi), Akku <b>„Keine Einschränkungen“</b> / „Nicht eingeschränkt“. Im App-Wechsler die App lange drücken → <b>Sperren</b>.</p></details>
+    </div>
+    <div class="card">
+      <h2>Ich habe schon einen Messenger</h2>
+      <p>Läuft dein Messenger schon im Browser oder als Web-App, ziehst du mit allen Chats um: Dort <b>Hub → Sicherheit → Sichern</b>, dann in der App beim Anmelden <b>„Sicherung einspielen“</b>. Das alte Gerät wird automatisch ersetzt.</p>
+    </div>
+    <div class="card warn">
+      <h2>Lieber ohne Installation?</h2>
+      <p>Du kannst den Messenger auch nur im Browser nutzen. Dann bleibt er <b>nur in diesem Browser</b> – die App wäre ein zweites, getrenntes System. Später wechseln geht per Sicherung.</p>
+      <a class="btn btn-g js-web" href="index.html?neu=1&web=1">Trotzdem im Browser starten</a>
+    </div>
+  </section>
+
+  <!-- iPHONE -->
+  <section id="ios" class="hidden">
+    <div class="card main">
+      <span class="tag">iPhone</span>
+      <h2>Erst auf den Home-Bildschirm, dann starten</h2>
+      <p>Auf dem iPhone sind Safari und die Home-Bildschirm-App getrennte Speicher. Lege dein Profil deshalb erst <b>in der Home-Bildschirm-App</b> an – dann gibt es nur ein System.</p>
+      <ol class="steps">
+        <li><span>Diese Seite in <b>Safari</b> öffnen<span id="iosBrowserNote"></span>.</span></li>
+        <li><span>Unten auf <span class="kbd">⬆︎ Teilen</span> tippen.</span></li>
+        <li><span><span class="kbd">Zum Home-Bildschirm</span> → <span class="kbd">Hinzufügen</span>.</span></li>
+        <li><span>Das neue Symbol <b>SpotMe</b> auf dem Home-Bildschirm öffnen und dort den Namen wählen. Benachrichtigungen gibt es nur dort.</span></li>
+      </ol>
+    </div>
+    <div class="card warn">
+      <h2>Trotzdem im Browser?</h2>
+      <p>Dann bleibt dein Messenger nur in Safari, ohne Hinweise bei neuen Nachrichten.</p>
+      <a class="btn btn-g js-web" href="index.html?neu=1&web=1">Trotzdem im Browser starten</a>
+    </div>
+  </section>
+
+  <!-- Android ohne APK: Web-App -->
+  <section id="pwa" class="hidden">
+    <div class="card main">
+      <span class="tag">Android</span>
+      <h2>Als Web-App auf den Startbildschirm</h2>
+      <ol class="steps">
+        <li><span>Diese Seite in Chrome, Brave, Edge oder Firefox geöffnet lassen.</span></li>
+        <li><span>Menü <span class="kbd">⋮</span> → <span class="kbd">App installieren</span> oder <span class="kbd">Zum Startbildschirm hinzufügen</span>.</span></li>
+        <li><span>Das neue Symbol öffnen und dort den Namen wählen.</span></li>
+      </ol>
+      <a class="btn btn-g js-web" href="index.html?neu=1&web=1">Trotzdem im Browser starten</a>
+    </div>
+  </section>
+  <p class="small">Keine Nummer · keine E-Mail · Open Source</p>
+</div>
+<script>
+(function () {
+  var ua = navigator.userAgent || '';
+  var isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var isAndroid = /Android/i.test(ua);
+  var sp = new URLSearchParams(location.search);
+  // Einladung (ID oder @Name) merken und anzeigen
+  var inv = '';
+  var add = (sp.get('add') || '').toLowerCase().replace(/[^a-z]/g, '');
+  if (/^[a-z]{6}$/.test(add)) inv = add.slice(0, 3) + '-' + add.slice(3);
+  else sp.forEach(function (v, k) { if (!inv && v === '' && /^[A-Za-z0-9][A-Za-z0-9_]{2,19}$/.test(k) && ['neu', 'web', 'info', 'h', 'ref', 'add'].indexOf(k.toLowerCase()) < 0) inv = '@' + k; });
+  if (inv) {
+    document.getElementById('inviteId').textContent = inv; document.getElementById('invite').classList.remove('hidden');
+    document.getElementById('copyInv').onclick = function () { try { navigator.clipboard.writeText(inv); this.textContent = 'Kopiert ✓'; } catch (e) {} };
+  }
+  // „Trotzdem im Browser“ behält Einladung/Parameter
+  var wp = new URLSearchParams(location.search); wp.set('neu', '1'); wp.set('web', '1');
+  document.querySelectorAll('.js-web').forEach(function (a) { a.href = 'index.html?' + wp.toString().replace(/=(&|$)/g, '$1'); });
+  function show(id) { ['android', 'ios', 'pwa'].forEach(function (k) { document.getElementById(k).classList.toggle('hidden', k !== id); }); }
+  if (isIOS) {
+    show('ios');
+    if (/CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua)) document.getElementById('iosBrowserNote').textContent = ' (in diesem Browser fehlt die Funktion meist)';
+    return;
+  }
+  if (!isAndroid) { location.replace('index.html?' + wp.toString().replace(/=(&|$)/g, '$1')); return; }
+  show('pwa');
+  fetch('app-version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+    if (j && /^https:\/\/github\.com\//.test(j.apk || '') && /^\d+\.\d+\.\d+$/.test(j.version || '')) {
+      var b = document.getElementById('apkBtn'); b.href = j.apk; document.getElementById('apkVer').textContent = ' (Version ' + j.version + ')';
+      show('android');
+    }
+  }).catch(function () {});
+})();
+</script>
+</body>
+</html>

@@ -1023,3 +1023,6 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
 #devGone .dev-small{opacity:.75;font-size:.8rem}
 #devGone button{width:100%;margin-top:.8rem;border:0;border-radius:10px;padding:.7rem;font-weight:700;background:#ffb347;color:#1c1208;cursor:pointer}
 .restore-hint{font-size:.74rem;opacity:.75;margin:.4rem 0 0;line-height:1.35}
+
+.hub-steps{margin:.2rem 0 .6rem 1.1rem;padding:0;font-size:.78rem;color:#9fb6c6;line-height:1.5}
+.hub-steps li{margin:.35rem 0}

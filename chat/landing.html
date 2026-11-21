@@ -351,12 +351,13 @@ footer{border-top:1px solid var(--bord);padding:2.4rem 1.25rem;max-width:1100px;
           <button class="tab" role="tab" id="tab-ios" aria-controls="p-ios" aria-selected="false" data-os="ios">iPhone</button>
         </div>
         <div id="p-android" role="tabpanel" aria-labelledby="tab-android">
+          <p class="note" id="pwaAlt" hidden style="margin-bottom:.4rem">Alternativ ohne App (nur im Browser):</p>
           <ol class="steps">
             <li><span><b>Diese Seite</b> in Chrome, Brave, Edge oder Firefox geöffnet lassen.</span></li>
             <li><span>Tippe oben rechts auf das Menü <span class="kbd">⋮</span>.</span></li>
             <li><span>Wähle <span class="kbd">App installieren</span> oder <span class="kbd">Zum Startbildschirm hinzufügen</span> und bestätige.</span></li>
           </ol>
-          <div id="apkOpt" hidden><p class="note" style="margin-top:.9rem">📲 <b>Lieber als echte App?</b> Die Android-App (APK) gibt es auch direkt von GitHub – ohne Play Store. Die PWA oben bleibt der empfohlene Weg. <a id="apkOptLink" href="#" rel="noopener" style="color:inherit;text-decoration:underline">APK laden</a></p></div>
+          <div id="apkOpt" hidden><p class="note" style="margin:.9rem 0"><b style="color:var(--acc)">📲 Empfohlen für Android: die App.</b> Mit Hinweisen auch bei geschlossenem Messenger – direkt von GitHub, ohne Play Store und ohne Konto. <a id="apkOptLink" href="#" rel="noopener" style="color:var(--acc);font-weight:700">App laden</a>. Beides gleichzeitig nutzen? Besser nicht – dann hättest du zwei getrennte Messenger.</p></div>
           <p class="note">Samsung Internet: Menü <span class="kbd">☰</span> → <span class="kbd">Seite hinzufügen zu</span> → <span class="kbd">Startbildschirm</span>.</p>
         </div>
         <div id="p-ios" role="tabpanel" aria-labelledby="tab-ios" hidden>
@@ -452,13 +453,13 @@ footer{border-top:1px solid var(--bord);padding:2.4rem 1.25rem;max-width:1100px;
 
   if (/Android/i.test(navigator.userAgent) && !standalone) {
     fetch('app-version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
-      if (j && /^https:\/\/github\.com\//.test(j.apk || '')) { var a = document.getElementById('apkOptLink'); a.href = j.apk; document.getElementById('apkOpt').hidden = false; }
+      if (j && /^https:\/\/github\.com\//.test(j.apk || '')) { var a = document.getElementById('apkOptLink'); a.href = j.apk; document.getElementById('apkOpt').hidden = false; document.getElementById('pwaAlt').hidden = false; window.__apkPrimary = true; var ib = document.getElementById('installNow'); if (ib) ib.style.display = 'none'; }
     }).catch(function () {});
   }
   var deferred = null, btn = document.getElementById('installNow');
   window.addEventListener('beforeinstallprompt', function (e) {
     e.preventDefault(); deferred = e;
-    if (btn && !standalone) btn.style.display = 'inline-flex';
+    if (btn && !standalone && !window.__apkPrimary) btn.style.display = 'inline-flex';
   });
   if (btn) btn.addEventListener('click', function () {
     if (!deferred) return;

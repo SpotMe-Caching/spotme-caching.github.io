@@ -8,7 +8,11 @@
     var q = location.search || '';
     var hasProfile = !!(localStorage.getItem('sm_chat_code') && localStorage.getItem('sm_chat_token'));
     var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
-    if (!hasProfile && !standalone && !/[?&]neu=1/.test(q)) location.replace('landing.html' + q);
+    var isApp = /SpotMeApp\//.test(navigator.userAgent);
+    var isMob = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (!hasProfile && !standalone && !isApp && !/[?&]neu=1/.test(q)) location.replace('landing.html' + q);
+    // Installations-Assistent: Handy-Browser ohne Profil → erst ein System wählen (App / Home-Bildschirm), "web=1" = bewusst im Browser
+    else if (!hasProfile && !standalone && !isApp && isMob && !/[?&]web=1/.test(q)) location.replace('start.html' + q);
   } catch (e) {}
 })();
 </script>
@@ -207,10 +211,15 @@
             <p class="hub-note">Xiaomi / HyperOS: App-Einstellungen → <b>Autostart an</b>, Akkusparmodus <b>„Keine Einschränkungen“</b>, im App-Wechsler die App <b>sperren</b>. Sonst beendet das System die Verbindung.</p>
           </div>
           <div id="apkBox" class="hidden">
-            <details><summary>📲 Optional: als echte App (APK) installieren</summary>
-              <p class="hub-note"><b>Empfohlen bleibt die PWA</b> (Browser-Menü ⋮ → „App installieren“). Wer lieber eine App möchte: Die APK kommt direkt von GitHub, ohne Play Store. Android fragt dabei nach „Installation aus dieser Quelle erlauben“, und Play Protect kann „unbekannter Entwickler“ melden – das ist bei Apps außerhalb des Stores normal. Der Messenger selbst bleibt immer live und aktuell.</p>
-              <a class="link-btn" id="apkLink" href="#" target="_blank" rel="noopener">⬇ SpotMe-Messenger.apk laden</a>
-              <p class="hub-note"><a id="apkPage" href="#" target="_blank" rel="noopener" style="color:#9fb6c6">Alle Versionen &amp; Prüfsumme</a></p>
+            <details id="moveBox"><summary>📲 Zur App wechseln (empfohlen für Android)</summary>
+              <p class="hub-note">Die App hat Benachrichtigungen auch bei geschlossenem Messenger. Mit deinen Chats umziehen geht so – danach gibt es nur noch <b>ein</b> System:</p>
+              <ol class="hub-steps">
+                <li>Hier jetzt sichern: <button type="button" class="link-btn" onclick="doBackup()">💾 Sicherung erstellen</button></li>
+                <li>App laden: <a class="link-btn" id="apkLink" href="#" target="_blank" rel="noopener">⬇ SpotMe-Messenger.apk</a></li>
+                <li>In der App beim Anmelden <b>„Ich habe schon einen Messenger – Sicherung einspielen“</b> wählen und die Datei auswählen.</li>
+                <li>Diese Web-App zeigt danach „Dieses Gerät wurde ersetzt“ – du kannst sie löschen.</li>
+              </ol>
+              <p class="hub-note">Android fragt bei der Installation nach „Installation aus dieser Quelle erlauben“, Play Protect kann „unbekannter Entwickler“ melden – bei Apps außerhalb des Stores normal. <a id="apkPage" href="#" target="_blank" rel="noopener" style="color:#9fb6c6">Alle Versionen &amp; Prüfsumme</a></p>
             </details>
           </div>
           <details><summary>🔋 Tipps: App wird gelöscht / schläft ein (Xiaomi / HyperOS)</summary>
@@ -2434,7 +2443,7 @@ async function initApk() {
   const um = navigator.userAgent.match(/SpotMeApp\/(\d+)\.(\d+)\.(\d+)/);
   const isAndroid = /Android/i.test(navigator.userAgent);
   const standalone = (window.matchMedia && matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches) || navigator.standalone === true;
-  if (!um && (!isAndroid || standalone)) return;
+  if (!um && !isAndroid) return; // auch installierte Web-Apps (PWA) sollen zur App wechseln können
   let info = null;
   try { const r = await fetch('/chat/app-version.json?t=' + Date.now(), { cache: 'no-store' }); if (r.ok) info = await r.json(); } catch (e) {}
   if (!info || !/^\d+\.\d+\.\d+$/.test(info.version || '')) return; // noch kein APK veröffentlicht → nichts anbieten
