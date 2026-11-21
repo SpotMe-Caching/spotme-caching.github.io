@@ -1341,6 +1341,9 @@ app.get("/api/messenger/handle/:name", async (req, res) => {
   }
 });
 
+// Teilen-Link mit Vorschaubild (/s/<Handle>, /s/<Handle>/card.png)
+require("./share-card")(app, { pool, decrypt, handleRe: MSGR_HANDLE_RE });
+
 // Handle beanspruchen / ändern
 app.post("/api/messenger/handle", async (req, res) => {
   const code = normCode(req.body?.code);
