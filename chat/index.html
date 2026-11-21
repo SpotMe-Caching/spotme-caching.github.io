@@ -183,6 +183,14 @@
           <p class="hub-sub">Chat-Version <span id="chatVer">…</span><br><span id="diagInfo"></span></p>
           <div class="hub-h">App-Status</div>
           <p id="instInfo" class="hub-note"></p>
+          <div id="bgBox" class="hidden">
+            <div class="hub-h">🔔 Benachrichtigungen im Hintergrund (App)</div>
+            <label class="comic-row"><input type="checkbox" id="bgToggle" onchange="setBg(this.checked)"> Neue Nachrichten auch bei geschlossener App melden</label>
+            <p class="hub-note">Ohne Google, ohne Zusatz-App: Die App hält selbst eine schlanke Verbindung zum Messenger-Server. Dafür zeigt Android dauerhaft eine kleine, leise Anzeige „Bereit für neue Nachrichten“ – die gehört dazu. Der Server meldet nur Absender und den Anfang der Nachricht, gelesen wird erst, wenn du den Chat öffnest.</p>
+            <p id="bgInfo" class="hub-note"></p>
+            <div class="copy-row"><button id="bgBatt" onclick="bgBattery()">🔋 Akku-Optimierung aus</button><button onclick="bgAppSettings()">⚙ App-Einstellungen</button></div>
+            <p class="hub-note">Xiaomi / HyperOS: App-Einstellungen → <b>Autostart an</b>, Akkusparmodus <b>„Keine Einschränkungen“</b>, im App-Wechsler die App <b>sperren</b>. Sonst beendet das System die Verbindung.</p>
+          </div>
           <div id="apkBox" class="hidden">
             <details><summary>📲 Optional: als echte App (APK) installieren</summary>
               <p class="hub-note"><b>Empfohlen bleibt die PWA</b> (Browser-Menü ⋮ → „App installieren“). Wer lieber eine App möchte: Die APK kommt direkt von GitHub, ohne Play Store. Android fragt dabei nach „Installation aus dieser Quelle erlauben“, und Play Protect kann „unbekannter Entwickler“ melden – das ist bei Apps außerhalb des Stores normal. Der Messenger selbst bleibt immer live und aktuell.</p>
@@ -507,6 +515,7 @@ function startApp() {
   renderChatList();
   pingVisit();
   syncVerified(false);
+  bgSync();
   const hq = handleFromSearch(location.search);
   if (hq) {
     try { history.replaceState(null, '', location.pathname); } catch (e) {}
@@ -577,6 +586,7 @@ function stopRuntime() {
 }
 
 function wipeLocal() {
+  try { const pl = bgPlugin(); if (pl) pl.stop(); } catch (e) {}
   try {
     Object.keys(localStorage).filter(k => k.startsWith('sm_chat_')).forEach(k => localStorage.removeItem(k));
   } catch (e) {}
@@ -781,6 +791,7 @@ function hubTab(t) {
 }
 function hubTiles() {
   try {
+    bgRefresh();
     const rt = document.getElementById('recToggle'); if (rt) rt.checked = lsGet('sm_chat_rec') === '1';
     const st = document.getElementById('seenToggle'); if (st) st.checked = lsGet('sm_chat_lastseen') === '1';
     const set = (i, v) => { const e = document.getElementById(i); if (e) e.textContent = v; };
@@ -2307,6 +2318,38 @@ if ('serviceWorker' in navigator) {
   });
 }
 function applyUpdate() { location.reload(); }
+// ── Hintergrund-Benachrichtigung (nur in der Android-App, ohne Google/FCM) ──
+function bgPlugin() {
+  try { return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SpotMeBackground) || null; } catch (e) { return null; }
+}
+async function bgRefresh() {
+  const pl = bgPlugin(); const box = document.getElementById('bgBox');
+  if (!pl || !box || !/SpotMeApp\//.test(navigator.userAgent)) return;
+  box.classList.remove('hidden');
+  let st = null; try { st = await pl.getStatus(); } catch (e) {}
+  const on = lsGet('sm_chat_bg') === '1';
+  document.getElementById('bgToggle').checked = on;
+  const info = document.getElementById('bgInfo');
+  if (info) info.innerHTML = !on ? 'Aus – Benachrichtigungen kommen nur, solange die App geöffnet ist.' :
+    `Verbindung: <b>${st && st.running ? 'aktiv ✓' : 'startet …'}</b><br>Akku-Optimierung: <b>${st && st.batteryExempt ? 'aus ✓' : 'an – Nachrichten können sich verspäten'}</b>`;
+}
+async function setBg(on) {
+  const pl = bgPlugin(); if (!pl || !CODE || !TOKEN) return;
+  try {
+    if (on) { await pl.start({ code: CODE, token: TOKEN, api: API }); lsSet('sm_chat_bg', '1'); }
+    else { await pl.stop(); lsSet('sm_chat_bg', '0'); }
+  } catch (e) { lsSet('sm_chat_bg', '0'); const m = document.getElementById('setMsg'); if (m) m.textContent = 'Konnte nicht umgeschaltet werden.'; }
+  setTimeout(bgRefresh, 800);
+}
+function bgBattery() { const pl = bgPlugin(); if (pl) pl.openBatterySettings().catch(() => {}); setTimeout(bgRefresh, 4000); }
+function bgAppSettings() { const pl = bgPlugin(); if (pl) pl.openAppSettings().catch(() => {}); }
+// Beim Start Zugangsdaten auffrischen / Dienst am Leben halten; bei gelöschtem Profil beenden
+function bgSync() {
+  const pl = bgPlugin(); if (!pl) return;
+  if (CODE && TOKEN && lsGet('sm_chat_bg') === '1') pl.start({ code: CODE, token: TOKEN, api: API }).catch(() => {});
+  bgRefresh();
+}
+
 // Speicher gegen automatisches Aufräumen schützen (Chat-Daten + Sicherung) und Installationsstatus anzeigen
 async function initPersist() {
   let pers = null;
