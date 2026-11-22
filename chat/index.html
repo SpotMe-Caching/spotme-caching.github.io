@@ -978,7 +978,40 @@ function hubTiles() {
   } catch (e) {}
 }
 function hideSettings() { document.getElementById('settingsLayer').classList.add('hidden'); }
-function setMsg(t) { const el = document.getElementById('setMsg'); el.textContent = t; setTimeout(() => { if (el.textContent === t) el.textContent = ''; }, 3000); }
+function setMsg(t) {
+  const el = document.getElementById('setMsg'); if (el) { el.textContent = t; setTimeout(() => { if (el.textContent === t) el.textContent = ''; }, 3000); }
+  toastMsg(t);
+}
+// Sichtbare Rückmeldung überall (auch im Chat und weit unten im Hub)
+let _toastT = null;
+function toastMsg(t) {
+  let b = document.getElementById('toastMsg');
+  if (!b) {
+    b = document.createElement('div'); b.id = 'toastMsg'; b.setAttribute('role', 'status');
+    b.style.cssText = 'position:fixed;left:50%;bottom:calc(88px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);max-width:88vw;padding:.7rem 1rem;border-radius:14px;background:#0f2a1e;color:#e8fff3;border:1px solid #2ecc71;font-size:.95rem;line-height:1.3;text-align:center;z-index:99999;box-shadow:0 6px 24px rgba(0,0,0,.5);pointer-events:none;transition:opacity .2s;opacity:0';
+    document.body.appendChild(b);
+  }
+  b.innerHTML = t; b.style.opacity = '1'; clearTimeout(_toastT); _toastT = setTimeout(() => { b.style.opacity = '0'; }, 3500);
+}
+// Teilen: App-Teilen-Dialog (Capacitor) → Web-Share → Zwischenablage → Link zum Kopieren anzeigen. Immer mit Rückmeldung.
+async function shareOut({ title, text, url }) {
+  const full = text ? `${text}\n${url}` : url;
+  try {
+    const cap = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
+    if (cap && cap.share) { await cap.share({ title, text: text || undefined, url, dialogTitle: 'Teilen' }); return 'shared'; }
+  } catch (e) { if (/cancel/i.test(String((e && (e.message || e.name)) || e))) return 'cancel'; }
+  try {
+    if (navigator.share) { await navigator.share(text ? { title, text, url } : { title, url }); return 'shared'; }
+  } catch (e) { if (e && e.name === 'AbortError') return 'cancel'; }
+  try { await navigator.clipboard.writeText(full); toastMsg(text ? '✅ Post-Text + Link kopiert' : '✅ Link kopiert'); return 'copied'; } catch (e) {}
+  try {
+    const ta = document.createElement('textarea'); ta.value = full; ta.style.cssText = 'position:fixed;opacity:0;top:0'; document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand('copy'); ta.remove();
+    if (ok) { toastMsg(text ? '✅ Post-Text + Link kopiert' : '✅ Link kopiert'); return 'copied'; }
+  } catch (e) {}
+  try { window.prompt('Link kopieren:', full); } catch (e) { toastMsg(escapeHtml(url)); }
+  return 'manual';
+}
 
 
 // ── @HANDLE (Kurzlink /chat/?Name) ─────────────────────────────────────────
@@ -1034,7 +1067,7 @@ function renderHandleInfo() {
   const share = document.getElementById('hdShare'), free = document.getElementById('hdFree'), inp = document.getElementById('hdInput');
   if (!info) return;
   if (HD.handle) {
-    info.innerHTML = `Dein Kurzlink: <b>${escapeHtml(handleLink(HD.handle).replace(/^https?:\/\//, ''))}</b>`;
+    info.innerHTML = `Dein Kurzlink: <b id="hdLinkTxt" style="text-decoration:underline;cursor:pointer" onclick="copyHandleLink()">${escapeHtml(handleLink(HD.handle).replace(/^https?:\/\//, ''))}</b> <small>(antippen = kopieren)</small>`;
     row.style.display = ''; share.style.display = ''; free.style.display = '';
     inp.value = '@' + HD.handle;
   } else if ((HD.count || 0) >= (HD.min || 3)) {
@@ -1069,16 +1102,16 @@ async function releaseHandle() {
     HD.handle = null; document.getElementById('hdInput').value = ''; renderHandleInfo(); setMsg('Handle freigegeben');
   } catch (e) { setMsg('Konnte nicht freigegeben werden'); }
 }
+async function copyHandleLink() {
+  if (!HD.handle) return;
+  const u = handleLink(HD.handle);
+  try { await navigator.clipboard.writeText(u); toastMsg('✅ Kurzlink kopiert'); } catch (e) { try { window.prompt('Link kopieren:', u); } catch (e2) {} }
+}
 async function shareHandle() {
   if (!HD.handle) return;
   // Teilen über den Server-Link (/s/<Handle>): liefert die Vorschau mit Bild + @Handle und leitet Menschen sofort weiter
   const url = `${API.replace(/\/api\/?$/, '')}/s/${HD.handle}`;
-  const text = `Schreib mir im Spot-Chat: @${HD.handle}`;
-  try {
-    if (navigator.share) { await navigator.share({ title: 'Spot-Chat', text, url }); return; }
-    await navigator.clipboard.writeText(`${text}\n${url}`);
-    setMsg('✅ Kurzlink kopiert');
-  } catch (e) {}
+  await shareOut({ title: 'Spot-Chat', text: `Schreib mir im Spot-Chat: @${HD.handle}`, url });
 }
 
 async function copyId() {
@@ -2131,17 +2164,18 @@ async function recPick() {
 // Empfehlung per Link: /s/<Handle des Empfohlenen>?von=<mein Handle> – Vorschau zeigt "empfohlen von @ich" (Server prüft Verifizierung + Erlaubnis)
 async function recLink() {
   const m = metaOf(PARTNER_CODE); if (!m.ver || !m.h) return;
+  toastMsg('⏳ Bereite den Link vor …');
   delete REC_CACHE[PARTNER_CODE];
   const f = await recFlag(PARTNER_CODE);
-  if (!f.pub) { setMsg(escapeHtml(PARTNER_NAME || 'Dieser Kontakt') + ' hat „Öffentlich per Link empfehlbar" nicht erlaubt.'); return; }
+  if (!f.ok) { toastMsg('Keine Verbindung – bitte später erneut versuchen'); return; }
+  if (!f.pub) { toastMsg(escapeHtml(PARTNER_NAME || 'Dieser Kontakt') + ' hat „Öffentlich per Link empfehlbar" nicht erlaubt.'); return; }
   await ensureHD();
   const von = HD && HD.handle ? '?von=' + encodeURIComponent(HD.handle) : '';
   const url = `${API.replace(/\/api\/?$/, '')}/s/${m.h}${von}`;
   const text = f.pubtext || ''; // mit Text: fertiger Post; ohne: eigener Text wird beim Teilen dazugeschrieben
-  try {
-    if (navigator.share) { await navigator.share(text ? { title: 'Spot-Chat', text, url } : { title: 'Spot-Chat', url }); if (!text) setMsg('Schreib im Post deinen eigenen Empfehlungstext dazu ✍️'); return; }
-    await navigator.clipboard.writeText(text ? `${text}\n${url}` : url); setMsg(text ? '✅ Post-Text + Link kopiert' : '✅ Link kopiert – schreib deinen eigenen Text dazu');
-  } catch (e) {}
+  const r = await shareOut({ title: 'Spot-Chat', text, url });
+  if (r === 'shared' && !text) toastMsg('Schreib im Post deinen eigenen Empfehlungstext dazu ✍️');
+  else if (r === 'copied' && !text) toastMsg('✅ Link kopiert – schreib deinen eigenen Text dazu');
 }
 function recClose() { REC_PICK = false; renderRecCard(); }
 async function recSend(code) {
