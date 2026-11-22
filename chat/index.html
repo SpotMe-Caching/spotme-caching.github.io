@@ -1083,8 +1083,10 @@ function renderHandleInfo() {
     row.style.display = 'none'; share.style.display = 'none'; free.style.display = 'none';
   }
 }
+// iOS/Safari: Autokorrektur kann Leerzeichen, unsichtbare Zeichen oder ein Voll­breit-＠ einschleusen → vorher bereinigen
+function cleanHandleInput(t) { return String(t || '').normalize('NFKC').replace(/[\s\u200B-\u200D\u2060\uFEFF]/g, '').replace(/^@/, ''); }
 async function claimHandle() {
-  const v = document.getElementById('hdInput').value.trim().replace(/^@/, '');
+  const v = cleanHandleInput(document.getElementById('hdInput').value);
   if (!HANDLE_RE.test(v)) return setMsg('3–20 Zeichen: Buchstaben, Zahlen, _ (auch nur Zahlen, wie früher bei ICQ)');
   try {
     const r = await tfetch(`${API}/messenger/handle`, {
@@ -1456,7 +1458,7 @@ function hideNewChatLayer() {
 }
 
 async function startNewChat() {
-  const raw = document.getElementById('newChatCode').value.trim();
+  const raw = String(document.getElementById('newChatCode').value || '').normalize('NFKC').replace(/[\s\u200B-\u200D\u2060\uFEFF]/g, '');
   const errEl = document.getElementById('newChatError');
   errEl.textContent = '';
   let partnerCode = '', partnerName = '', handleUsed = '';
@@ -2137,7 +2139,7 @@ function dragonFire(noLogo) {
   });
 })();
 // ── Easter Egg 🌟 Sternbild: Doppeltipp auf die Kachel „✔ Verifizierte“ im Hub → jeder verifizierte Kontakt ist ein Stern ──
-const STAR_LEVELS = [[0, '🌑 Noch dunkel', 'Verifiziere Kontakte (grüner Haken ✔) – jeder wird ein Stern.'], [1, '✨ Funke', ''], [3, '⭐ Sternbild', ''], [6, '🌟 Konstellation', ''], [10, '🌌 Galaxie', '']];
+const STAR_LEVELS = [[0, '🌑 Noch dunkel', 'Verifiziere Kontakte (grüner Haken ✔) – jeder wird ein Stern.'], [1, '✨ Funke', ''], [3, '⭐ Sternbild', ''], [6, '🌟 Konstellation', ''], [10, '🌌 Galaxie', ''], [25, '🌀 Spiralgalaxie', ''], [50, '✨ Galaxienhaufen', ''], [100, '🪐 Universum', '']];
 function starLevel(n) { let l = STAR_LEVELS[0]; STAR_LEVELS.forEach(x => { if (n >= x[0]) l = x; }); return l; }
 function starPos(code) { let h = 2166136261; for (const ch of code) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return [12 + (h % 77), 18 + (((h >>> 8) % 61))]; }
 function starMap() {
