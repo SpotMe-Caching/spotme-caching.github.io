@@ -498,7 +498,8 @@ function showSetup(prefill, msg) {
     const hq = typeof handleFromSearch === 'function' ? handleFromSearch(location.search) : '';
     const add = (q.get('add') || '').toLowerCase().replace(/[^a-z]/g, '');
     let who = hq ? '@' + hq : (/^[a-z]{6}$/.test(add) ? add.slice(0, 3) + '-' + add.slice(3) : '');
-    if (who) { inv.textContent = '💌 Du wurdest eingeladen: Schreib mit ' + who + '. Lege kurz deinen Namen fest – danach ist der Chat startklar.'; inv.classList.remove('hidden'); }
+    const von = (q.get('von') || '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 20);
+    if (who) { inv.textContent = '💌 Du wurdest eingeladen: Schreib mit ' + who + (hq && von ? ' (empfohlen von @' + von + ')' : '') + '. Lege kurz deinen Namen fest – danach ist der Chat startklar.'; inv.classList.remove('hidden'); }
   } catch (e) {}
 }
 
@@ -548,10 +549,13 @@ function startApp() {
   goneCheck();
   publishPub();
   const hq = handleFromSearch(location.search);
+  let vonQ = (new URLSearchParams(location.search).get('von') || '').replace(/^@/, '');
+  if (!HANDLE_RE.test(vonQ)) vonQ = '';
   if (hq) {
     try { history.replaceState(null, '', location.pathname); } catch (e) {}
     showNewChatLayer();
     document.getElementById('newChatCode').value = '@' + hq;
+    if (vonQ) { const e = document.getElementById('newChatError'); e.textContent = '🤝 Empfohlen von @' + vonQ; e.style.color = '#7fe3d6'; }
   }
   const add = new URLSearchParams(location.search).get('add');
   if (add) {
@@ -2038,7 +2042,7 @@ function renderVerCard() {
     else if (vp.st === 'judge') html = `<b>🔏 ${nm} antwortet</b><p>Deine Frage: <i>„${escapeHtml(vp.q)}“</i><br>Antwort: <i>„${escapeHtml(vp.a || '')}“</i></p><p>Ist das die richtige Antwort?</p><div class="vc-btns"><button onclick="verJudge(true)">✔ Stimmt</button><button class="vc-no" onclick="verJudge(false)">✖ Stimmt nicht</button><button class="vc-ghost" onclick="verCancel()">Abbrechen</button></div>`;
   } else if (m.ver) {
     if (!VC_OPEN) { el.className = 'ver-card hidden'; return; }
-    html = `<b>✔ Verifiziert</b><p>Du und ${nm} habt euch gegenseitig bestätigt. Der grüne Haken bleibt am Namen.</p><p id="vcSafe" class="vc-wait">🔐 …</p><div class="vc-btns"><button onclick="recPick()">🤝 Kontakt empfehlen</button><button class="vc-ghost" onclick="verUnverify()">Verifizierung aufheben</button><button class="vc-ghost" onclick="toggleVerCard()">Schließen</button></div>`;
+    html = `<b>✔ Verifiziert</b><p>Du und ${nm} habt euch gegenseitig bestätigt. Der grüne Haken bleibt am Namen.</p><p id="vcSafe" class="vc-wait">🔐 …</p><div class="vc-btns"><button onclick="recPick()">🤝 Kontakt empfehlen</button>${m.h ? `<button onclick="recLink()">🔗 Per Link empfehlen</button>` : ''}<button class="vc-ghost" onclick="verUnverify()">Verifizierung aufheben</button><button class="vc-ghost" onclick="toggleVerCard()">Schließen</button></div>`;
   } else {
     const note = { no: 'Die Antwort wurde nicht bestätigt – keine Verifizierung.', x: 'Die Verifizierung wurde abgebrochen.', un: 'Die Verifizierung wurde aufgehoben.' }[m.vnote || ''];
     if (!VC_OPEN && !note) { el.className = 'ver-card hidden'; return; }
@@ -2086,6 +2090,19 @@ async function recPick() {
   el.innerHTML = '<b>🤝 Wen empfiehlst du ' + escapeHtml(PARTNER_NAME || '') + '?</b><p>Nur Kontakte, die Empfehlungen erlaubt haben, können gewählt werden.</p>' +
     cands.map((k, i) => `<div class="rec-row"><span>${escapeHtml(cs[k])} <small>${fmtId(k)}</small></span>${fl[i].rec ? `<button onclick="recSend('${k}')">Empfehlen</button>` : '<em>erlaubt es nicht</em>'}</div>`).join('') +
     '<div class="vc-btns"><button class="vc-ghost" onclick="recClose()">Schließen</button></div>';
+}
+// Empfehlung per Link: /s/<Handle des Empfohlenen>?von=<mein Handle> – Vorschau zeigt "empfohlen von @ich" (Server prüft Verifizierung + Erlaubnis)
+async function recLink() {
+  const m = metaOf(PARTNER_CODE); if (!m.ver || !m.h) return;
+  const f = await recFlag(PARTNER_CODE);
+  if (!f.rec) { setMsg(escapeHtml(PARTNER_NAME || 'Dieser Kontakt') + ' erlaubt keine Empfehlungen.'); return; }
+  const von = HD && HD.handle ? '?von=' + encodeURIComponent(HD.handle) : '';
+  const url = `${API.replace(/\/api\/?$/, '')}/s/${m.h}${von}`;
+  const text = `Ich empfehle dir @${m.h} im Spot-Chat`;
+  try {
+    if (navigator.share) { await navigator.share({ title: 'Spot-Chat', text, url }); return; }
+    await navigator.clipboard.writeText(`${text}\n${url}`); setMsg('✅ Empfehlungs-Link kopiert');
+  } catch (e) {}
 }
 function recClose() { REC_PICK = false; renderRecCard(); }
 async function recSend(code) {

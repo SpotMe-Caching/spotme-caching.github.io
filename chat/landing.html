@@ -423,9 +423,10 @@ footer{border-top:1px solid var(--bord);padding:2.4rem 1.25rem;max-width:1100px;
     var hq = '', sp = new URLSearchParams(location.search), skip = ['add', 'neu', 'info', 'h', 'ref'];
     sp.forEach(function (v, k) { if (!hq && v === '' && /^[A-Za-z0-9][A-Za-z0-9_]{2,19}$/.test(k) && skip.indexOf(k.toLowerCase()) < 0) hq = k; });
     if (hq) {
-      document.getElementById('inviteId').textContent = '@' + hq;
+      var von = (sp.get('von') || '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 20);
+      document.getElementById('inviteId').textContent = '@' + hq + (von ? ' (empfohlen von @' + von + ')' : '');
       document.getElementById('invite').style.display = 'block';
-      document.querySelectorAll('.js-start').forEach(function (a) { a.setAttribute('href', 'index.html?neu=1&' + hq); });
+      document.querySelectorAll('.js-start').forEach(function (a) { a.setAttribute('href', 'index.html?neu=1&' + hq + (von ? '&von=' + von : '')); });
     }
   } catch (e) {}
 
