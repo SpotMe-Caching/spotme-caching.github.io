@@ -134,7 +134,8 @@ details p{margin-top:.4rem}
   if (/^[a-z]{6}$/.test(add)) inv = add.slice(0, 3) + '-' + add.slice(3);
   else sp.forEach(function (v, k) { if (!inv && v === '' && /^[A-Za-z0-9][A-Za-z0-9_]{2,19}$/.test(k) && ['neu', 'web', 'info', 'h', 'ref', 'add'].indexOf(k.toLowerCase()) < 0) inv = '@' + k; });
   if (inv) {
-    document.getElementById('inviteId').textContent = inv; document.getElementById('invite').classList.remove('hidden');
+    var von = (sp.get('von') || '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 20);
+    document.getElementById('inviteId').textContent = inv + (von && inv.charAt(0) === '@' ? ' (empfohlen von @' + von + ')' : ''); document.getElementById('invite').classList.remove('hidden');
     document.getElementById('copyInv').onclick = function () { try { navigator.clipboard.writeText(inv); this.textContent = 'Kopiert ✓'; } catch (e) {} };
   }
   // „Trotzdem im Browser“ behält Einladung/Parameter
