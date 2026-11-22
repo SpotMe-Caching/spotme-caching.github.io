@@ -1799,7 +1799,9 @@ async function renderMessages(appendOnly = false) {
   const renderMsg = (m) => {
     const isMine = m.from === CODE;
     const qq = m.kind === 'image' ? null : parseQuote(m.text);
-    const txt = qq ? qq.body : m.text;
+    const txt0 = qq ? qq.body : m.text;
+    const sn = m.kind !== 'image' && SNAIL_RE.test(txt0), txt = sn ? txt0.replace(SNAIL_RE, '') : txt0;
+    const snPlay = sn && snailPlay(m), snCls = sn ? ' snail-msg' + (snPlay ? ' snail-play' : '') : '', snEl = snPlay ? '<span class="snail-crawl" aria-hidden="true">🐌</span>' : '';
     const qHtml = qq ? quoteHtml(m, qq, msgs) : '';
     // Nur "gesendet" (✓) vs. "zugestellt" (✓✓) – bewusst KEIN Lesestatus
     // und KEINE zusätzliche Uhrzeit dafür (würde Online-Zeiten verraten).
@@ -1808,7 +1810,7 @@ async function renderMessages(appendOnly = false) {
           ? '<span class="msg-status delivered" title="Zugestellt">✓✓</span>'
           : '<span class="msg-status sent" title="Gesendet">✓</span>')
       : '';
-    const time = new Date(m.ts).toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'});
+    const time = new Date(m.ts).toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'}) + (sn ? ' 🐌' : '');
     const body = m.kind === 'image'
       ? `<img class="chat-img ${isMine ? '' : 'blur'}" data-iid="${escapeHtml(m.iid)}" alt="Bild">${isMine ? '' : '<div class="img-tap">Tippen zum Anzeigen</div>'}`
       : qHtml + escapeHtml(txt);
@@ -1817,9 +1819,9 @@ async function renderMessages(appendOnly = false) {
       const BADGES = { question: '?', shout: '!', love: '♥', whisper: '…', scare: '!?', anger: '#@!', laugh: 'HA', sad: '💧', tired: 'Zzz', idea: '💡', cool: '😎' };
       const badge = BADGES[pm.mood] || '';
       const tilt = ((m.ts % 5) - 2) * 0.35;
-      return `<div class="message ${isMine ? 'mine' : 'other'} cm cm-${pm.mood}" data-ts="${m.ts}" style="--tilt:${tilt}deg">${badge ? `<span class="cm-badge${/^[?!♥…]$/.test(badge) || /\p{Extended_Pictographic}/u.test(badge) ? '' : ' w'}">${badge}</span>` : ''}${qHtml}<span class="cm-txt">${escapeHtml(pm.text)}</span><div class="msg-time">${time}${statusTick}</div></div>`;
+      return `<div class="message ${isMine ? 'mine' : 'other'} cm cm-${pm.mood}${snCls}" data-ts="${m.ts}" style="--tilt:${tilt}deg">${badge ? `<span class="cm-badge${/^[?!♥…]$/.test(badge) || /\p{Extended_Pictographic}/u.test(badge) ? '' : ' w'}">${badge}</span>` : ''}${qHtml}<span class="cm-txt">${escapeHtml(pm.text)}</span><div class="msg-time">${time}${statusTick}</div>${snEl}</div>`;
     }
-    return `<div class="message ${isMine ? 'mine' : 'other'}${m.kind === 'image' ? ' has-img' : ''}" data-ts="${m.ts}">${body}<div class="msg-time">${time}${statusTick}</div></div>`;
+    return `<div class="message ${isMine ? 'mine' : 'other'}${m.kind === 'image' ? ' has-img' : ''}${snCls}" data-ts="${m.ts}">${body}<div class="msg-time">${time}${statusTick}</div>${snEl}</div>`;
   };
 
   // FIX: Bei jeder eingehenden Nachricht wurde vorher die komplette Liste
@@ -1850,12 +1852,23 @@ const MOOD_ICON = { speech: '💬', question: '❓', thought: '🗯️', wow: '�
 const MOOD_RE = new RegExp('^(' + Object.keys(MOODS).map(k => k === '🗯' ? '🗯\\uFE0F?' : k).join('|') + ')\\s+([\\s\\S]*)$', 'u');
 let CUR_MOOD = '';
 function comicOn() { return lsGet(COMIC_KEY) === '1'; }
+// 🐌 Schneckenpost: Präfix "🐌 " (alte Versionen zeigen es einfach als Emoji). Beim Empfänger kriecht die Blase herein.
+const SNAIL_RE = /^🐌\s+/u;
 function parseMood(text) {
-  const t = String(text || '');
+  let t = String(text || ''), snail = false;
+  if (SNAIL_RE.test(t)) { t = t.replace(SNAIL_RE, ''); snail = true; }
   const m = t.match(MOOD_RE);
-  if (m) return { mood: MOODS[m[1].replace('️', '')], text: m[2] };
-  if (/\?[!?\s]*$/.test(t.trim())) return { mood: 'question', text: t };
-  return { mood: 'speech', text: t };
+  if (m) return { mood: MOODS[m[1].replace('️', '')], text: m[2], snail };
+  if (/\?[!?\s]*$/.test(t.trim())) return { mood: 'question', text: t, snail };
+  return { mood: 'speech', text: t, snail };
+}
+let SNAIL_NEXT = false;
+const SNAIL_SEEN = (() => { try { return new Set(JSON.parse(lsGet('sm_chat_snailseen') || '[]')); } catch (e) { return new Set(); } })();
+// Kriecht diese Nachricht jetzt herein? Nur einmal, nur frisch (< 10 min), nur im offenen Chat.
+function snailPlay(m) {
+  if (SNAIL_SEEN.has(m.ts)) return false;
+  SNAIL_SEEN.add(m.ts); try { lsSet('sm_chat_snailseen', JSON.stringify([...SNAIL_SEEN].slice(-100))); } catch (e) {}
+  return !!CURRENT_ROOM && !document.hidden && Date.now() - m.ts < 600000 && !matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 function applyComic() {
   const c = document.getElementById('messages');
@@ -2358,6 +2371,7 @@ async function sendMessage() {
   if (!text) return;
   if (CUR_MOOD && !MOOD_RE.test(text)) text = CUR_MOOD + ' ' + text;
   if (CUR_MOOD) pickMood('');
+  if (SNAIL_NEXT) { text = '🐌 ' + text; SNAIL_NEXT = false; }
 
   if (!PARTNER_CODE) {
     console.error('[Chat] Kein Partner ausgewählt!');
@@ -2738,6 +2752,22 @@ function jumpToQuoted(ts) {
   t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash');
   setTimeout(() => t.classList.remove('flash'), 1400);
 }
+// Langes Drücken auf ➤ = Schneckenpost (Easter Egg). Der Klick danach wird geschluckt.
+function initSnailSend() {
+  const bar = document.querySelector('.input-bar'), btn = bar && bar.querySelector('button[onclick="sendMessage()"]'); if (!btn) return;
+  let timer = null, fired = false;
+  const cancel = () => { clearTimeout(timer); timer = null; };
+  btn.addEventListener('pointerdown', () => { fired = false; cancel(); timer = setTimeout(() => {
+    fired = true; timer = null;
+    if (!document.getElementById('msgInput').value.trim()) return;
+    SNAIL_NEXT = true; try { navigator.vibrate && navigator.vibrate(30); } catch (e) {}
+    toastMsg('🐌 Schneckenpost unterwegs …'); sendMessage();
+  }, 550); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => btn.addEventListener(ev, cancel));
+  bar.addEventListener('click', (e) => { if (fired && e.target.closest('button[onclick="sendMessage()"]')) { e.stopImmediatePropagation(); e.preventDefault(); fired = false; } }, true);
+  btn.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+if (document.querySelector('.input-bar')) initSnailSend(); else document.addEventListener('DOMContentLoaded', initSnailSend);
 (function initReplyGestures() {
   const c = document.getElementById('messages'); if (!c) return;
   let st = null, lp = null;
