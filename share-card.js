@@ -141,7 +141,7 @@ ${nm ? `<text x="604" y="400" font-family="Outfit" font-weight="400" font-size="
     const self = (process.env.PUBLIC_API_BASE || (req.protocol + "://" + req.get("host"))) + "/s/" + encodeURIComponent(req.params.name);
     const sn = h ? starN(req.query.stern) : null;
     const q = sn != null ? "?stern=" + sn : von ? "?von=" + encodeURIComponent(von) : "";
-    const target = BASE + (h ? "?" + encodeURIComponent(h.handle) + (von ? "&von=" + encodeURIComponent(von) : "") : "landing.html");
+    const target = h && sn != null ? BASE + "sterne.html?" + encodeURIComponent(h.handle) + "&stern=" + sn : BASE + (h ? "?" + encodeURIComponent(h.handle) + (von ? "&von=" + encodeURIComponent(von) : "") : "landing.html");
     const title = h && sn != null ? `🌟 @${h.handle}: ${sn} ${sn === 1 ? "Stern" : "Sterne"} im Sternbild` : h ? `@${h.handle} auf dem SpotMe Messenger` : "SpotMe Messenger – Schreiben ohne Nummer, ohne E-Mail";
     const desc = h && sn != null ? `${sn} ${sn === 1 ? "Stern" : "Sterne"}, Stufe ${levelOf(sn)} – jeder Stern ist ein Kontakt, dem ich vertraue. Ich sehe dich. Nicht deine Daten.` : rv && rv.text ? rv.text.slice(0, 300) : h ? `${von ? "@" + von + " empfiehlt dir " + (h.name || "@" + h.handle) + ": " : h.name ? h.name + " lädt dich ein: " : ""}Anonym und privat schreiben – ohne Telefonnummer, ohne E-Mail.` : "Anonym und privat schreiben: nur ein Name, keine Telefonnummer, keine Werbung.";
     res.set({ "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" }).send(`<!doctype html><html lang="de"><head><meta charset="utf-8"><title>${esc(title)}</title>
