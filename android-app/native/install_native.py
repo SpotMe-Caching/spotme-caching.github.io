@@ -23,7 +23,7 @@ if "PushService" not in s:
         </receiver>
     '''
     s = s.replace("</application>", comp + "</application>", 1)
-for p in ("FOREGROUND_SERVICE", "FOREGROUND_SERVICE_SPECIAL_USE", "RECEIVE_BOOT_COMPLETED", "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"):
+for p in ("FOREGROUND_SERVICE", "FOREGROUND_SERVICE_SPECIAL_USE", "RECEIVE_BOOT_COMPLETED", "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS", "RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS"):
     tag = f'android.permission.{p}"'
     if tag not in s:
         s = s.replace("</manifest>", f'    <uses-permission android:name="android.permission.{p}" />\n</manifest>', 1)
