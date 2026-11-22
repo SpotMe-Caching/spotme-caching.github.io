@@ -1108,3 +1108,14 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
   100% { translate: 0 0; rotate: 0deg; }
 }
 @media (prefers-reduced-motion: reduce) { .message.shaken { animation: none; } }
+
+/* Easter Egg: Geheimwörter (/schnee /stern /herz) */
+.wfx { position: fixed; inset: 0; pointer-events: none; z-index: 99998; overflow: hidden; }
+.wfx span { position: absolute; left: var(--x); line-height: 1; will-change: transform, opacity; }
+.wfx-snow span { top: -40px; animation: fxFall var(--d) linear var(--dl) both; filter: drop-shadow(0 0 4px rgba(170,210,255,.7)); }
+.wfx-heart span { bottom: -40px; animation: fxRise var(--d) ease-in var(--dl) both; filter: drop-shadow(0 0 6px rgba(255,90,150,.6)); }
+.wfx-star span { top: var(--y); opacity: 0; animation: fxTwinkle var(--d) ease-in-out var(--dl) both; filter: drop-shadow(0 0 8px rgba(255,200,80,.9)); }
+@keyframes fxFall { 0% { transform: translate(0,0) rotate(0); opacity: 0; } 8% { opacity: .95; } 100% { transform: translate(var(--sw), 112vh) rotate(var(--r)); opacity: .9; } }
+@keyframes fxRise { 0% { transform: translate(0,0) scale(.6); opacity: 0; } 10% { opacity: 1; } 100% { transform: translate(var(--sw), -112vh) scale(1.2) rotate(var(--r)); opacity: 0; } }
+@keyframes fxTwinkle { 0% { transform: scale(0) rotate(0); opacity: 0; } 40% { transform: scale(1.25) rotate(40deg); opacity: 1; } 100% { transform: scale(0) rotate(120deg); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .wfx { display: none; } }

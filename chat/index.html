@@ -1792,6 +1792,7 @@ async function saveMessages(msgs) {
   await saveRoomMessages(CURRENT_ROOM, msgs);
 }
 
+let FX_PENDING = [];
 async function renderMessages(appendOnly = false) {
   const container = document.getElementById('messages');
   const msgs = await getMessages();
@@ -1801,6 +1802,7 @@ async function renderMessages(appendOnly = false) {
     const qq = m.kind === 'image' ? null : parseQuote(m.text);
     const txt0 = qq ? qq.body : m.text;
     const sn = m.kind !== 'image' && SNAIL_RE.test(txt0), txt = sn ? txt0.replace(SNAIL_RE, '') : txt0;
+    const wfx0 = m.kind !== 'image' ? wordFxOf(txt) : null; if (wfx0 && wordFxPlay(m)) FX_PENDING.push(wfx0);
     const snEl0 = sn ? snailPlay(m) : null, snPlay = snEl0 != null, snSty = snPlay ? `--sd:-${snEl0.toFixed(2)}s` : '', snCls = sn ? ' snail-msg' + (snPlay ? ' snail-play' : '') : '', snEl = snPlay ? '<span class="snail-crawl" aria-hidden="true">🐌</span>' : '';
     const qHtml = qq ? quoteHtml(m, qq, msgs) : '';
     // Nur "gesendet" (✓) vs. "zugestellt" (✓✓) – bewusst KEIN Lesestatus
@@ -1836,6 +1838,7 @@ async function renderMessages(appendOnly = false) {
   }
 
   RENDERED_MSG_COUNT = msgs.length;
+  if (FX_PENDING.length) { const w = FX_PENDING[FX_PENDING.length - 1]; FX_PENDING = []; setTimeout(() => wordFx(w), 250); }
   container.scrollTop = container.scrollHeight;
   hydrateImages(container).then(() => { container.scrollTop = container.scrollHeight; });
 }
@@ -2086,9 +2089,9 @@ function setSeen(on) {
 // ── Easter Egg 🐉 Drachenfeuer: Logo im Hub 7× antippen ───────────────────────
 // Gefundene Eier merkt sich sm_chat_egg_<name> (Grundlage für die spätere Easter-Egg-Seite im Hub).
 function eggFound(name) { try { lsSet('sm_chat_egg_' + name, '1'); } catch (e) {} }
-function dragonFire() {
+function dragonFire(noLogo) {
   eggFound('dragon');
-  const logo = document.getElementById('hubLogo');
+  const logo = noLogo ? null : document.getElementById('hubLogo');
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) { toastMsg('🐉 Du hast den Drachen geweckt! (Animationen sind aus)'); return; }
   try { playMood('wow', 'in'); } catch (e) {}
   if (logo) { logo.classList.remove('glow'); void logo.offsetWidth; logo.classList.add('glow'); setTimeout(() => logo.classList.remove('glow'), 2600); }
@@ -2143,6 +2146,31 @@ function shakeStart() {
   }
 }
 function shakeStop() { window.removeEventListener('devicemotion', shakeMotion); SHAKE.on = false; SHAKE.last = null; SHAKE.hits = []; }
+// ── Easter Egg 🤫 Geheimwörter: ganze Nachricht = "/schnee", "/stern", "/herz", "/drache" → Effekt bei beiden im offenen Chat ──
+const WORD_FX = { '/schnee': ['❄️', 'snow'], '/stern': ['⭐', 'star'], '/herz': ['💗', 'heart'], '/drache': ['🐉', 'dragon'] };
+function wordFxOf(text) {
+  const w = parseMood(String(text || '')).text.trim().toLowerCase();
+  return WORD_FX[w] ? w : null;
+}
+// Nur frische Nachrichten (< 2 min), nur einmal, nur im offenen Chat – gleiche Merkliste wie die Schneckenpost.
+function wordFxPlay(m) {
+  if (SNAIL_SEEN.has(m.ts)) return false;
+  SNAIL_SEEN.add(m.ts); try { lsSet('sm_chat_snailseen', JSON.stringify([...SNAIL_SEEN].slice(-100))); } catch (e) {}
+  return !!CURRENT_ROOM && !document.hidden && Date.now() - m.ts < 120000 && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+function wordFx(w) {
+  eggFound('words'); eggFound('word_' + w.slice(1));
+  if (w === '/drache') { dragonFire(true); return; }
+  const [emo, kind] = WORD_FX[w], fx = document.createElement('div'); fx.className = 'wfx wfx-' + kind; fx.setAttribute('aria-hidden', 'true');
+  const n = kind === 'star' ? 26 : kind === 'heart' ? 22 : 44; let h = '';
+  for (let i = 0; i < n; i++) {
+    const x = Math.random() * 100, d = kind === 'star' ? 1.6 + Math.random() : 4 + Math.random() * 3.5, dl = Math.random() * (kind === 'star' ? 3 : 3.2);
+    const sz = kind === 'snow' ? 14 + Math.random() * 18 : kind === 'heart' ? 20 + Math.random() * 20 : 18 + Math.random() * 22;
+    h += `<span style="--x:${x.toFixed(1)}%;--y:${(8 + Math.random() * 70).toFixed(1)}%;--d:${d.toFixed(2)}s;--dl:${dl.toFixed(2)}s;--sw:${((Math.random() * 2 - 1) * 60).toFixed(0)}px;--r:${((Math.random() * 2 - 1) * 200).toFixed(0)}deg;font-size:${sz.toFixed(0)}px">${kind === 'star' && i % 3 === 0 ? '✨' : emo}</span>`;
+  }
+  fx.innerHTML = h; document.body.appendChild(fx);
+  setTimeout(() => fx.remove(), 7800);
+}
 // ── Easter Egg: Pusten = zurück zur Kontaktliste ─────────────────────────────
 // Reine lokale Auswertung des Mikrofonpegels (Rauschen mit viel Tiefton, nicht stimmhaft); nichts wird aufgenommen/gesendet.
 const BLOW = { ctx: null, stream: null, an: null, timer: null, hist: [], busy: false };
