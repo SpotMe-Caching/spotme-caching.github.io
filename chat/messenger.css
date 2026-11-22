@@ -1119,3 +1119,31 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
 @keyframes fxRise { 0% { transform: translate(0,0) scale(.6); opacity: 0; } 10% { opacity: 1; } 100% { transform: translate(var(--sw), -112vh) scale(1.2) rotate(var(--r)); opacity: 0; } }
 @keyframes fxTwinkle { 0% { transform: scale(0) rotate(0); opacity: 0; } 40% { transform: scale(1.25) rotate(40deg); opacity: 1; } 100% { transform: scale(0) rotate(120deg); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .wfx { display: none; } }
+
+/* ── Nachteule ── */
+.chat-header .hd-avatar { position: relative; }
+.owl-badge { position: absolute; left: 36px; top: 4px; font-size: .8rem; pointer-events: none; z-index: 2; }
+.owl-badge.hidden { display: none; }
+.owl-fx { position: fixed; inset: 0; pointer-events: none; z-index: 9998; display: flex; align-items: center; justify-content: center; gap: 28px; animation: owlFade 4s ease both; }
+.owl-fx .o1, .owl-fx .o2 { font-size: 64px; animation: owlBlink 1.6s ease-in-out 3; transform-origin: 50% 80%; }
+.owl-fx .o2 { transform: scaleX(-1); animation-name: owlBlink2; }
+.owl-fx i { position: absolute; font-style: normal; font-size: 22px; left: calc(30% + var(--i) * 8%); top: 38%; animation: owlStar 2s ease-in-out infinite; animation-delay: calc(var(--i) * .25s); }
+@keyframes owlFade { 0% { opacity: 0 } 12% { opacity: 1 } 80% { opacity: 1 } 100% { opacity: 0 } }
+@keyframes owlBlink { 0%, 40%, 100% { transform: scaleY(1) rotate(-6deg) } 46%, 52% { transform: scaleY(.15) rotate(-6deg) } }
+@keyframes owlBlink2 { 0%, 40%, 100% { transform: scaleX(-1) scaleY(1) rotate(-6deg) } 46%, 52% { transform: scaleX(-1) scaleY(.15) rotate(-6deg) } }
+@keyframes owlStar { 0%, 100% { opacity: 0; transform: translateY(0) scale(.6) } 50% { opacity: 1; transform: translateY(-26px) scale(1) } }
+@media (prefers-reduced-motion: reduce) { .owl-fx { display: none } }
+
+/* ── Sternbild ── */
+.sg-ov { position: fixed; inset: 0; z-index: 9999; background: radial-gradient(ellipse at 50% 30%, #101a3a, #04060f 75%); animation: sgIn .6s ease both; }
+.sg-ov svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.sg-line { stroke: rgba(150,200,255,.55); stroke-width: .35; vector-effect: non-scaling-stroke; stroke-width: 1.2px; stroke-dasharray: 600; animation: sgDraw 2.5s ease .4s both; }
+.sg-star { position: absolute; transform: translate(-50%, -50%); font-size: 26px; text-align: center; animation: sgTw 2.4s ease-in-out infinite; animation-delay: calc(var(--i) * .3s); }
+.sg-star span { display: block; font-size: 11px; color: #cfe3ff; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sg-title { position: absolute; left: 0; right: 0; bottom: 8%; text-align: center; color: #e6f0ff; }
+.sg-title b { font-size: 1.4rem; }
+.sg-title small { display: block; opacity: .6; margin-top: .3rem; }
+@keyframes sgIn { from { opacity: 0 } to { opacity: 1 } }
+@keyframes sgDraw { from { stroke-dashoffset: 600 } to { stroke-dashoffset: 0 } }
+@keyframes sgTw { 0%, 100% { opacity: .75; filter: none } 50% { opacity: 1; filter: drop-shadow(0 0 8px #ffe28a) } }
+@media (prefers-reduced-motion: reduce) { .sg-ov, .sg-line, .sg-star { animation: none } }

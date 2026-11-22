@@ -251,6 +251,7 @@
   
   <div class="chat-header">
     <div class="hd-avatar" id="headerAvatar">?</div>
+    <span id="owlBadge" class="owl-badge hidden" title="Nachteule" aria-hidden="true">🌙</span>
     <div class="header-info">
       <div class="header-name" id="headerName">...</div>
       <div class="header-code" id="headerCode"></div>
@@ -1663,6 +1664,7 @@ async function openChat(room, partnerCode, partnerName) {
   fitChatToViewport();
 
   document.getElementById('headerName').textContent = partnerName;
+  owlBadge();
   cancelReply();
   VC_OPEN = false;
   updateHeaderCode();
@@ -1838,6 +1840,7 @@ async function renderMessages(appendOnly = false) {
   }
 
   RENDERED_MSG_COUNT = msgs.length;
+  try { owlCheck(msgs); } catch (e) {}
   if (FX_PENDING.length) { const w = FX_PENDING[FX_PENDING.length - 1]; FX_PENDING = []; setTimeout(() => wordFx(w), 250); }
   container.scrollTop = container.scrollHeight;
   hydrateImages(container).then(() => { container.scrollTop = container.scrollHeight; });
@@ -2089,6 +2092,28 @@ function setSeen(on) {
 // ── Easter Egg 🐉 Drachenfeuer: Logo im Hub 7× antippen ───────────────────────
 // Gefundene Eier merkt sich sm_chat_egg_<name> (Grundlage für die spätere Easter-Egg-Seite im Hub).
 function eggFound(name) { try { lsSet('sm_chat_egg_' + name, '1'); } catch (e) {} }
+// ── Easter Egg: Nachteule ────────────────────────────────────────────────────
+// Nur eigene Uhr (0:00–4:59). Es wird nie die Uhrzeit des Partners verraten oder gesendet:
+// "Beide nachts" = beide Nachrichten tragen auf MEINER Uhr eine Nachtzeit.
+const owlNight = (t) => new Date(t == null ? Date.now() : t).getHours() < 5;
+function owlBadge() {
+  const b = document.getElementById('owlBadge'); if (!b) return;
+  b.classList.toggle('hidden', !owlNight());
+}
+function owlCheck(msgs) {
+  owlBadge();
+  if (!CURRENT_ROOM || document.hidden || !owlNight()) return;
+  const now = Date.now(), recent = msgs.filter(m => now - m.ts < 20 * 60000 && owlNight(m.ts));
+  if (!recent.some(m => m.from === CODE) || !recent.some(m => m.from !== CODE)) return;
+  const key = 'sm_chat_owl_' + CURRENT_ROOM, nk = new Date(now - 5 * 3600000).toDateString();
+  if (lsGet(key) === nk) return;
+  lsSet(key, nk); eggFound('owl');
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { toastMsg('🦉🦉 Zwei Nachteulen im Chat!'); return; }
+  const fx = document.createElement('div'); fx.className = 'owl-fx'; fx.setAttribute('aria-hidden', 'true');
+  fx.innerHTML = '<span class="o1">🦉</span><span class="o2">🦉</span>' + [0,1,2,3,4,5].map(i => `<i style="--i:${i}">✨</i>`).join('');
+  document.body.appendChild(fx); toastMsg('🦉🦉 Zwei Nachteulen im Chat!');
+  setTimeout(() => fx.remove(), 4200);
+}
 function dragonFire(noLogo) {
   eggFound('dragon');
   const logo = noLogo ? null : document.getElementById('hubLogo');
@@ -2109,6 +2134,30 @@ function dragonFire(noLogo) {
     if (!e.target || e.target.id !== 'hubLogo') return;
     const now = Date.now(); n = now - last < 1200 ? n + 1 : 1; last = now;
     if (n >= 7) { n = 0; dragonFire(); }
+  });
+})();
+// ── Easter Egg 🌟 Sternbild: Doppeltipp auf den Kurzlink-Text im Hub → jeder verifizierte Kontakt ist ein Stern ──
+const STAR_LEVELS = [[0, '🌑 Noch dunkel', 'Verifiziere Kontakte (grüner Haken ✔) – jeder wird ein Stern.'], [1, '✨ Funke', ''], [3, '⭐ Sternbild', ''], [6, '🌟 Konstellation', ''], [10, '🌌 Galaxie', '']];
+function starLevel(n) { let l = STAR_LEVELS[0]; STAR_LEVELS.forEach(x => { if (n >= x[0]) l = x; }); return l; }
+function starPos(code) { let h = 2166136261; for (const ch of code) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return [12 + (h % 77), 18 + (((h >>> 8) % 61))]; }
+function starMap() {
+  eggFound('stars');
+  const ct = getContacts(), mt = getMeta();
+  const codes = Object.keys(ct).filter(c => mt[c] && mt[c].ver).sort();
+  const lv = starLevel(codes.length), pts = codes.map(c => starPos(c));
+  let svg = '';
+  for (let i = 1; i < pts.length; i++) svg += `<line x1="${pts[i-1][0]}" y1="${pts[i-1][1]}" x2="${pts[i][0]}" y2="${pts[i][1]}" class="sg-line"/>`;
+  const stars = codes.map((c, i) => `<div class="sg-star" style="left:${pts[i][0]}%;top:${pts[i][1]}%;--i:${i}">⭐<span>${escapeHtml(String(ct[c]))}</span></div>`).join('');
+  const el = document.createElement('div'); el.className = 'sg-ov'; el.id = 'starOv';
+  el.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${svg}</svg>${stars}<div class="sg-title"><b>${lv[1]}</b><div>${codes.length} verifizierte${codes.length === 1 ? 'r Kontakt' : ' Kontakte'}</div>${lv[2] ? `<small>${lv[2]}</small>` : ''}<small>Tippen zum Schließen</small></div>`;
+  el.addEventListener('click', () => el.remove());
+  document.body.appendChild(el);
+}
+(function initStarEgg() {
+  let last = 0;
+  document.addEventListener('click', (e) => {
+    const t = e.target; if (!t || t.id !== 'hdInfo') return;
+    const now = Date.now(); if (now - last < 600) { last = 0; starMap(); } else last = now;
   });
 })();
 // ── Easter Egg 🫨 Schütteln: Handy im offenen Chat schütteln → die Blasen purzeln durcheinander ──
