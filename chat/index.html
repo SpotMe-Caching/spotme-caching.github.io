@@ -169,6 +169,13 @@
           <div class="hub-h">Empfehlungen</div>
           <label class="comic-row"><input type="checkbox" id="recToggle" onchange="setRec(this.checked)"> 🤝 Meine Verifizierten dürfen mich weiterempfehlen</label>
           <p class="hub-note">Nur Kontakte mit grünem Haken, und nur an deren eigene Verifizierte. Wer eine Empfehlung bekommt, schickt dir nur eine normale Anfrage – du entscheidest. Jederzeit abschaltbar.</p>
+          <label class="comic-row"><input type="checkbox" id="pubToggle" onchange="setPub(this.checked)"> 🔗 Öffentlich per Link empfehlbar</label>
+          <p class="hub-note" id="pubNote">Meine Verifizierten dürfen mich dann <b>öffentlich</b> empfehlen, z. B. auf Bluesky. In der Link-Vorschau stehen dein @Handle, dein Name und dein Empfehlungstext – für jeden sichtbar, der den Link sieht. Es bleibt immer nur eine Anfrage: Du entscheidest. Jederzeit abschaltbar, dann sind alle bisherigen Links wirkungslos. Braucht einen @Handle.</p>
+          <div id="pubBox" style="display:none">
+            <textarea id="pubText" maxlength="300" rows="3" placeholder="Empfehlungstext (optional, max. 300 Zeichen) – z. B. „Fotograf für Shootings an der Costa Brava“" style="width:100%;box-sizing:border-box" oninput="document.getElementById('pubCnt').textContent=this.value.length+' / 300'"></textarea>
+            <p class="hub-note"><span id="pubCnt">0 / 300</span> · Mit Text: wird beim Teilen als fertiger Post vorgeschlagen. Ohne Text: der Empfehlende schreibt seinen eigenen Text dazu.</p>
+            <button class="link-btn hub-full" onclick="savePubText()">Text speichern</button>
+          </div>
           <label class="comic-row"><input type="checkbox" id="seenToggle" onchange="setSeen(this.checked)"> 👁 Grobes „zuletzt online“ (heute / diese Woche / länger her)</label>
           <p class="hub-note">Nur gegenseitig: Du siehst es bei Chatpartnern nur, wenn du es selbst einschaltest und sie es auch an haben. Es gibt nie eine Uhrzeit, nur drei Stufen. Aus = du siehst nichts und wirst nicht angezeigt.</p>
           <div class="hub-h">Dein Name (die ID bleibt gleich)</div>
@@ -991,8 +998,30 @@ async function loadHandleInfo() {
   } catch (e) {}
   renderHandleInfo();
 }
+function renderPub() {
+  const tg = document.getElementById('pubToggle'), box = document.getElementById('pubBox'), tx = document.getElementById('pubText');
+  if (!tg) return;
+  tg.checked = !!HD.pub; tg.disabled = !HD.handle && !HD.pub;
+  box.style.display = HD.pub ? '' : 'none';
+  if (HD.pub && tx && document.activeElement !== tx) { tx.value = HD.pubtext || ''; document.getElementById('pubCnt').textContent = tx.value.length + ' / 300'; }
+}
+async function pubPost(on, text) {
+  const r = await tfetch(`${API}/messenger/pubrec`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: CODE, token: TOKEN, on: !!on, text: text || '' }) }, 15000);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(j.error || 'net'); e.code = j.code; throw e; }
+  return j;
+}
+async function setPub(on) {
+  try { const j = await pubPost(on, on ? (document.getElementById('pubText').value || HD.pubtext || '') : ''); HD.pub = j.pub; HD.pubtext = j.text || ''; setMsg(on ? '✅ Öffentliches Empfehlen erlaubt' : 'Öffentliches Empfehlen aus'); }
+  catch (e) { setMsg(e.code === 'nohandle' ? 'Dafür brauchst du erst einen @Handle' : 'Keine Verbindung – bitte später erneut versuchen'); }
+  renderPub();
+}
+async function savePubText() {
+  try { const j = await pubPost(true, document.getElementById('pubText').value); HD.pubtext = j.text || ''; setMsg('✅ Text gespeichert'); }
+  catch (e) { setMsg('Nicht gespeichert – bitte später erneut versuchen'); }
+}
 function renderHandleInfo() {
-  hubTiles();
+  hubTiles(); renderPub();
   const info = document.getElementById('hdInfo'), row = document.getElementById('hdRow');
   const share = document.getElementById('hdShare'), free = document.getElementById('hdFree'), inp = document.getElementById('hdInput');
   if (!info) return;
@@ -2075,7 +2104,7 @@ async function recFlag(code) {
     const r = await tfetch(`${API}/profile/${code}?spot=messenger`, {}, 10000);
     if (!r.ok) return { ok: false, rec: false, ts: Date.now() };
     const j = await r.json();
-    return (REC_CACHE[code] = { ok: true, rec: !!j.rec, name: j.name || '', handle: j.handle || '', ts: Date.now() });
+    return (REC_CACHE[code] = { ok: true, rec: !!j.rec, pub: !!j.pub, pubtext: j.pubtext || '', name: j.name || '', handle: j.handle || '', ts: Date.now() });
   } catch (e) { return { ok: false, rec: false, ts: Date.now() }; }
 }
 async function recPick() {
@@ -2094,14 +2123,15 @@ async function recPick() {
 // Empfehlung per Link: /s/<Handle des Empfohlenen>?von=<mein Handle> – Vorschau zeigt "empfohlen von @ich" (Server prüft Verifizierung + Erlaubnis)
 async function recLink() {
   const m = metaOf(PARTNER_CODE); if (!m.ver || !m.h) return;
+  delete REC_CACHE[PARTNER_CODE];
   const f = await recFlag(PARTNER_CODE);
-  if (!f.rec) { setMsg(escapeHtml(PARTNER_NAME || 'Dieser Kontakt') + ' erlaubt keine Empfehlungen.'); return; }
+  if (!f.pub) { setMsg(escapeHtml(PARTNER_NAME || 'Dieser Kontakt') + ' hat „Öffentlich per Link empfehlbar" nicht erlaubt.'); return; }
   const von = HD && HD.handle ? '?von=' + encodeURIComponent(HD.handle) : '';
   const url = `${API.replace(/\/api\/?$/, '')}/s/${m.h}${von}`;
-  const text = `Ich empfehle dir @${m.h} im Spot-Chat`;
+  const text = f.pubtext || ''; // mit Text: fertiger Post; ohne: eigener Text wird beim Teilen dazugeschrieben
   try {
-    if (navigator.share) { await navigator.share({ title: 'Spot-Chat', text, url }); return; }
-    await navigator.clipboard.writeText(`${text}\n${url}`); setMsg('✅ Empfehlungs-Link kopiert');
+    if (navigator.share) { await navigator.share(text ? { title: 'Spot-Chat', text, url } : { title: 'Spot-Chat', url }); if (!text) setMsg('Schreib im Post deinen eigenen Empfehlungstext dazu ✍️'); return; }
+    await navigator.clipboard.writeText(text ? `${text}\n${url}` : url); setMsg(text ? '✅ Post-Text + Link kopiert' : '✅ Link kopiert – schreib deinen eigenen Text dazu');
   } catch (e) {}
 }
 function recClose() { REC_PICK = false; renderRecCard(); }
