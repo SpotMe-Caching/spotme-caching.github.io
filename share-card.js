@@ -20,15 +20,19 @@ module.exports = function (app, { pool, decrypt, handleRe }) {
     return { code: r.rows[0].code, handle: r.rows[0].display, name: nm };
   }
   // "X empfiehlt dir Y": nur wenn Y Empfehlungen erlaubt hat UND X und Y gegenseitig verifiziert sind (sonst keine Behauptung in der Vorschau)
-  async function recommender(von, y) {
+  async function recommender(von, y, why) {
+    const no = (r) => { if (why) why.reason = r; return null; };
     try {
-      if (!von || !y) return null;
-      const v = await lookup(von); if (!v || v.code === y.code) return null;
-      const rc = await pool.query("SELECT text FROM messenger_pubrec WHERE code=$1", [y.code]); if (!rc.rows.length) return null;
+      if (!von) return no("kein ?von= im Link");
+      if (!y) return no("Empfohlener hat keinen @Handle");
+      const v = await lookup(von); if (!v) return no("@" + von + " existiert nicht als Handle (der Empfehlende braucht einen @Handle)");
+      if (v.code === y.code) return no("von = der Empfohlene selbst");
+      const rc = await pool.query("SELECT text FROM messenger_pubrec WHERE code=$1", [y.code]); if (!rc.rows.length) return no("@" + y.handle + " hat „Öffentlich per Link empfehlbar“ NICHT eingeschaltet");
       const lo = v.code < y.code ? v.code : y.code, hi = v.code < y.code ? y.code : v.code;
       const ok = await pool.query("SELECT 1 FROM messenger_verified WHERE lo=$1 AND hi=$2 AND lo_ok AND hi_ok", [lo, hi]);
-      return ok.rows.length ? { handle: v.handle, text: rc.rows[0].text || "" } : null;
-    } catch (e) { return null; }
+      if (!ok.rows.length) return no("Server kennt die Verifizierung von @" + v.handle + " und @" + y.handle + " noch nicht beidseitig (beide einmal den Hub öffnen/online sein)");
+      return { handle: v.handle, text: rc.rows[0].text || "" };
+    } catch (e) { return no("Fehler: " + e.message); }
   }
   function limited(req, res) {
     const ip = req.headers["cf-connecting-ip"] || req.ip || "x"; const n = (hits.get(ip) || 0) + 1; hits.set(ip, n);
@@ -58,6 +62,13 @@ ${nm ? `<text x="604" y="400" font-family="Outfit" font-weight="400" font-size="
       if (!png) return res.status(404).end();
       res.set({ "Content-Type": "image/png", "Cache-Control": "public, max-age=600" }).send(png);
     } catch (e) { console.error("share card:", e.message); res.status(500).end(); }
+  });
+  // Diagnose (nur mit Render-Env SHARE_DEBUG=1): sagt, warum eine Empfehlung NICHT angezeigt wird
+  app.get("/s/:name/check", async (req, res) => {
+    if (process.env.SHARE_DEBUG !== "1") return res.status(404).end();
+    const why = {}; const h = await lookup(req.params.name).catch(() => null);
+    const r = await recommender(String(req.query.von || "").slice(0, 30), h, why);
+    res.json({ empfehlung: !!r, grund: r ? "alles ok" : why.reason, text: r ? r.text : null });
   });
   app.get("/s/:name", async (req, res) => {
     if (limited(req, res)) return;
