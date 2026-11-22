@@ -54,7 +54,7 @@ ${nm ? `<text x="604" y="400" font-family="Outfit" font-weight="400" font-size="
     return png;
   }
   // 🌟 Sternbild-Bild: /s/<Handle>/card.png?stern=N  (nur Anzahl + Stufe, keine Namen; N kommt vom Client und wird nur angezeigt)
-  const LEVELS = [[0, "Noch dunkel"], [1, "Funke"], [3, "Sternbild"], [6, "Konstellation"], [10, "Galaxie"]];
+  const LEVELS = [[0, "Noch dunkel"], [1, "Funke"], [3, "Sternbild"], [6, "Konstellation"], [10, "Galaxie"], [25, "Spiralgalaxie"], [50, "Galaxienhaufen"], [100, "Universum"]];
   const levelOf = (n) => LEVELS.filter((l) => n >= l[0]).pop()[1];
   const starN = (q) => { const n = parseInt(q, 10); return Number.isFinite(n) && n >= 0 ? Math.min(n, 999) : null; };
   function renderStars(h, n) {
@@ -63,18 +63,55 @@ ${nm ? `<text x="604" y="400" font-family="Outfit" font-weight="400" font-size="
     if (!Resvg) return TPL();
     let seed = 7; for (const ch of h.handle) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
     const rnd = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
-    const shown = Math.min(n, 14), pts = [];
-    for (let i = 0; i < shown; i++) pts.push([90 + rnd() * 1020, 130 + rnd() * 250]);
-    pts.sort((a, b) => a[0] - b[0]);
-    const lines = pts.slice(1).map((p, i) => `<line x1="${pts[i][0].toFixed(0)}" y1="${pts[i][1].toFixed(0)}" x2="${p[0].toFixed(0)}" y2="${p[1].toFixed(0)}" stroke="#8fc4ff" stroke-opacity=".55" stroke-width="3"/>`).join("");
-    const star = (x, y, r) => { let d = ""; for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, rr = k % 2 ? r * 0.45 : r; d += (k ? "L" : "M") + (x + rr * Math.cos(a)).toFixed(1) + " " + (y + rr * Math.sin(a)).toFixed(1); } return `<path d="${d}Z" fill="#ffd45a"/>`; };
-    const dots = pts.map((p) => star(p[0], p[1], 20)).join("");
-    const bg = Array.from({ length: 40 }, () => `<circle cx="${(rnd() * 1200).toFixed(0)}" cy="${(rnd() * 630).toFixed(0)}" r="${(1 + rnd() * 2).toFixed(1)}" fill="#fff" fill-opacity="${(0.2 + rnd() * 0.5).toFixed(2)}"/>`).join("");
+    const f1 = (x) => x.toFixed(1);
+    const star = (x, y, r, col = "#ffd45a") => { let d = ""; for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, rr = k % 2 ? r * 0.45 : r; d += (k ? "L" : "M") + f1(x + rr * Math.cos(a)) + " " + f1(y + rr * Math.sin(a)); } return `<path d="${d}Z" fill="${col}"/>`; };
+    const halo = (x, y, r, col = "#ffd45a", o = 0.35) => `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r)}" fill="${col}" fill-opacity="${o}" filter="url(#bl)"/>`;
+    const dot = (x, y, r, col, o) => `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r)}" fill="${col}" fill-opacity="${o.toFixed(2)}"/>`;
+    const lv = levelOf(n);
+    let body = "";
+    const bgN = lv === "Universum" ? 70 : 40;
+    for (let i = 0; i < bgN; i++) body += dot(rnd() * 1200, rnd() * 630, 1 + rnd() * 2, "#fff", 0.2 + rnd() * 0.5);
+    // Spirale/Ellipse: Kern warm, Rand blau
+    const galaxy = (cx, cy, R, arms, tilt, flat, bright, dust, spin) => {
+      let o = halo(cx, cy, R * 0.3, "#ffcf7a", 0.3) + halo(cx, cy, R * 0.1, "#fff3c4", 0.7), ca = Math.cos(tilt), sa = Math.sin(tilt);
+      const pt = (t, a) => { const r = R * t, x = r * Math.cos(a), y = r * Math.sin(a) * flat; return [cx + x * ca - y * sa, cy + x * sa + y * ca]; };
+      for (let i = 0; i < dust; i++) {
+        const t = Math.pow(rnd(), 0.8), arm = Math.floor(rnd() * arms), a = arm * 2 * Math.PI / arms + t * spin + (rnd() - 0.5) * (0.9 - 0.5 * t), [x, y] = pt(t, a);
+        o += dot(x, y, 0.8 + rnd() * 1.6, t < 0.35 ? "#ffe2a8" : t < 0.7 ? "#cfe0ff" : "#8fb4ff", 0.35 + rnd() * 0.5);
+      }
+      for (let i = 0; i < bright; i++) { const t = 0.25 + rnd() * 0.75, arm = i % arms, a = arm * 2 * Math.PI / arms + t * spin, [x, y] = pt(t, a); o += halo(x, y, 16, "#ffd45a", 0.3) + star(x, y, 11 + rnd() * 5); }
+      return o;
+    };
+    if (lv === "Noch dunkel") {
+      body += `<circle cx="600" cy="260" r="110" fill="none" stroke="#8fc4ff" stroke-opacity=".25" stroke-width="3" stroke-dasharray="10 14"/>` + dot(600, 260, 6, "#ffd45a", 0.5);
+    } else if (lv === "Funke") {
+      const pts = n === 1 ? [[600, 260]] : [[480, 280], [720, 230]];
+      pts.forEach((p) => { body += halo(p[0], p[1], 90, "#ffd45a", 0.35) + halo(p[0], p[1], 45, "#fff3c4", 0.6) + star(p[0], p[1], 46); });
+      if (n === 2) body += `<line x1="480" y1="280" x2="720" y2="230" stroke="#8fc4ff" stroke-opacity=".6" stroke-width="3"/>`;
+    } else if (lv === "Sternbild" || lv === "Konstellation") {
+      const k = Math.min(n, 9), pts = [];
+      for (let i = 0; i < k; i++) pts.push([140 + (i / Math.max(1, k - 1)) * 920 + (rnd() - 0.5) * 90, 150 + rnd() * 240]);
+      pts.sort((a, b) => a[0] - b[0]);
+      if (lv === "Konstellation") for (let i = 2; i < pts.length; i++) body += `<line x1="${f1(pts[i - 2][0])}" y1="${f1(pts[i - 2][1])}" x2="${f1(pts[i][0])}" y2="${f1(pts[i][1])}" stroke="#ffd45a" stroke-opacity=".28" stroke-width="2" stroke-dasharray="8 10"/>`;
+      for (let i = 1; i < pts.length; i++) body += `<line x1="${f1(pts[i - 1][0])}" y1="${f1(pts[i - 1][1])}" x2="${f1(pts[i][0])}" y2="${f1(pts[i][1])}" stroke="#8fc4ff" stroke-opacity=".65" stroke-width="3"/>`;
+      pts.forEach((p, i) => { body += halo(p[0], p[1], lv === "Konstellation" ? 46 : 32, "#ffd45a", lv === "Konstellation" ? 0.4 : 0.25) + star(p[0], p[1], lv === "Konstellation" ? 26 + (i % 3) * 4 : 22); });
+    } else if (lv === "Galaxie") {
+      body += galaxy(600, 255, 300, 2, -0.35, 0.42, Math.min(n, 16), 260, 3.4);
+    } else if (lv === "Spiralgalaxie") {
+      body += galaxy(600, 255, 330, 3, -0.25, 0.5, Math.min(n, 30), 600, 4.2);
+    } else if (lv === "Galaxienhaufen") {
+      const gs = [[300, 230, 190, 2, -0.5, 0.45], [640, 210, 230, 3, 0.3, 0.5], [930, 290, 170, 2, 0.7, 0.4], [520, 350, 120, 2, -0.2, 0.55]];
+      gs.forEach((g, i) => { body += galaxy(g[0], g[1], g[2], g[3], g[4], g[5], 5 + (i % 2) * 2, 220, 3.6); });
+    } else {
+      body += halo(420, 200, 200, "#7a5cff", 0.12) + halo(820, 300, 220, "#ff6a8a", 0.09) + halo(600, 250, 240, "#2fa8ff", 0.09);
+      for (let i = 0; i < 9; i++) body += galaxy(110 + rnd() * 980, 120 + rnd() * 290, 80 + rnd() * 130, 2 + (i % 2), rnd() * 3, 0.35 + rnd() * 0.3, 3, 170, 3.6);
+    }
     const hs = "@" + h.handle, hSize = Math.max(36, Math.min(64, Math.floor(900 / (hs.length * 0.6))));
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><defs><radialGradient id="g" cx="50%" cy="35%" r="80%"><stop offset="0" stop-color="#14224a"/><stop offset="1" stop-color="#04060f"/></radialGradient></radialGradient></defs>
-<rect width="1200" height="630" fill="url(#g)"/>${bg}${lines}${dots}
-<text x="600" y="470" text-anchor="middle" font-family="Outfit" font-weight="700" font-size="64" fill="#ffd45a">${n === 0 ? "Mein Sternbild beginnt" : n + (n === 1 ? " Stern" : " Sterne") + " · " + esc(levelOf(n))}</text>
-<text x="600" y="540" text-anchor="middle" font-family="Outfit" font-weight="400" font-size="${hSize}" fill="#e8eefc">${esc(hs)}</text></svg>`.replace("</radialGradient></radialGradient>", "</radialGradient>");
+    const title = n === 0 ? "Mein Sternbild beginnt" : n + (n === 1 ? " Stern" : " Sterne") + " · " + lv;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><defs><radialGradient id="g" cx="50%" cy="35%" r="80%"><stop offset="0" stop-color="#14224a"/><stop offset="1" stop-color="#04060f"/></radialGradient><filter id="bl" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="14"/></filter></defs>
+<rect width="1200" height="630" fill="url(#g)"/>${body}
+<text x="600" y="470" text-anchor="middle" font-family="Outfit" font-weight="700" font-size="64" fill="#ffd45a">${esc(title)}</text>
+<text x="600" y="540" text-anchor="middle" font-family="Outfit" font-weight="400" font-size="${hSize}" fill="#e8eefc">${esc(hs)}</text></svg>`;
     const png = new Resvg(svg, { font: { fontFiles: [path.join(DIR, "outfit-700.ttf"), path.join(DIR, "outfit-400.ttf")], loadSystemFonts: false, defaultFontFamily: "Outfit" } }).render().asPng();
     if (cache.size > 300) cache.clear(); cache.set(key, { t: Date.now(), png });
     return png;
