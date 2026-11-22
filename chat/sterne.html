@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sterne – SpotMe Messenger</title>
+<meta name="description" content="Jeder Stern ist ein Kontakt, dem du vertraust. Sammle Sterne und tausche Stufen gegen echte Handarbeit.">
+<meta name="theme-color" content="#04060f">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="icons/spot_192.png">
+<link rel="stylesheet" href="../fonts.css">
+<style>
+:root{--bg:#04060f;--card:#0d1426;--bord:rgba(255,255,255,.09);--gold:#ffd45a;--acc:#f59e0b;--cy:#22d3ee;--ok:#10b981;--text:#e8edf5;--muted:#8793ab;--sans:'Outfit',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+html{background:var(--bg)}
+body{font-family:var(--sans);background:radial-gradient(ellipse at 50% 0%,#14224a,var(--bg) 60%) fixed;color:var(--text);font-size:17px;line-height:1.6;-webkit-text-size-adjust:100%}
+.wrap{max-width:720px;margin:0 auto;padding:0 16px 60px}
+a{color:var(--cy)}
+.top{display:flex;align-items:center;gap:.6rem;padding:18px 0}
+.top img{width:34px;height:34px;border-radius:9px}
+.top b{font-weight:800;color:var(--acc)} .top span{font-weight:300}
+.sandbox{background:rgba(245,158,11,.12);border:1px dashed var(--acc);color:#ffd9a0;border-radius:12px;padding:.6rem .9rem;font-size:.9rem;margin-bottom:1rem}
+.hero{text-align:center;padding:.5rem 0 1.4rem}
+.hero img{width:100%;max-width:560px;aspect-ratio:1200/630;border-radius:16px;border:1px solid var(--bord);background:#0a1020;display:block;margin:0 auto 1rem}
+.hero h1{font-size:1.75rem;line-height:1.2;letter-spacing:-.01em}
+.hero h1 em{font-style:normal;color:var(--gold)}
+.hero p{color:var(--muted);margin-top:.5rem}
+h2{font-size:1.3rem;margin:2rem 0 .7rem}
+.card{background:var(--card);border:1px solid var(--bord);border-radius:16px;padding:1rem 1.1rem}
+.what li{margin:.35rem 0 .35rem 1.2rem}
+.lv{display:grid;gap:.7rem}
+.step{background:var(--card);border:1px solid var(--bord);border-radius:16px;padding:.9rem 1.1rem;position:relative}
+.step.reached{border-color:rgba(16,185,129,.5)}
+.step.cur{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold),0 0 24px rgba(255,212,90,.18)}
+.step .hd{display:flex;align-items:baseline;justify-content:space-between;gap:.6rem;flex-wrap:wrap}
+.step .nm{font-weight:700;font-size:1.1rem}
+.step .rng{color:var(--muted);font-size:.85rem}
+.step .rw{margin-top:.3rem}
+.tag{display:inline-block;font-size:.72rem;font-weight:700;letter-spacing:.03em;border-radius:999px;padding:.1rem .55rem;margin-right:.4rem;vertical-align:.1em}
+.tag.dig{background:rgba(34,211,238,.15);color:var(--cy)}
+.tag.real{background:rgba(255,212,90,.16);color:var(--gold)}
+.state{font-size:.85rem;margin-top:.4rem;color:var(--muted)}
+.step.reached .state{color:var(--ok)} .step.cur .state{color:var(--gold)}
+.btn{display:block;text-align:center;text-decoration:none;font-weight:700;border-radius:999px;padding:.8rem 1.2rem;margin-top:1rem;border:0;font-family:inherit;font-size:1rem}
+.btn.p{background:linear-gradient(135deg,#ffb347,#ff7a59);color:#1a1020}
+.btn.g{background:transparent;border:1px solid var(--bord);color:var(--text)}
+ol.how{margin-left:1.2rem} ol.how li{margin:.4rem 0}
+.rules li{margin:.3rem 0 .3rem 1.2rem;color:#c3cde0;font-size:.95rem}
+small,.fine{color:var(--muted);font-size:.85rem}
+footer{text-align:center;margin-top:2rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><img src="icons/spot_192.png" alt="iSee.Q"><div><b>SPOT</b><span>ME Messenger</span></div></div>
+  <div class="sandbox" id="sandbox">🧪 Testphase: Die Sterne stammen aus dem Link, Tauschen ist noch nicht aktiv.</div>
+
+  <section class="hero" id="hero"></section>
+
+  <h2>Was ist ein Stern?</h2>
+  <div class="card what"><ul>
+    <li>Ein Stern ist <b>ein Kontakt, dem du vertraust</b>: ihr habt euch im Chat gegenseitig verifiziert (Frage – Antwort – grüner Haken ✔).</li>
+    <li>Sterne kann man <b>nicht kaufen</b>. Es zählt nur echtes, gegenseitiges Vertrauen.</li>
+    <li>Das Sternbild zeigt nur eine <b>Zahl</b>. Keine Namen, keine Chats, keine Daten. <i>Ich sehe dich. Nicht deine Daten.</i></li>
+  </ul></div>
+
+  <h2>Deine Stufen</h2>
+  <div class="lv" id="lv"></div>
+
+  <h2>So tauschst du</h2>
+  <div class="card">
+    <ol class="how">
+      <li>Stufe erreichen (Sterne sammeln).</li>
+      <li>Im Messenger auf „Einlösen“ tippen <small>(kommt mit dem Start)</small>.</li>
+      <li>Du bekommst eine Nachricht im Chat von <b>@DragonsChain</b>, wir klären Größe, Wunsch und Adresse.</li>
+      <li>Ich baue es, du bekommst es per Post.</li>
+    </ol>
+    <ul class="rules" style="margin-top:.8rem">
+      <li>Jede Stufe lässt sich <b>einmal pro Profil</b> tauschen.</li>
+      <li>Die Handarbeiten sind <b>begrenzt</b> („solange Vorrat“), ich baue sie von Hand.</li>
+      <li>Ein Stern zählt nur, wenn er echt ist: beidseitig verifiziert und ein aktives Profil.</li>
+      <li>Kein Barwert, keine Auszahlung. Versand nach Absprache.</li>
+      <li>Danke fürs Weitersagen: Wer teilt, bekommt dafür eine Belohnung. Das ist offen so gedacht und keine versteckte Werbung.</li>
+    </ul>
+  </div>
+
+  <div id="cta"></div>
+  <footer class="fine"><a href="../datenschutz.html">Datenschutz</a> · <a href="landing.html?info=1">Was ist der Messenger?</a></footer>
+</div>
+<script>
+/* ===== Stufen & Belohnungen – hier steht ALLES, was auf der Seite versprochen wird ===== */
+var LEVELS = [
+  {min:0,   name:'Noch dunkel',    icon:'🌑', real:false, reward:'Dein Sternbild beginnt. Verifiziere deinen ersten Kontakt.'},
+  {min:1,   name:'Funke',          icon:'✨', real:false, reward:'Digitales iSee.Q-Abzeichen und Handy-Wallpaper'},
+  {min:3,   name:'Sternbild',      icon:'⭐', real:true,  reward:'Sticker-Set mit Ring-Motiv per Post'},
+  {min:6,   name:'Konstellation',  icon:'🌟', real:false, reward:'1 Monat Patreon gratis (Einstiegsstufe von Dragons Chain)'},
+  {min:10,  name:'Galaxie',        icon:'🌌', real:true,  reward:'Kleines Chainmail-Stück von Hand: Ring, Armband oder Anhänger'},
+  {min:25,  name:'Spiralgalaxie',  icon:'🌀', real:true,  reward:'Kleines Dress / Top aus Scale- oder Chainmail, Größe nach Absprache'},
+  {min:50,  name:'Galaxienhaufen', icon:'🌠', real:true,  reward:'Unikat nach deinem Wunsch, wir entwerfen es gemeinsam'},
+  {min:100, name:'Universum',      icon:'🪐', real:true,  reward:'Großes Unikat plus dein Name auf der Danke-Wand'}
+];
+var API_BASE = 'https://spotme-chat-obom.onrender.com';
+function $(i){return document.getElementById(i)}
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+(function(){
+  var q=location.search.replace(/^\?/,''), handle='', n=null;
+  q.split('&').forEach(function(p){
+    var kv=p.split('='), k=decodeURIComponent(kv[0]||''), v=decodeURIComponent(kv[1]||'');
+    if(k==='stern'){var x=parseInt(v,10); if(isFinite(x)&&x>=0) n=Math.min(x,999);}
+    else if(k==='h'&&/^[A-Za-z0-9_]{3,20}$/.test(v)) handle=v;
+    else if(!kv[1]&&/^[A-Za-z0-9_]{3,20}$/.test(k)) handle=k;
+  });
+  var cur=0; if(n!=null) LEVELS.forEach(function(l,i){if(n>=l.min)cur=i});
+  var L=LEVELS[cur];
+  // Kopf
+  var hero='';
+  if(n!=null&&handle){
+    hero='<img src="'+API_BASE+'/s/'+encodeURIComponent(handle)+'/card.png?stern='+n+'" alt="Sternbild von @'+esc(handle)+'" onerror="this.style.display=\'none\'">'
+      +'<h1>@'+esc(handle)+' hat <em>'+n+' '+(n===1?'Stern':'Sterne')+'</em><br>'+L.icon+' '+esc(L.name)+'</h1>'
+      +'<p>Jeder Stern ist ein Kontakt, dem '+esc('@'+handle)+' vertraut.</p>';
+  } else {
+    hero='<h1>Jeder Stern ist ein Kontakt,<br><em>dem du vertraust</em> 🌟</h1><p>Sammle Sterne, steige auf und tausche Stufen gegen echte Handarbeit.</p>';
+    $('sandbox').style.display=(n==null?'none':'');
+  }
+  $('hero').innerHTML=hero;
+  // Stufen
+  var h='';
+  LEVELS.forEach(function(l,i){
+    var rng=(i<LEVELS.length-1)?(l.min===LEVELS[i+1].min-1?l.min:l.min+'–'+(LEVELS[i+1].min-1)):l.min+'+';
+    if(l.min===0) rng='0';
+    var cls='step'+(n!=null&&i<cur?' reached':'')+(n!=null&&i===cur?' cur':'');
+    var st='';
+    if(n!=null){ st = i<cur ? '✓ erreicht' : i===cur ? '⭐ Deine Stufe' : 'noch '+(l.min-n)+' '+((l.min-n)===1?'Stern':'Sterne'); }
+    h+='<div class="'+cls+'"><div class="hd"><span class="nm">'+l.icon+' '+esc(l.name)+'</span><span class="rng">ab '+l.min+' Sternen</span></div>'
+      +'<div class="rw">'+(l.min===0?'':'<span class="tag '+(l.real?'real':'dig')+'">'+(l.real?'HANDARBEIT':'DIGITAL')+'</span>')+esc(l.reward)+'</div>'
+      +(st?'<div class="state">'+st+'</div>':'')+'</div>';
+  });
+  $('lv').innerHTML=h;
+  // Knopf
+  var go = handle ? './?'+encodeURIComponent(handle) : 'landing.html?info=1';
+  $('cta').innerHTML='<a class="btn p" href="'+go+'">'+(handle?'🚀 Eigenen Messenger starten &amp; @'+esc(handle)+' hinzufügen':'🚀 Zum Messenger')+'</a>'
+    +'<a class="btn g" href="landing.html?info=1">Mehr über den Messenger</a>';
+})();
+</script>
+</body>
+</html>
