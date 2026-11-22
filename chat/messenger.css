@@ -1094,3 +1094,17 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
   100% { transform: translate(115vw, 10px) rotate(0deg) scaleX(-1); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .dragon-fx { display: none; } #hubLogo.glow { animation: none; } }
+
+/* Easter Egg: Schütteln – die Blasen purzeln durcheinander und federn zurück */
+.message.shaken { animation: shakeTumble 2s cubic-bezier(.3,.7,.4,1) both; animation-delay: var(--sdl, 0s); position: relative; z-index: 3; }
+@keyframes shakeTumble {
+  0%   { translate: 0 0; rotate: 0deg; }
+  10%  { translate: calc(var(--sx) * .3) calc(var(--sy) * -.4); rotate: calc(var(--sr) * -.5); }
+  25%  { translate: var(--sx) var(--sy); rotate: var(--sr); }
+  45%  { translate: calc(var(--sx) * -.6) calc(var(--sy) * .5); rotate: calc(var(--sr) * -.7); }
+  65%  { translate: calc(var(--sx) * .25) calc(var(--sy) * -.2); rotate: calc(var(--sr) * .3); }
+  82%  { translate: 0 8px; rotate: 0deg; }
+  92%  { translate: 0 -4px; }
+  100% { translate: 0 0; rotate: 0deg; }
+}
+@media (prefers-reduced-motion: reduce) { .message.shaken { animation: none; } }

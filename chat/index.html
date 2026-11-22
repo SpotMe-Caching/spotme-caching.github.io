@@ -1674,7 +1674,7 @@ async function openChat(room, partnerCode, partnerName) {
   renderVerCard(); REC_PICK = false; renderRecCard();
 
   await renderMessages();
-  blowStart();
+  blowStart(); shakeStart();
 
   // Versuch P2P Verbindung herzustellen
   await attemptP2PConnection(partnerCode);
@@ -1766,7 +1766,7 @@ async function sendReadinessInvite(partnerCode) {
 }
 
 function goBackToList() {
-  blowStop();
+  blowStop(); shakeStop();
   if (P2P_ATTEMPT_TIMER) { clearInterval(P2P_ATTEMPT_TIMER); P2P_ATTEMPT_TIMER = null; }
   markSeen(CURRENT_ROOM);
   CURRENT_ROOM = null;
@@ -2108,6 +2108,41 @@ function dragonFire() {
     if (n >= 7) { n = 0; dragonFire(); }
   });
 })();
+// ── Easter Egg 🫨 Schütteln: Handy im offenen Chat schütteln → die Blasen purzeln durcheinander ──
+const SHAKE = { on: false, last: null, hits: [], cool: 0, permAsked: false };
+function shakeMotion(e) {
+  const a = e.accelerationIncludingGravity; if (!a || a.x == null) return;
+  const cur = [a.x, a.y, a.z || 0], l = SHAKE.last; SHAKE.last = cur; if (!l) return;
+  const d = Math.hypot(cur[0] - l[0], cur[1] - l[1], cur[2] - l[2]), now = Date.now();
+  if (d > 16) { SHAKE.hits.push(now); SHAKE.hits = SHAKE.hits.filter(x => now - x < 900); }
+  if (SHAKE.hits.length >= 4 && now > SHAKE.cool) { SHAKE.hits = []; SHAKE.cool = now + 5000; shakeBubbles(); }
+}
+function shakeBubbles() {
+  if (!CURRENT_ROOM) return;
+  eggFound('shake');
+  try { navigator.vibrate && navigator.vibrate([30, 40, 30]); } catch (e) {}
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { toastMsg('🫨 Hoppla! (Animationen sind aus)'); return; }
+  try { playMood('scare', 'in'); } catch (e) {}
+  const els = [...document.querySelectorAll('#messages .message')].slice(-40);
+  els.forEach((el, i) => {
+    const r = (n) => (Math.random() * 2 - 1) * n;
+    el.style.setProperty('--sx', r(90).toFixed(0) + 'px'); el.style.setProperty('--sy', r(70).toFixed(0) + 'px'); el.style.setProperty('--sr', r(28).toFixed(0) + 'deg');
+    el.style.setProperty('--sdl', (i % 5) * 0.04 + 's');
+    el.classList.remove('shaken'); void el.offsetWidth; el.classList.add('shaken');
+  });
+  setTimeout(() => els.forEach(el => { el.classList.remove('shaken'); ['--sx', '--sy', '--sr', '--sdl'].forEach(k => el.style.removeProperty(k)); }), 2200);
+  toastMsg('🫨 Hoppla!');
+}
+function shakeStart() {
+  if (SHAKE.on || typeof DeviceMotionEvent === 'undefined') return;
+  const go = () => { window.addEventListener('devicemotion', shakeMotion); SHAKE.on = true; };
+  go(); // Android/Chrome: kein Dialog nötig (iOS liefert ohne Erlaubnis einfach keine Werte)
+  if (typeof DeviceMotionEvent.requestPermission === 'function' && !SHAKE.permAsked) {
+    // iOS: Erlaubnis lässt sich nur nach einer Berührung abfragen → beim ersten Tippen im Chat
+    document.addEventListener('pointerdown', () => { SHAKE.permAsked = true; try { DeviceMotionEvent.requestPermission().then(s => { if (s === 'granted') go(); }).catch(() => {}); } catch (e) {} }, { once: true });
+  }
+}
+function shakeStop() { window.removeEventListener('devicemotion', shakeMotion); SHAKE.on = false; SHAKE.last = null; SHAKE.hits = []; }
 // ── Easter Egg: Pusten = zurück zur Kontaktliste ─────────────────────────────
 // Reine lokale Auswertung des Mikrofonpegels (Rauschen mit viel Tiefton, nicht stimmhaft); nichts wird aufgenommen/gesendet.
 const BLOW = { ctx: null, stream: null, an: null, timer: null, hist: [], busy: false };
