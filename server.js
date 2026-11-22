@@ -446,6 +446,8 @@ async function initDB() {
       handle TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, display TEXT NOT NULL, updated_at BIGINT NOT NULL)`);
     // Messenger: "darf von meinen Verifizierten empfohlen werden" (nur wer hier steht, kann empfohlen werden)
     await pool.query(`CREATE TABLE IF NOT EXISTS messenger_rec (code TEXT PRIMARY KEY, created_at BIGINT NOT NULL)`);
+    // Messenger: "öffentlich per Link empfehlbar" + optionaler Empfehlungstext (max. 300 Zeichen)
+    await pool.query(`CREATE TABLE IF NOT EXISTS messenger_pubrec (code TEXT PRIMARY KEY, text TEXT NOT NULL DEFAULT '', created_at BIGINT NOT NULL)`);
     // Messenger: grobes "zuletzt online" – nur für Profile, die es selbst eingeschaltet haben (gegenseitig).
     await pool.query(`CREATE TABLE IF NOT EXISTS messenger_seen (code TEXT PRIMARY KEY, last_ms BIGINT NOT NULL)`);
     // Messenger: auf welchen Geräten/Apps ist diese ID gerade angemeldet (nur zufällige Geräte-Kennung, keine Gerätedaten)
@@ -1091,6 +1093,8 @@ app.get("/api/profile/:code", async (req, res) => {
       out.handle = h.rows[0]?.display || null;
       const rc = await pool.query("SELECT 1 FROM messenger_rec WHERE code=$1", [code]);
       out.rec = rc.rows.length > 0;
+      const pr = await pool.query("SELECT text FROM messenger_pubrec WHERE code=$1", [code]);
+      out.pub = pr.rows.length > 0; out.pubtext = pr.rows[0]?.text || "";
     }
     res.json(out);
   } catch (e) {
@@ -1341,9 +1345,6 @@ app.get("/api/messenger/handle/:name", async (req, res) => {
   }
 });
 
-// Teilen-Link mit Vorschaubild (/s/<Handle>, /s/<Handle>/card.png)
-require("./share-card")(app, { pool, decrypt, handleRe: MSGR_HANDLE_RE });
-
 // Handle beanspruchen / ändern
 app.post("/api/messenger/handle", async (req, res) => {
   const code = normCode(req.body?.code);
@@ -1391,6 +1392,25 @@ app.delete("/api/messenger/handle", async (req, res) => {
     res.json({ success: true });
   } catch (e) {
     console.error("DELETE /api/messenger/handle:", e.message);
+    res.status(500).json({ error: "Datenbankfehler" });
+  }
+});
+
+// Öffentlich per Link empfehlbar an/aus + Empfehlungstext (braucht einen @Handle; Text max. 300 Zeichen)
+app.post("/api/messenger/pubrec", async (req, res) => {
+  const code = normCode(req.body?.code);
+  const token = String(req.body?.token || "");
+  if (!isMsgCode(code) || !token) return res.status(400).json({ error: "code und token erforderlich" });
+  try {
+    if (!(await authCheck(code, token))) return res.status(403).json({ error: "Ungültiger Token" });
+    if (!req.body?.on) { await pool.query("DELETE FROM messenger_pubrec WHERE code=$1", [code]); return res.json({ success: true, pub: false, text: "" }); }
+    const h = await pool.query("SELECT 1 FROM messenger_handles WHERE code=$1", [code]);
+    if (!h.rows.length) return res.status(400).json({ error: "Dafür brauchst du einen @Handle", code: "nohandle" });
+    const text = String(req.body?.text || "").replace(/[\u0000-\u001f\u007f]+/g, " ").trim().slice(0, 300);
+    await pool.query("INSERT INTO messenger_pubrec (code, text, created_at) VALUES ($1,$2,$3) ON CONFLICT (code) DO UPDATE SET text=EXCLUDED.text", [code, text, Date.now()]);
+    res.json({ success: true, pub: true, text });
+  } catch (e) {
+    console.error("POST /api/messenger/pubrec:", e.message);
     res.status(500).json({ error: "Datenbankfehler" });
   }
 });
@@ -1623,7 +1643,8 @@ app.get("/api/messenger/verified/:code", async (req, res) => {
     const h = await pool.query("SELECT display FROM messenger_handles WHERE code=$1", [code]);
     const rc = await pool.query("SELECT 1 FROM messenger_rec WHERE code=$1", [code]);
     const sn = await pool.query("SELECT 1 FROM messenger_seen WHERE code=$1", [code]);
-    res.json({ count, min: MSGR_HANDLE_MIN, handle: h.rows[0]?.display || null, rec: rc.rows.length > 0, seen: sn.rows.length > 0 });
+    const pr = await pool.query("SELECT text FROM messenger_pubrec WHERE code=$1", [code]);
+    res.json({ count, min: MSGR_HANDLE_MIN, handle: h.rows[0]?.display || null, rec: rc.rows.length > 0, seen: sn.rows.length > 0, pub: pr.rows.length > 0, pubtext: pr.rows[0]?.text || "" });
   } catch (e) {
     console.error("GET /api/messenger/verified:", e.message);
     res.status(500).json({ error: "Datenbankfehler" });
@@ -1939,6 +1960,7 @@ app.delete("/api/account/:code", async (req, res) => {
       await run("messenger_verifiziert", "DELETE FROM messenger_verified WHERE lo=$1 OR hi=$1", [code]);
       await run("messenger_handle", "DELETE FROM messenger_handles WHERE code=$1", [code]);
       await run("messenger_rec", "DELETE FROM messenger_rec WHERE code=$1", [code]);
+      await run("messenger_pubrec", "DELETE FROM messenger_pubrec WHERE code=$1", [code]);
       await run("messenger_seen", "DELETE FROM messenger_seen WHERE code=$1", [code]);
       await run("messenger_devices", "DELETE FROM messenger_devices WHERE code=$1", [code]);
       await run("live_folgen", "DELETE FROM live_followers WHERE follower_code=$1", [code]);
@@ -5151,6 +5173,9 @@ function nearAllowed(key) {
 }
 
 // ── Live-Events (Tickets / Teilnehmerlimit) – überschreibt die Live-Routen darunter ──
+// Teilen-Link mit Vorschaubild (/s/<Handle>, /s/<Handle>/card.png)
+require("./share-card")(app, { pool, decrypt, handleRe: MSGR_HANDLE_RE });
+
 const notify = require("./notify-prefs")(pool);
 notify.ensureSchema().catch((e) => console.error("notify Schema:", e.message));
 notify.mount(app, { authCheck, decrypt, sendPush: (c, t, b, u) => sendPushToCode(c, t, b, u) });

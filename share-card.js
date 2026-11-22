@@ -24,10 +24,10 @@ module.exports = function (app, { pool, decrypt, handleRe }) {
     try {
       if (!von || !y) return null;
       const v = await lookup(von); if (!v || v.code === y.code) return null;
-      const rc = await pool.query("SELECT 1 FROM messenger_rec WHERE code=$1", [y.code]); if (!rc.rows.length) return null;
+      const rc = await pool.query("SELECT text FROM messenger_pubrec WHERE code=$1", [y.code]); if (!rc.rows.length) return null;
       const lo = v.code < y.code ? v.code : y.code, hi = v.code < y.code ? y.code : v.code;
       const ok = await pool.query("SELECT 1 FROM messenger_verified WHERE lo=$1 AND hi=$2 AND lo_ok AND hi_ok", [lo, hi]);
-      return ok.rows.length ? v.handle : null;
+      return ok.rows.length ? { handle: v.handle, text: rc.rows[0].text || "" } : null;
     } catch (e) { return null; }
   }
   function limited(req, res) {
@@ -53,7 +53,7 @@ ${nm ? `<text x="604" y="400" font-family="Outfit" font-weight="400" font-size="
     if (limited(req, res)) return;
     try {
       const h = (await lookup(req.params.name)) || { handle: "", name: "" };
-      if (h.handle && req.query.von) h.von = await recommender(String(req.query.von).slice(0, 30), h);
+      if (h.handle && req.query.von) { const rv = await recommender(String(req.query.von).slice(0, 30), h); h.von = rv ? rv.handle : null; }
       const png = h.handle ? render(h) : TPL();
       if (!png) return res.status(404).end();
       res.set({ "Content-Type": "image/png", "Cache-Control": "public, max-age=600" }).send(png);
@@ -62,12 +62,12 @@ ${nm ? `<text x="604" y="400" font-family="Outfit" font-weight="400" font-size="
   app.get("/s/:name", async (req, res) => {
     if (limited(req, res)) return;
     let h = null; try { h = await lookup(req.params.name); } catch (e) {}
-    const von = h && req.query.von ? await recommender(String(req.query.von).slice(0, 30), h) : null;
+    const rv = h && req.query.von ? await recommender(String(req.query.von).slice(0, 30), h) : null, von = rv ? rv.handle : null;
     const self = (process.env.PUBLIC_API_BASE || (req.protocol + "://" + req.get("host"))) + "/s/" + encodeURIComponent(req.params.name);
     const q = von ? "?von=" + encodeURIComponent(von) : "";
     const target = BASE + (h ? "?" + encodeURIComponent(h.handle) + (von ? "&von=" + encodeURIComponent(von) : "") : "landing.html");
     const title = h ? `@${h.handle} auf dem SpotMe Messenger` : "SpotMe Messenger – Schreiben ohne Nummer, ohne E-Mail";
-    const desc = h ? `${von ? "@" + von + " empfiehlt dir " + (h.name || "@" + h.handle) + ": " : h.name ? h.name + " lädt dich ein: " : ""}Anonym und privat schreiben – ohne Telefonnummer, ohne E-Mail.` : "Anonym und privat schreiben: nur ein Name, keine Telefonnummer, keine Werbung.";
+    const desc = rv && rv.text ? rv.text.slice(0, 300) : h ? `${von ? "@" + von + " empfiehlt dir " + (h.name || "@" + h.handle) + ": " : h.name ? h.name + " lädt dich ein: " : ""}Anonym und privat schreiben – ohne Telefonnummer, ohne E-Mail.` : "Anonym und privat schreiben: nur ein Name, keine Telefonnummer, keine Werbung.";
     res.set({ "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" }).send(`<!doctype html><html lang="de"><head><meta charset="utf-8"><title>${esc(title)}</title>
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
 <meta property="og:type" content="website"><meta property="og:site_name" content="SpotMe Messenger"><meta property="og:url" content="${esc(self)}">
