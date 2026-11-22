@@ -1801,7 +1801,7 @@ async function renderMessages(appendOnly = false) {
     const qq = m.kind === 'image' ? null : parseQuote(m.text);
     const txt0 = qq ? qq.body : m.text;
     const sn = m.kind !== 'image' && SNAIL_RE.test(txt0), txt = sn ? txt0.replace(SNAIL_RE, '') : txt0;
-    const snPlay = sn && snailPlay(m), snCls = sn ? ' snail-msg' + (snPlay ? ' snail-play' : '') : '', snEl = snPlay ? '<span class="snail-crawl" aria-hidden="true">🐌</span>' : '';
+    const snEl0 = sn ? snailPlay(m) : null, snPlay = snEl0 != null, snSty = snPlay ? `--sd:-${snEl0.toFixed(2)}s` : '', snCls = sn ? ' snail-msg' + (snPlay ? ' snail-play' : '') : '', snEl = snPlay ? '<span class="snail-crawl" aria-hidden="true">🐌</span>' : '';
     const qHtml = qq ? quoteHtml(m, qq, msgs) : '';
     // Nur "gesendet" (✓) vs. "zugestellt" (✓✓) – bewusst KEIN Lesestatus
     // und KEINE zusätzliche Uhrzeit dafür (würde Online-Zeiten verraten).
@@ -1819,9 +1819,9 @@ async function renderMessages(appendOnly = false) {
       const BADGES = { question: '?', shout: '!', love: '♥', whisper: '…', scare: '!?', anger: '#@!', laugh: 'HA', sad: '💧', tired: 'Zzz', idea: '💡', cool: '😎' };
       const badge = BADGES[pm.mood] || '';
       const tilt = ((m.ts % 5) - 2) * 0.35;
-      return `<div class="message ${isMine ? 'mine' : 'other'} cm cm-${pm.mood}${snCls}" data-ts="${m.ts}" style="--tilt:${tilt}deg">${badge ? `<span class="cm-badge${/^[?!♥…]$/.test(badge) || /\p{Extended_Pictographic}/u.test(badge) ? '' : ' w'}">${badge}</span>` : ''}${qHtml}<span class="cm-txt">${escapeHtml(pm.text)}</span><div class="msg-time">${time}${statusTick}</div>${snEl}</div>`;
+      return `<div class="message ${isMine ? 'mine' : 'other'} cm cm-${pm.mood}${snCls}" data-ts="${m.ts}" style="--tilt:${tilt}deg;${snSty}">${badge ? `<span class="cm-badge${/^[?!♥…]$/.test(badge) || /\p{Extended_Pictographic}/u.test(badge) ? '' : ' w'}">${badge}</span>` : ''}${qHtml}<span class="cm-txt">${escapeHtml(pm.text)}</span><div class="msg-time">${time}${statusTick}</div>${snEl}</div>`;
     }
-    return `<div class="message ${isMine ? 'mine' : 'other'}${m.kind === 'image' ? ' has-img' : ''}${snCls}" data-ts="${m.ts}">${body}<div class="msg-time">${time}${statusTick}</div>${snEl}</div>`;
+    return `<div class="message ${isMine ? 'mine' : 'other'}${m.kind === 'image' ? ' has-img' : ''}${snCls}" data-ts="${m.ts}"${snSty ? ` style="${snSty}"` : ''}>${body}<div class="msg-time">${time}${statusTick}</div>${snEl}</div>`;
   };
 
   // FIX: Bei jeder eingehenden Nachricht wurde vorher die komplette Liste
@@ -1865,10 +1865,15 @@ function parseMood(text) {
 let SNAIL_NEXT = false;
 const SNAIL_SEEN = (() => { try { return new Set(JSON.parse(lsGet('sm_chat_snailseen') || '[]')); } catch (e) { return new Set(); } })();
 // Kriecht diese Nachricht jetzt herein? Nur einmal, nur frisch (< 10 min), nur im offenen Chat.
+// Gibt null (nicht abspielen) oder die schon verstrichene Zeit in s zurück. Wird die Liste mitten in der Animation neu gebaut
+// (z. B. wenn das ✓✓ eintrifft), läuft sie per negativem animation-delay nahtlos weiter.
+const SNAIL_DUR = 3.4, SNAIL_START = {};
 function snailPlay(m) {
-  if (SNAIL_SEEN.has(m.ts)) return false;
+  if (SNAIL_START[m.ts] != null) { const el = (performance.now() - SNAIL_START[m.ts]) / 1000; return el < SNAIL_DUR ? el : null; }
+  if (SNAIL_SEEN.has(m.ts)) return null;
   SNAIL_SEEN.add(m.ts); try { lsSet('sm_chat_snailseen', JSON.stringify([...SNAIL_SEEN].slice(-100))); } catch (e) {}
-  return !!CURRENT_ROOM && !document.hidden && Date.now() - m.ts < 600000 && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!(!!CURRENT_ROOM && !document.hidden && Date.now() - m.ts < 600000 && !matchMedia('(prefers-reduced-motion: reduce)').matches)) return null;
+  SNAIL_START[m.ts] = performance.now(); return 0;
 }
 function applyComic() {
   const c = document.getElementById('messages');

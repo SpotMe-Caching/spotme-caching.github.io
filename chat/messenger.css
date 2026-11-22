@@ -1061,9 +1061,9 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
 
 /* Easter Egg: Schneckenpost – die Blase wird von einer Schnecke "hereingekrochen" */
 .message.snail-msg { position: relative; }
-.message.snail-play { animation: snailReveal 3.4s linear backwards; }
+.message.snail-play { animation: snailReveal 3.4s linear backwards; animation-delay: var(--sd, 0s); }
 .message.snail-play .snail-crawl { position: absolute; bottom: -3px; left: 0; font-size: 1.35em; line-height: 1; pointer-events: none; z-index: 2;
-  scale: -1 1; animation: snailMove 3.4s linear both, snailWobble .45s ease-in-out infinite alternate; }
+  scale: -1 1; animation: snailMove 3.4s linear both, snailWobble .45s ease-in-out infinite alternate; animation-delay: var(--sd, 0s), 0s; }
 @keyframes snailReveal { from { clip-path: inset(-6px 100% -6px 0); } to { clip-path: inset(-6px -6px -6px 0); } }
 @keyframes snailMove { 0% { left: 0; transform: translateX(-100%); opacity: 1; } 93% { left: 100%; transform: translateX(-100%); opacity: 1; } 100% { left: 100%; transform: translateX(0); opacity: 0; } }
 @keyframes snailWobble { from { rotate: -7deg; } to { rotate: 7deg; } }
