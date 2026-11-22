@@ -1147,3 +1147,5 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
 @keyframes sgDraw { from { stroke-dashoffset: 600 } to { stroke-dashoffset: 0 } }
 @keyframes sgTw { 0%, 100% { opacity: .75; filter: none } 50% { opacity: 1; filter: drop-shadow(0 0 8px #ffe28a) } }
 @media (prefers-reduced-motion: reduce) { .sg-ov, .sg-line, .sg-star { animation: none } }
+
+.sg-share { margin: .8rem auto .2rem; display: block; background: linear-gradient(135deg,#ffb347,#ff7a59); color: #1a1020; border: 0; border-radius: 999px; padding: .6rem 1.2rem; font-weight: 700; font-size: .95rem; }

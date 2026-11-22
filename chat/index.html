@@ -2149,9 +2149,17 @@ function starMap() {
   for (let i = 1; i < pts.length; i++) svg += `<line x1="${pts[i-1][0]}" y1="${pts[i-1][1]}" x2="${pts[i][0]}" y2="${pts[i][1]}" class="sg-line"/>`;
   const stars = codes.map((c, i) => `<div class="sg-star" style="left:${pts[i][0]}%;top:${pts[i][1]}%;--i:${i}">⭐<span>${escapeHtml(String(ct[c]))}</span></div>`).join('');
   const el = document.createElement('div'); el.className = 'sg-ov'; el.id = 'starOv';
-  el.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${svg}</svg>${stars}<div class="sg-title"><b>${lv[1]}</b><div>${codes.length} verifizierte${codes.length === 1 ? 'r Kontakt' : ' Kontakte'}</div>${lv[2] ? `<small>${lv[2]}</small>` : ''}<small>Tippen zum Schließen</small></div>`;
+  el.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${svg}</svg>${stars}<div class="sg-title"><b>${lv[1]}</b><div>${codes.length} verifizierte${codes.length === 1 ? 'r Kontakt' : ' Kontakte'}</div>${lv[2] ? `<small>${lv[2]}</small>` : ''}<button class="sg-share" id="sgShare">🔗 Sternbild teilen</button><small>Tippen zum Schließen</small></div>`;
   el.addEventListener('click', () => el.remove());
+  el.querySelector('#sgShare').addEventListener('click', (ev) => { ev.stopPropagation(); shareStars(codes.length); });
   document.body.appendChild(el);
+}
+async function shareStars(n) {
+  await ensureHD();
+  if (!HD || !HD.handle) { toastMsg('Zum Teilen brauchst du einen @Handle (Hub → Ich, ab ' + ((HD && HD.min) || 3) + ' Verifizierten).'); return; }
+  const url = `${API.replace(/\/api\/?$/, '')}/s/${HD.handle}?stern=${n}`;
+  const text = n ? `Mein Sternbild im Spot-Chat: ${n} ${n === 1 ? 'Stern' : 'Sterne'} ⭐ – schreib mir: @${HD.handle}` : `Mein Sternbild im Spot-Chat beginnt gerade – schreib mir: @${HD.handle}`;
+  await shareOut({ title: 'Mein Sternbild', text, url });
 }
 (function initStarEgg() {
   let last = 0;
