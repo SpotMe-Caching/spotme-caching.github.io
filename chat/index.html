@@ -177,6 +177,8 @@
             <button class="link-btn hub-full" onclick="savePubText()">Text speichern</button>
           </div>
           <label class="comic-row"><input type="checkbox" id="seenToggle" onchange="setSeen(this.checked)"> 👁 Grobes „zuletzt online“ (heute / diese Woche / länger her)</label>
+          <label class="comic-row"><input type="checkbox" id="blowToggle" onchange="setBlow(this.checked)"> 💨 Pusten = zurück zur Kontaktliste (Easter Egg)</label>
+          <p class="hub-note">Pustest du im offenen Chat kurz ins Mikrofon, „bläst“ du den Chat weg und landest in der Kontaktliste. Das Mikrofon lauscht nur <b>lokal</b> auf Pusten (kein Aufnehmen, nichts wird gespeichert oder gesendet) und ist nur im offenen Chat an – dein Handy zeigt dann das Mikrofon-Symbol. Standard: aus.</p>
           <p class="hub-note">Nur gegenseitig: Du siehst es bei Chatpartnern nur, wenn du es selbst einschaltest und sie es auch an haben. Es gibt nie eine Uhrzeit, nur drei Stufen. Aus = du siehst nichts und wirst nicht angezeigt.</p>
           <div class="hub-h">Dein Name (die ID bleibt gleich)</div>
           <div class="copy-row">
@@ -265,6 +267,7 @@
   </div>
   
   <div id="messages" class="messages-container"></div>
+  <div id="blowFx" aria-hidden="true" style="position:fixed;left:50%;top:42%;transform:translate(-50%,-50%);font-size:84px;opacity:0;pointer-events:none;transition:opacity .15s;z-index:50">💨</div>
   
   <div id="verCard" class="ver-card hidden"></div>
   <div id="recCard" class="ver-card rec-card hidden"></div>
@@ -970,6 +973,7 @@ function hubTiles() {
     bgRefresh();
     const rt = document.getElementById('recToggle'); if (rt) rt.checked = lsGet('sm_chat_rec') === '1';
     const st = document.getElementById('seenToggle'); if (st) st.checked = lsGet('sm_chat_lastseen') === '1';
+    const bt = document.getElementById('blowToggle'); if (bt) bt.checked = lsGet('sm_chat_blow') === '1';
     const set = (i, v) => { const e = document.getElementById(i); if (e) e.textContent = v; };
     set('tChats', Object.keys(getContacts()).length);
     set('tVer', HD.count || 0);
@@ -1670,6 +1674,7 @@ async function openChat(room, partnerCode, partnerName) {
   renderVerCard(); REC_PICK = false; renderRecCard();
 
   await renderMessages();
+  blowStart();
 
   // Versuch P2P Verbindung herzustellen
   await attemptP2PConnection(partnerCode);
@@ -1761,6 +1766,7 @@ async function sendReadinessInvite(partnerCode) {
 }
 
 function goBackToList() {
+  blowStop();
   if (P2P_ATTEMPT_TIMER) { clearInterval(P2P_ATTEMPT_TIMER); P2P_ATTEMPT_TIMER = null; }
   markSeen(CURRENT_ROOM);
   CURRENT_ROOM = null;
@@ -2058,6 +2064,70 @@ function setSeen(on) {
     .then(r => { if (!r.ok) throw 0; setMsg(on ? '✅ „Zuletzt online“ an (gegenseitig)' : '„Zuletzt online“ aus'); })
     .catch(() => setMsg('Keine Verbindung – bitte später erneut umschalten'));
 }
+
+// ── Easter Egg: Pusten = zurück zur Kontaktliste ─────────────────────────────
+// Reine lokale Auswertung des Mikrofonpegels (Rauschen mit viel Tiefton, nicht stimmhaft); nichts wird aufgenommen/gesendet.
+const BLOW = { ctx: null, stream: null, an: null, timer: null, hist: [], busy: false };
+function blowFeatures(an, ctx, td, fd) {
+  an.getFloatTimeDomainData(td); an.getFloatFrequencyData(fd);
+  let s = 0; for (let i = 0; i < td.length; i++) s += td[i] * td[i];
+  const rms = Math.sqrt(s / td.length), bw = ctx.sampleRate / an.fftSize;
+  const pw = (i) => Math.pow(10, fd[i] / 10);
+  const iLo = Math.max(1, Math.round(20 / bw)), iLow = Math.round(300 / bw), iMid = Math.round(1500 / bw), iHi = Math.min(fd.length - 1, Math.round(8000 / bw));
+  let eLow = 0, eAll = 0; for (let i = iLo; i <= iHi; i++) { const p = pw(i); eAll += p; if (i <= iLow) eLow += p; }
+  let ls = 0, am = 0, n = 0; for (let i = iLo; i <= iMid; i++) { const p = pw(i) + 1e-20; ls += Math.log(p); am += p; n++; }
+  const flat = Math.exp(ls / n) / (am / n); // 1 = rauschartig, klein = Töne/Stimme
+  return { rms, low: eAll > 0 ? eLow / eAll : 0, flat };
+}
+function blowIsBlow(f) { return f.rms > 0.05 && f.low > 0.35 && f.flat > 0.15; } // Schwellen ggf. am echten Handy nachjustieren
+function blowTick() {
+  if (!BLOW.an) return;
+  const f = blowFeatures(BLOW.an, BLOW.ctx, BLOW.td, BLOW.fd);
+  BLOW.hist.push(blowIsBlow(f)); if (BLOW.hist.length > 12) BLOW.hist.shift();
+  window.__blowDbg = f;
+  const hits = BLOW.hist.filter(Boolean).length;
+  const fx = document.getElementById('blowFx'); if (fx) fx.style.opacity = hits >= 3 ? String(Math.min(1, hits / 8)) : '0';
+  if (BLOW.hist.length >= 10 && hits >= 8) blowTrigger();
+}
+async function blowStart() {
+  if (lsGet('sm_chat_blow') !== '1' || BLOW.ctx || BLOW.busy || !CURRENT_ROOM || document.hidden) return;
+  BLOW.busy = true;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    if (!CURRENT_ROOM || lsGet('sm_chat_blow') !== '1') { stream.getTracks().forEach(t => t.stop()); return; }
+    const Ctx = window.AudioContext || window.webkitAudioContext, ctx = new Ctx();
+    if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
+    const an = ctx.createAnalyser(); an.fftSize = 2048; an.smoothingTimeConstant = 0; an.minDecibels = -120;
+    ctx.createMediaStreamSource(stream).connect(an);
+    Object.assign(BLOW, { ctx, stream, an, hist: [], td: new Float32Array(an.fftSize), fd: new Float32Array(an.frequencyBinCount) });
+    BLOW.timer = setInterval(blowTick, 50);
+  } catch (e) { /* keine Berechtigung → still, Schalter im Hub bleibt */ }
+  finally { BLOW.busy = false; }
+}
+function blowStop() {
+  clearInterval(BLOW.timer); BLOW.timer = null;
+  try { if (BLOW.stream) BLOW.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+  try { if (BLOW.ctx) BLOW.ctx.close(); } catch (e) {}
+  BLOW.ctx = BLOW.stream = BLOW.an = null; BLOW.hist = [];
+  const fx = document.getElementById('blowFx'); if (fx) fx.style.opacity = '0';
+}
+function blowTrigger() {
+  blowStop();
+  const scr = document.getElementById('chatDetailScreen'); if (!scr || !CURRENT_ROOM) return;
+  scr.classList.add('blown');
+  setTimeout(() => { goBackToList(); scr.classList.remove('blown'); }, 650);
+}
+async function setBlow(on) {
+  if (!on) { lsSet('sm_chat_blow', '0'); blowStop(); setMsg('Pusten aus'); return; }
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({ audio: true }); s.getTracks().forEach(t => t.stop());
+    lsSet('sm_chat_blow', '1'); setMsg('💨 Pusten an – im offenen Chat einfach kurz ins Mikrofon pusten');
+  } catch (e) {
+    lsSet('sm_chat_blow', '0'); const bt = document.getElementById('blowToggle'); if (bt) bt.checked = false;
+    setMsg('Mikrofon nicht erlaubt – Pusten bleibt aus');
+  }
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) blowStop(); else if (CURRENT_ROOM) blowStart(); });
 async function loadPartnerSeen(code) {
   const el = document.getElementById('hdSeen'); if (!el) return;
   el.classList.add('hidden'); el.textContent = '';

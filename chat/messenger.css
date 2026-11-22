@@ -1053,3 +1053,8 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
 @media (pointer:coarse){#messages .message{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}}
 .message.mine .qt b{color:#4a2200}
 .message.mine .qt{border-left-color:#4a2200}
+
+/* Easter Egg: Chat wegpusten */
+#chatDetailScreen.blown { animation: blowAway .65s ease-in forwards; transform-origin: 0 100%; }
+@keyframes blowAway { 0% { transform: none; opacity: 1; } 100% { transform: translateX(115vw) rotate(14deg); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #chatDetailScreen.blown { animation: none; opacity: 0; } }
