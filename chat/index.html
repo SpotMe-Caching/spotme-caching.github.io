@@ -147,7 +147,7 @@
       </div>
       <div class="hub-body">
         <section data-pane="ich">
-          <h2>🧭 Mein Messenger</h2>
+          <h2><img id="hubLogo" src="icons/spot_192.png" alt="iSee.Q" style="width:30px;height:30px;border-radius:8px;vertical-align:middle;margin-right:.45rem">Mein Messenger</h2>
           <p class="hub-sub">Alles an einem Ort – dein Profil, dein Look, deine Sicherheit.</p>
           <div class="hub-tiles">
             <div class="hub-tile"><b id="tChats">0</b><span>💬 Chats</span></div>
@@ -2083,6 +2083,31 @@ function setSeen(on) {
     .catch(() => setMsg('Keine Verbindung – bitte später erneut umschalten'));
 }
 
+// ── Easter Egg 🐉 Drachenfeuer: Logo im Hub 7× antippen ───────────────────────
+// Gefundene Eier merkt sich sm_chat_egg_<name> (Grundlage für die spätere Easter-Egg-Seite im Hub).
+function eggFound(name) { try { lsSet('sm_chat_egg_' + name, '1'); } catch (e) {} }
+function dragonFire() {
+  eggFound('dragon');
+  const logo = document.getElementById('hubLogo');
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { toastMsg('🐉 Du hast den Drachen geweckt! (Animationen sind aus)'); return; }
+  try { playMood('wow', 'in'); } catch (e) {}
+  if (logo) { logo.classList.remove('glow'); void logo.offsetWidth; logo.classList.add('glow'); setTimeout(() => logo.classList.remove('glow'), 2600); }
+  const fx = document.createElement('div'); fx.className = 'dragon-fx'; fx.setAttribute('aria-hidden', 'true');
+  let h = '';
+  for (let i = 9; i >= 1; i--) h += `<span class="df-fire" style="animation-delay:${(i * 0.085).toFixed(3)}s;font-size:${(26 + (9 - i) * 2)}px">🔥</span>`;
+  h += '<span class="df-dragon">🐉</span>';
+  fx.innerHTML = h; document.body.appendChild(fx);
+  toastMsg('🐉 Du hast den Drachen geweckt!');
+  setTimeout(() => fx.remove(), 3600);
+}
+(function initDragonEgg() {
+  let n = 0, last = 0;
+  document.addEventListener('click', (e) => {
+    if (!e.target || e.target.id !== 'hubLogo') return;
+    const now = Date.now(); n = now - last < 1200 ? n + 1 : 1; last = now;
+    if (n >= 7) { n = 0; dragonFire(); }
+  });
+})();
 // ── Easter Egg: Pusten = zurück zur Kontaktliste ─────────────────────────────
 // Reine lokale Auswertung des Mikrofonpegels (Rauschen mit viel Tiefton, nicht stimmhaft); nichts wird aufgenommen/gesendet.
 const BLOW = { ctx: null, stream: null, an: null, timer: null, hist: [], busy: false };
@@ -2132,7 +2157,7 @@ function blowStop() {
 function blowTrigger() {
   blowStop();
   const scr = document.getElementById('chatDetailScreen'); if (!scr || !CURRENT_ROOM) return;
-  scr.classList.add('blown');
+  eggFound('blow'); scr.classList.add('blown');
   setTimeout(() => { goBackToList(); scr.classList.remove('blown'); }, 650);
 }
 async function setBlow(on) {
@@ -2765,7 +2790,7 @@ function initSnailSend() {
   btn.addEventListener('pointerdown', () => { fired = false; cancel(); timer = setTimeout(() => {
     fired = true; timer = null;
     if (!document.getElementById('msgInput').value.trim()) return;
-    SNAIL_NEXT = true; try { navigator.vibrate && navigator.vibrate(30); } catch (e) {}
+    SNAIL_NEXT = true; eggFound('snail'); try { navigator.vibrate && navigator.vibrate(30); } catch (e) {}
     toastMsg('🐌 Schneckenpost unterwegs …'); sendMessage();
   }, 550); });
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => btn.addEventListener(ev, cancel));

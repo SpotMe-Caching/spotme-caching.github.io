@@ -1063,8 +1063,34 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
 .message.snail-msg { position: relative; }
 .message.snail-play { animation: snailReveal 3.4s linear backwards; animation-delay: var(--sd, 0s); }
 .message.snail-play .snail-crawl { position: absolute; bottom: -3px; left: 0; font-size: 1.35em; line-height: 1; pointer-events: none; z-index: 2;
-  scale: -1 1; animation: snailMove 3.4s linear both, snailWobble .45s ease-in-out infinite alternate; animation-delay: var(--sd, 0s), 0s; }
+  animation: snailMove 3.4s linear both, snailWobble .45s ease-in-out infinite alternate; animation-delay: var(--sd, 0s), 0s; }
 @keyframes snailReveal { from { clip-path: inset(-6px 100% -6px 0); } to { clip-path: inset(-6px -6px -6px 0); } }
-@keyframes snailMove { 0% { left: 0; transform: translateX(-100%); opacity: 1; } 93% { left: 100%; transform: translateX(-100%); opacity: 1; } 100% { left: 100%; transform: translateX(0); opacity: 0; } }
+@keyframes snailMove { 0% { left: 0; transform: translateX(-100%) scaleX(-1); opacity: 1; } 93% { left: 100%; transform: translateX(-100%) scaleX(-1); opacity: 1; } 100% { left: 100%; transform: translateX(0) scaleX(-1); opacity: 0; } }
 @keyframes snailWobble { from { rotate: -7deg; } to { rotate: 7deg; } }
 @media (prefers-reduced-motion: reduce) { .message.snail-play { animation: none; } .snail-crawl { display: none; } }
+
+/* Easter Egg: Drachenfeuer */
+#hubLogo { transition: filter .3s; }
+#hubLogo.glow { animation: logoGlow 2.6s ease-in-out; }
+@keyframes logoGlow { 0%,100% { filter: none; transform: none; } 25%,75% { filter: drop-shadow(0 0 12px #ffb347) brightness(1.4); transform: scale(1.25) rotate(8deg); } 50% { filter: drop-shadow(0 0 22px #ff7a2f) brightness(1.7); transform: scale(1.4) rotate(-8deg); } }
+.dragon-fx { position: fixed; inset: 0; pointer-events: none; z-index: 99999; overflow: hidden; }
+.dragon-fx .df-dragon, .dragon-fx .df-fire { position: absolute; left: 0; top: 30%; line-height: 1; will-change: transform, opacity; animation: dragonFly 2.8s cubic-bezier(.4,.1,.6,.9) both; }
+.dragon-fx .df-dragon { font-size: 92px; filter: drop-shadow(0 0 14px rgba(255,140,40,.9)); animation-name: dragonFlyD; }
+.dragon-fx .df-fire { opacity: .9; margin-left: -34px; }
+@keyframes dragonFly {
+  0%   { transform: translate(-130px, 40px) rotate(-8deg); opacity: 0; }
+  8%   { opacity: 1; }
+  30%  { transform: translate(30vw, -60px) rotate(-14deg); }
+  55%  { transform: translate(55vw, 60px) rotate(6deg); }
+  80%  { transform: translate(85vw, -40px) rotate(-10deg); opacity: 1; }
+  100% { transform: translate(115vw, 10px) rotate(0deg); opacity: 0; }
+}
+@keyframes dragonFlyD {
+  0%   { transform: translate(-130px, 40px) rotate(-8deg) scaleX(-1); opacity: 0; }
+  8%   { opacity: 1; }
+  30%  { transform: translate(30vw, -60px) rotate(-14deg) scaleX(-1); }
+  55%  { transform: translate(55vw, 60px) rotate(6deg) scaleX(-1); }
+  80%  { transform: translate(85vw, -40px) rotate(-10deg) scaleX(-1); opacity: 1; }
+  100% { transform: translate(115vw, 10px) rotate(0deg) scaleX(-1); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .dragon-fx { display: none; } #hubLogo.glow { animation: none; } }
