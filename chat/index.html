@@ -982,7 +982,15 @@ function setMsg(t) { const el = document.getElementById('setMsg'); el.textConten
 
 
 // ── @HANDLE (Kurzlink /chat/?Name) ─────────────────────────────────────────
-let HD = { count: 0, min: 3, handle: null };
+let HD = { count: 0, min: 3, handle: null }, HD_OK = false;
+// Eigene Hub-Daten (Handle, Freigaben) nachladen, falls der Hub in dieser Sitzung noch nicht offen war
+async function ensureHD() {
+  if (HD_OK) return;
+  try {
+    const r = await tfetch(`${API}/messenger/verified/${CODE}?token=${encodeURIComponent(TOKEN)}`, {}, 10000);
+    if (r.ok) { HD = await r.json(); HD_OK = true; }
+  } catch (e) {}
+}
 const HANDLE_RE = /^[A-Za-z0-9][A-Za-z0-9_]{2,19}$/; // auch nur Zahlen (wie alte ICQ-Nummern)
 const RESERVED_Q = ['add', 'neu', 'info', 'h', 'ref'];
 function handleFromSearch(search) {
@@ -994,7 +1002,7 @@ async function loadHandleInfo() {
   await syncVerified(true);
   try {
     const r = await tfetch(`${API}/messenger/verified/${CODE}?token=${encodeURIComponent(TOKEN)}`, {}, 10000);
-    if (r.ok) { HD = await r.json(); if (typeof HD.rec === 'boolean') lsSet('sm_chat_rec', HD.rec ? '1' : '0'); if (typeof HD.seen === 'boolean') lsSet('sm_chat_lastseen', HD.seen ? '1' : '0'); }
+    if (r.ok) { HD = await r.json(); HD_OK = true; if (typeof HD.rec === 'boolean') lsSet('sm_chat_rec', HD.rec ? '1' : '0'); if (typeof HD.seen === 'boolean') lsSet('sm_chat_lastseen', HD.seen ? '1' : '0'); }
   } catch (e) {}
   renderHandleInfo();
 }
@@ -2126,6 +2134,7 @@ async function recLink() {
   delete REC_CACHE[PARTNER_CODE];
   const f = await recFlag(PARTNER_CODE);
   if (!f.pub) { setMsg(escapeHtml(PARTNER_NAME || 'Dieser Kontakt') + ' hat „Öffentlich per Link empfehlbar" nicht erlaubt.'); return; }
+  await ensureHD();
   const von = HD && HD.handle ? '?von=' + encodeURIComponent(HD.handle) : '';
   const url = `${API.replace(/\/api\/?$/, '')}/s/${m.h}${von}`;
   const text = f.pubtext || ''; // mit Text: fertiger Post; ohne: eigener Text wird beim Teilen dazugeschrieben
