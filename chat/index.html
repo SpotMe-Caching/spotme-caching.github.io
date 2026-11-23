@@ -297,8 +297,10 @@
     <button id="moodBtn" class="img-btn" onclick="toggleMoodTray()" aria-label="Stimmung" title="Stimmung der Sprechblase">💬</button>
     <button id="imgBtn" class="img-btn" onclick="pickImage()" aria-label="Bild senden" title="Bild senden">📷</button>
     <input type="file" id="imgFile" accept="image/*" class="hidden" onchange="onImagePicked(this)">
+    <button id="micBtn" class="img-btn" onclick="voxStart()" aria-label="Sprachnachricht aufnehmen" title="Sprachnachricht aufnehmen">🎤</button>
     <textarea id="msgInput" placeholder="Nachricht..." rows="1"></textarea>
     <button onclick="sendMessage()">➤</button>
+    <div id="voxBar" class="vox-bar-rec hidden"><span class="vox-dot"></span><span id="voxTime">0:00</span><span class="vox-hint">Aufnahme läuft</span><button class="vox-x" onclick="voxCancel()" aria-label="Verwerfen">🗑</button><button class="vox-ok" onclick="voxStop(true)" aria-label="Senden">➤</button></div>
   </div>
 </div>
 
@@ -690,6 +692,7 @@ function refreshImageState() {
   const on = canSendImage();
   const mm = metaOf(PARTNER_CODE);
   btn.classList.toggle('on', on);
+  const mic = document.getElementById('micBtn'); if (mic) mic.classList.toggle('on', on);
   hint.className = 'img-hint ' + (on ? 'on' : 'off');
   if (on) { hint.textContent = '📷 Bilder an deinen verifizierten Kontakt – verschlüsselt, auch wenn er offline ist'; return; }
   hint.textContent = mm.gone ? '📷 Konto gelöscht'
@@ -776,12 +779,20 @@ async function encryptImage(partner, dataUrl) {
   const out = new Uint8Array(12 + ct.length); out.set(iv, 0); out.set(ct, 12);
   return out;
 }
-async function decryptImage(partner, blob) {
+async function decryptBytes(partner, blob) {
   const go = async (refetch) => {
     const key = await sharedKeyWith(partner, refetch);
-    return bytesToDataUrl(new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: blob.slice(0, 12) }, key, blob.slice(12))));
+    return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: blob.slice(0, 12) }, key, blob.slice(12)));
   };
   try { return await go(false); } catch (e) { return await go(true); } // Schlüssel evtl. neu (Gerätewechsel des Kontakts)
+}
+async function decryptImage(partner, blob) { return bytesToDataUrl(await decryptBytes(partner, blob)); }
+async function encryptBytes(partner, bytes) {
+  const key = await sharedKeyWith(partner);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, bytes));
+  const out = new Uint8Array(12 + ct.length); out.set(iv, 0); out.set(ct, 12);
+  return out;
 }
 
 let PICKED_IMG = null;
@@ -864,12 +875,117 @@ async function sendPickedImage() {
   }
 }
 
+// ── SPRACHNACHRICHTEN (🎤): Aufnahme per Tipp, ≤60 s, über dieselbe verschlüsselte Server-Route wie Bilder, nur an Verifizierte ──
+const VOX_MARK = '🎤VOX|', VOX_MAX_S = 60;
+const VOX_TYPES = [['audio/mp4;codecs=mp4a.40.2', 1], ['audio/mp4', 1], ['audio/webm;codecs=opus', 2], ['audio/webm', 2], ['audio/ogg;codecs=opus', 3]];
+const VOX_MIME = { 1: 'audio/mp4', 2: 'audio/webm', 3: 'audio/ogg' };
+const VOX = { rec: null, stream: null, chunks: [], t0: 0, timer: null, type: 1, busy: false, send: false, room: null, partner: null };
+function voxToDataUrl(bytes) {
+  const mime = VOX_MIME[bytes[0]] || 'audio/webm', a = bytes.subarray(1); let s = '';
+  for (let i = 0; i < a.length; i += 8192) s += String.fromCharCode.apply(null, a.subarray(i, i + 8192));
+  return 'data:' + mime + ';base64,' + btoa(s);
+}
+const voxFmt = (sec) => { sec = Math.max(0, Math.round(sec || 0)); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); };
+function voxPick() { if (!window.MediaRecorder) return null; for (const [m, t] of VOX_TYPES) { try { if (MediaRecorder.isTypeSupported(m)) return { mime: m, type: t }; } catch (e) {} } return null; }
+async function voxStart() {
+  if (VOX.rec || VOX.busy) return;
+  if (!canSendImage()) { toastMsg('🎤 Sprachnachrichten gehen nur an verifizierte Kontakte (🔏 oben im Chat)'); return; }
+  const pick = voxPick(); if (!pick || !navigator.mediaDevices) { toastMsg('🎤 Dieses Gerät kann keine Sprachnachrichten aufnehmen'); return; }
+  VOX.busy = true;
+  try {
+    try { blowStop(); } catch (e) {}
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    const rec = new MediaRecorder(stream, { mimeType: pick.mime, audioBitsPerSecond: 24000 });
+    VOX.chunks = []; rec.ondataavailable = (e) => { if (e.data && e.data.size) VOX.chunks.push(e.data); };
+    rec.onstop = voxFinish;
+    Object.assign(VOX, { rec, stream, type: pick.type, room: CURRENT_ROOM, partner: PARTNER_CODE, t0: Date.now(), send: false });
+    rec.start(1000);
+    document.getElementById('voxBar').classList.remove('hidden'); document.getElementById('voxTime').textContent = '0:00';
+    VOX.timer = setInterval(() => {
+      const el = (Date.now() - VOX.t0) / 1000; document.getElementById('voxTime').textContent = voxFmt(el);
+      if (el >= VOX_MAX_S) voxStop(true);
+    }, 200);
+  } catch (e) { toastMsg('🎤 Kein Zugriff auf das Mikrofon'); voxCleanup(); }
+  finally { VOX.busy = false; }
+}
+function voxStop(send) {
+  if (!VOX.rec) return;
+  VOX.send = !!send; clearInterval(VOX.timer);
+  try { VOX.rec.stop(); } catch (e) { voxCleanup(); }
+}
+function voxCancel() { voxStop(false); }
+function voxCleanup() {
+  clearInterval(VOX.timer);
+  try { if (VOX.stream) VOX.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+  VOX.rec = null; VOX.stream = null;
+  const bar = document.getElementById('voxBar'); if (bar) bar.classList.add('hidden');
+  if (CURRENT_ROOM) { try { blowStart(); } catch (e) {} }
+}
+async function voxFinish() {
+  const { send, room, partner, type, chunks } = { send: VOX.send, room: VOX.room, partner: VOX.partner, type: VOX.type, chunks: VOX.chunks };
+  const dur = Math.min(VOX_MAX_S, Math.round((Date.now() - VOX.t0) / 1000));
+  voxCleanup();
+  if (!send || !room || !partner) return;
+  if (dur < 1) { toastMsg('🎤 Zu kurz'); return; }
+  try {
+    const bytes = new Uint8Array(await new Blob(chunks).arrayBuffer());
+    if (!bytes.length) throw new Error('net');
+    if (bytes.length + 1 > 420000) throw new Error('size');
+    const payload = new Uint8Array(bytes.length + 1); payload[0] = type; payload.set(bytes, 1);
+    toastMsg('🎤 Sende …');
+    const ts = Date.now();
+    const up = await tfetch(`${API}/messenger/image/${partner}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', ...imgHdr() }, body: await encryptBytes(partner, payload) }, 60000);
+    if (!up.ok) { const e = await up.json().catch(() => ({})); throw new Error(e.code || 'net'); }
+    const { id } = await up.json();
+    const res = await tfetch(`${API}/message`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recipient: partner, sender_code: CODE, sender_name: PROFILE?.name || CODE, message: VOX_MARK + id + '|' + dur + '|' + ts, spot_type: 'messenger_chat', token: TOKEN }) }, 30000);
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      fetch(`${API}/messenger/image/${id}`, { method: 'DELETE', headers: imgHdr() }).catch(() => {});
+      if (e.code === 'closed') setMeta(partner, { paused: true });
+      throw new Error(e.code || 'net');
+    }
+    const d = await res.json().catch(() => ({}));
+    await imgPut(room, id, voxToDataUrl(payload));
+    const msgs = await loadRoomMessages(room);
+    msgs.push({ from: CODE, fromName: PROFILE?.name || CODE, kind: 'voice', iid: id, dur, text: '🎤 Sprachnachricht', ts, status: d.delivered ? 'delivered' : 'sent' });
+    await saveRoomMessages(room, msgs);
+    if (room === CURRENT_ROOM) await renderMessages(true);
+    renderChatList();
+  } catch (e) { toastMsg('🎤 ' + (IMG_ERR[e.message] || IMG_ERR.net).replace('Bild nicht gesendet', 'Nachricht nicht gesendet').replace(/Bilder|Bild/g, 'Sprachnachricht')); }
+}
+function voxHtml(m) {
+  return `<div class="vox" data-iid="${escapeHtml(m.iid)}" data-dur="${+m.dur || 0}"><button class="vox-play" type="button" aria-label="Abspielen">▶</button><div class="vox-track"><i></i></div><span class="vox-t">${voxFmt(m.dur)}</span></div>`;
+}
+async function hydrateVoice(container) {
+  for (const el of container.querySelectorAll('.vox:not([data-done])')) {
+    el.dataset.done = '1';
+    const url = await imgGet(container.dataset.room, el.dataset.iid);
+    if (url) el._url = url; else el.replaceWith(Object.assign(document.createElement('span'), { textContent: '🎤 Sprachnachricht nicht mehr vorhanden', className: 'img-gone' }));
+  }
+}
+let VOXA = null, VOXEL = null;
+function voxReset(el) { if (!el) return; const b = el.querySelector('.vox-play'), i = el.querySelector('.vox-track i'); if (b) b.textContent = '▶'; if (i) i.style.width = '0'; }
+document.addEventListener('click', (e) => {
+  const b = e.target.closest && e.target.closest('.vox-play'); if (!b) return;
+  const el = b.closest('.vox'); if (!el || !el._url) return;
+  if (VOXA && VOXEL === el) { if (VOXA.paused) { VOXA.play().catch(() => {}); b.textContent = '⏸'; } else { VOXA.pause(); b.textContent = '▶'; } return; }
+  if (VOXA) { try { VOXA.pause(); } catch (e2) {} voxReset(VOXEL); }
+  const a = new Audio(el._url); VOXA = a; VOXEL = el;
+  const dur = +el.dataset.dur || 0, bar = el.querySelector('.vox-track i');
+  a.ontimeupdate = () => { const d = (isFinite(a.duration) && a.duration > 0) ? a.duration : dur; if (d) bar.style.width = Math.min(100, a.currentTime / d * 100) + '%'; };
+  a.onended = () => { voxReset(el); VOXA = null; VOXEL = null; };
+  a.onerror = () => { voxReset(el); VOXA = null; VOXEL = null; toastMsg('🎤 Konnte nicht abgespielt werden'); };
+  a.play().then(() => { b.textContent = '⏸'; }).catch(() => { voxReset(el); toastMsg('🎤 Konnte nicht abgespielt werden'); });
+});
+document.addEventListener('visibilitychange', () => { if (document.hidden && VOX.rec) voxCancel(); });
+
 // Bild vom Server abholen, entschlüsseln und lokal speichern. → 'ok' | 'gone' | 'retry'
 const IMG_RETRY = new Map();
 async function receiveServerImage(m, room) {
-  const mt = String(m.message).match(/^🖼IMG\|([a-f0-9]{32})\|\d+$/);
+  const mt = String(m.message).match(/^(?:🖼IMG\|([a-f0-9]{32})\|\d+|🎤VOX\|([a-f0-9]{32})\|(\d+)\|\d+)$/);
   if (!mt) return 'gone';
-  const id = mt[1];
+  const id = mt[1] || mt[2], vox = !!mt[2], vdur = Math.min(60, +mt[3] || 0);
   const msgs = await loadRoomMessages(room);
   if (msgs.some(e => e.sid === m.id || e.iid === id)) return 'ok';
   let status = 'gone', stored = false;
@@ -878,7 +994,7 @@ async function receiveServerImage(m, room) {
     if (r.status === 404) status = 'gone';
     else if (!r.ok) status = 'retry';
     else {
-      const dataUrl = await decryptImage(m.sender_code, new Uint8Array(await r.arrayBuffer()));
+      const dataUrl = vox ? voxToDataUrl(await decryptBytes(m.sender_code, new Uint8Array(await r.arrayBuffer()))) : await decryptImage(m.sender_code, new Uint8Array(await r.arrayBuffer()));
       await imgPut(room, id, dataUrl); stored = true; status = 'ok';
       fetch(`${API}/messenger/image/${id}`, { method: 'DELETE', headers: imgHdr() }).catch(() => {});
     }
@@ -890,7 +1006,8 @@ async function receiveServerImage(m, room) {
   }
   if (!stored && status !== 'gone') return status;
   const cur = await loadRoomMessages(room);
-  cur.push({ from: m.sender_code, fromName: m.sender_name, kind: 'image', iid: id, sid: m.id, text: '📷 Bild', ts: new Date(m.created_at).getTime() });
+  cur.push(vox ? { from: m.sender_code, fromName: m.sender_name, kind: 'voice', iid: id, dur: vdur, sid: m.id, text: '🎤 Sprachnachricht', ts: new Date(m.created_at).getTime() }
+    : { from: m.sender_code, fromName: m.sender_name, kind: 'image', iid: id, sid: m.id, text: '📷 Bild', ts: new Date(m.created_at).getTime() });
   await saveRoomMessages(room, cur);
   return 'ok';
 }
@@ -1770,6 +1887,7 @@ async function sendReadinessInvite(partnerCode) {
 }
 
 function goBackToList() {
+  try { voxCancel(); } catch (e) {}
   blowStop(); shakeStop();
   if (P2P_ATTEMPT_TIMER) { clearInterval(P2P_ATTEMPT_TIMER); P2P_ATTEMPT_TIMER = null; }
   markSeen(CURRENT_ROOM);
@@ -1803,10 +1921,11 @@ async function renderMessages(appendOnly = false) {
 
   const renderMsg = (m) => {
     const isMine = m.from === CODE;
-    const qq = m.kind === 'image' ? null : parseQuote(m.text);
+    const isMed = m.kind === 'image' || m.kind === 'voice';
+    const qq = isMed ? null : parseQuote(m.text);
     const txt0 = qq ? qq.body : m.text;
-    const sn = m.kind !== 'image' && SNAIL_RE.test(txt0), txt = sn ? txt0.replace(SNAIL_RE, '') : txt0;
-    const wfx0 = m.kind !== 'image' ? wordFxOf(txt) : null; if (wfx0 && wordFxPlay(m)) FX_PENDING.push(wfx0);
+    const sn = !isMed && SNAIL_RE.test(txt0), txt = sn ? txt0.replace(SNAIL_RE, '') : txt0;
+    const wfx0 = !isMed ? wordFxOf(txt) : null; if (wfx0 && wordFxPlay(m)) FX_PENDING.push(wfx0);
     const snEl0 = sn ? snailPlay(m) : null, snPlay = snEl0 != null, snSty = snPlay ? `--sd:-${snEl0.toFixed(2)}s` : '', snCls = sn ? ' snail-msg' + (snPlay ? ' snail-play' : '') : '', snEl = snPlay ? '<span class="snail-crawl" aria-hidden="true">🐌</span>' : '';
     const qHtml = qq ? quoteHtml(m, qq, msgs) : '';
     // Nur "gesendet" (✓) vs. "zugestellt" (✓✓) – bewusst KEIN Lesestatus
@@ -1817,17 +1936,19 @@ async function renderMessages(appendOnly = false) {
           : '<span class="msg-status sent" title="Gesendet">✓</span>')
       : '';
     const time = new Date(m.ts).toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'}) + (sn ? ' 🐌' : '');
-    const body = m.kind === 'image'
+    const body = m.kind === 'voice'
+      ? voxHtml(m)
+      : m.kind === 'image'
       ? `<img class="chat-img ${isMine ? '' : 'blur'}" data-iid="${escapeHtml(m.iid)}" alt="Bild">${isMine ? '' : '<div class="img-tap">Tippen zum Anzeigen</div>'}`
       : qHtml + escapeHtml(txt);
-    if (m.kind !== 'image' && comicOn()) {
+    if (!isMed && comicOn()) {
       const pm = parseMood(txt);
       const BADGES = { question: '?', shout: '!', love: '♥', whisper: '…', scare: '!?', anger: '#@!', laugh: 'HA', sad: '💧', tired: 'Zzz', idea: '💡', cool: '😎' };
       const badge = BADGES[pm.mood] || '';
       const tilt = ((m.ts % 5) - 2) * 0.35;
       return `<div class="message ${isMine ? 'mine' : 'other'} cm cm-${pm.mood}${snCls}" data-ts="${m.ts}" style="--tilt:${tilt}deg;${snSty}">${badge ? `<span class="cm-badge${/^[?!♥…]$/.test(badge) || /\p{Extended_Pictographic}/u.test(badge) ? '' : ' w'}">${badge}</span>` : ''}${qHtml}<span class="cm-txt">${escapeHtml(pm.text)}</span><div class="msg-time">${time}${statusTick}</div>${snEl}</div>`;
     }
-    return `<div class="message ${isMine ? 'mine' : 'other'}${m.kind === 'image' ? ' has-img' : ''}${snCls}" data-ts="${m.ts}"${snSty ? ` style="${snSty}"` : ''}>${body}<div class="msg-time">${time}${statusTick}</div>${snEl}</div>`;
+    return `<div class="message ${isMine ? 'mine' : 'other'}${m.kind === 'image' ? ' has-img' : m.kind === 'voice' ? ' has-vox' : ''}${snCls}" data-ts="${m.ts}"${snSty ? ` style="${snSty}"` : ''}>${body}<div class="msg-time">${time}${statusTick}</div>${snEl}</div>`;
   };
 
   // FIX: Bei jeder eingehenden Nachricht wurde vorher die komplette Liste
@@ -1846,6 +1967,7 @@ async function renderMessages(appendOnly = false) {
   if (FX_PENDING.length) { const w = FX_PENDING[FX_PENDING.length - 1]; FX_PENDING = []; setTimeout(() => wordFx(w), 250); }
   container.scrollTop = container.scrollHeight;
   hydrateImages(container).then(() => { container.scrollTop = container.scrollHeight; });
+  hydrateVoice(container);
 }
 
 
@@ -2674,12 +2796,12 @@ async function pollOnce() {
             // Von mir beendete Kontakte: nichts annehmen
             if (getClosedByMe()[m.sender_code]) continue;
             // Bild über den Server (nur von verifizierten Kontakten)
-            if (String(m.message).startsWith(IMG_MARK)) {
+            if (String(m.message).startsWith(IMG_MARK) || String(m.message).startsWith(VOX_MARK)) {
               if (!metaOf(m.sender_code).ver) { continue; }
               setMeta(m.sender_code, { heard: true, paused: false, out: 0 });
               const rr = await receiveServerImage(m, room);
               if (rr === 'retry') { retryIds.add(m.id); continue; }
-              listNeedsUpdate = true; sndText = '📷 Bild';
+              listNeedsUpdate = true; sndText = String(m.message).startsWith(VOX_MARK) ? '🎤 Sprachnachricht' : '📷 Bild';
               if (room === CURRENT_ROOM) { markSeen(room); await renderMessages(true); renderedAny = true; applyChatState(); }
               continue;
             }
@@ -2850,6 +2972,7 @@ function stripQuoteText(text) { const q = parseQuote(text); return q ? q.body : 
 function quoteExcerpt(m) {
   if (!m) return '';
   if (m.kind === 'image') return '📷 Bild';
+  if (m.kind === 'voice') return '🎤 Sprachnachricht';
   return parseMood(stripQuoteText(m.text)).text.replace(/\s+/g, ' ').trim().slice(0, 80);
 }
 function findQuoted(msgs, m, q) {

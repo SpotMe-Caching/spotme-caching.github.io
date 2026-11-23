@@ -1149,3 +1149,21 @@ body { background: var(--bg, #080b10); color: var(--text, #dce8f0); font-family:
 @media (prefers-reduced-motion: reduce) { .sg-ov, .sg-line, .sg-star { animation: none } }
 
 .sg-share { margin: .8rem auto .2rem; display: block; background: linear-gradient(135deg,#ffb347,#ff7a59); color: #1a1020; border: 0; border-radius: 999px; padding: .6rem 1.2rem; font-weight: 700; font-size: .95rem; }
+
+/* ── Sprachnachrichten ── */
+.input-bar { position: relative; }
+.vox-bar-rec { position: absolute; inset: 0; display: flex; align-items: center; gap: .7rem; padding: 0 1rem; background: #0f1218; z-index: 5; }
+.vox-bar-rec.hidden { display: none; }
+.vox-dot { width: 12px; height: 12px; border-radius: 50%; background: #ef4444; animation: voxPulse 1s ease-in-out infinite; }
+#voxTime { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 3ch; }
+.vox-hint { flex: 1; font-size: .8rem; opacity: .6; }
+.vox-x, .vox-ok { width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--bord2, rgba(255,255,255,.15)); background: var(--card, #111820); color: var(--text, #dce8f0); font-size: 1.05rem; }
+.vox-ok { background: linear-gradient(135deg, #ffb347, #ff7a59); border: 0; color: #1a1020; }
+@keyframes voxPulse { 0%, 100% { opacity: 1; transform: scale(1) } 50% { opacity: .35; transform: scale(.8) } }
+@media (prefers-reduced-motion: reduce) { .vox-dot { animation: none } }
+.message.has-vox { min-width: 220px; }
+.vox { display: flex; align-items: center; gap: .6rem; }
+.vox-play { width: 40px; height: 40px; flex-shrink: 0; border-radius: 50%; border: 0; background: rgba(0,0,0,.2); color: inherit; font-size: 1rem; }
+.vox-track { flex: 1; height: 6px; border-radius: 3px; background: rgba(0,0,0,.18); overflow: hidden; }
+.vox-track i { display: block; height: 100%; width: 0; background: currentColor; opacity: .75; }
+.vox-t { font-size: .75rem; opacity: .75; font-variant-numeric: tabular-nums; }
