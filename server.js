@@ -820,6 +820,7 @@ setInterval(async () => {
 // ---------- Antispam ----------
 // Antwort/Zitat: erste Zeile "↩ <Auszug> ⟨m|o⟩" (m = vom Absender, o = vom Empfänger), danach die eigentliche Nachricht.
 // Auszug (max. 80) und Text werden getrennt begrenzt, damit ein Zitat den Platz für die Antwort nicht auffrisst.
+// Sprachnachricht nutzt dieselbe verschlüsselte Ablage wie Bilder: Chat-Nachricht "🎤VOX|<id>|<sekunden>|<ts>" (Marker unten als Literal, damit die Test-Ausschnitte ohne Konstante laufen)
 const MSGR_IMG_MARK = "🖼IMG|"; // Chat-Nachricht mit Verweis auf ein Bild auf dem Server: 🖼IMG|<id>|<ts>
 const QUOTE_RE = /^↩ ([^\n]{0,100}?) ⟨([mo])⟩\n([\s\S]*)$/;
 function sanitizeCore(text, max) {
@@ -2341,7 +2342,9 @@ app.post("/api/message", async (req, res) => {
             ? `${String(sender_name || sender_code).slice(0, 50)}: 🔏 Verifizierung`
             : clean.startsWith(MSGR_IMG_MARK)
               ? `${String(sender_name || sender_code).slice(0, 50)}: 📷 Bild`
-              : `${String(sender_name || sender_code).slice(0, 50)}: ${stripQuote(clean).slice(0, 80)}`,
+              : clean.startsWith("🎤VOX|")
+                ? `${String(sender_name || sender_code).slice(0, 50)}: 🎤 Sprachnachricht`
+                : `${String(sender_name || sender_code).slice(0, 50)}: ${stripQuote(clean).slice(0, 80)}`,
           isMsgCode(sender_code) ? "/chat/" : "/",
           "chat",
           `chat-${sender_code}`,
@@ -2457,7 +2460,7 @@ app.get("/api/messenger/wait/:code", async (req, res) => {
       let nm = r.sender_code;
       try { nm = decrypt(r.sender_name); } catch {}
       return { id: r.id, from: r.sender_code, name: nm,
-        text: txt.startsWith("🔏") ? "🔏 Verifizierung" : txt.startsWith(MSGR_IMG_MARK) ? "📷 Bild" : stripQuote(txt).slice(0, 80), ctrl: txt.startsWith("🔏") };
+        text: txt.startsWith("🔏") ? "🔏 Verifizierung" : txt.startsWith(MSGR_IMG_MARK) ? "📷 Bild" : txt.startsWith("🎤VOX|") ? "🎤 Sprachnachricht" : stripQuote(txt).slice(0, 80), ctrl: txt.startsWith("🔏") };
     });
   };
   try {
