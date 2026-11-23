@@ -30,10 +30,10 @@
   ],
   "shortcuts": [
     {
-      "name": "Support",
-      "short_name": "Support",
-      "description": "Verbinde Dich mit dem Support",
-      "url": "https://spotme-caching.github.io/chat/?dragonschain",
+      "name": "Sterne",
+      "short_name": "Sterne",
+      "description": "Sterne sammeln",
+      "url": "https://spotme-caching.github.io/chat/sterne.html",
       "icons": [
         {
           "src": "https://spotme-caching.github.io/chat/icons/icon-192x192.png",
