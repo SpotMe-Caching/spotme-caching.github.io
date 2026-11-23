@@ -2244,15 +2244,15 @@ function blowFeatures(an, ctx, td, fd) {
   const flat = Math.exp(ls / n) / (am / n); // 1 = rauschartig, klein = Töne/Stimme
   return { rms, low: eAll > 0 ? eLow / eAll : 0, flat };
 }
-function blowIsBlow(f) { return f.rms > 0.05 && f.low > 0.35 && f.flat > 0.15; } // Schwellen ggf. am echten Handy nachjustieren
+function blowIsBlow(f) { return f.rms > 0.025 && f.low > 0.3 && f.flat > 0.12; } // Schwellen ggf. am echten Handy nachjustieren
 function blowTick() {
   if (!BLOW.an) return;
   const f = blowFeatures(BLOW.an, BLOW.ctx, BLOW.td, BLOW.fd);
   BLOW.hist.push(blowIsBlow(f)); if (BLOW.hist.length > 12) BLOW.hist.shift();
   window.__blowDbg = f;
   const hits = BLOW.hist.filter(Boolean).length;
-  const fx = document.getElementById('blowFx'); if (fx) fx.style.opacity = hits >= 3 ? String(Math.min(1, hits / 8)) : '0';
-  if (BLOW.hist.length >= 10 && hits >= 8) blowTrigger();
+  const fx = document.getElementById('blowFx'); if (fx) fx.style.opacity = hits >= 2 ? String(Math.min(1, hits / 6)) : '0';
+  if (BLOW.hist.length >= 10 && hits >= 6) blowTrigger();
 }
 async function blowStart() {
   if (lsGet('sm_chat_blow') !== '1' || BLOW.ctx || BLOW.busy || !CURRENT_ROOM || document.hidden) return;
