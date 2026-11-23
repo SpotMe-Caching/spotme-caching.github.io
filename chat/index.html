@@ -556,7 +556,7 @@ function startApp() {
   initPushNotifications();
   renderChatList();
   pingVisit();
-  syncVerified(false);
+  { const need = lsGet('sm_chat_vsync_v') !== 'v66'; syncVerified(need).then(ok => { if (ok && need) lsSet('sm_chat_vsync_v', 'v66'); }); }
   bgSync();
   devStart();
   goneCheck();
@@ -723,15 +723,17 @@ async function publishPub() {
   if (!CODE || !TOKEN || !window.crypto || !crypto.subtle) return;
   try {
     const k = await myEcdh(), pub = JSON.stringify(k.pub), fp = CODE + '|' + pub;
-    if (lsGet(PUBPUB_KEY) === fp) return;
+    const lastPub = Number(lsGet('sm_chat_pubpub_ts') || 0);
+    if (lsGet(PUBPUB_KEY) === fp && Date.now() - lastPub < 24 * 3600 * 1000) return; // 1×/Tag erneut melden: heilt verlorene Server-Einträge
     const r = await tfetch(`${API}/messenger/pubkey`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...imgHdr() }, body: JSON.stringify({ pub }) });
-    if (r.ok) lsSet(PUBPUB_KEY, fp);
+    if (r.ok) { lsSet(PUBPUB_KEY, fp); lsSet('sm_chat_pubpub_ts', String(Date.now())); }
   } catch (e) {}
 }
 async function sharedKeyWith(partner, refetch) {
   let pub = refetch ? null : PARTNER_KEYS.get(partner);
   if (!pub) {
-    const r = await tfetch(`${API}/messenger/pubkey/${partner}`, { headers: imgHdr() });
+    let r = await tfetch(`${API}/messenger/pubkey/${partner}`, { headers: imgHdr() });
+    if (r.status === 403) { await syncVerified(true); r = await tfetch(`${API}/messenger/pubkey/${partner}`, { headers: imgHdr() }); } // Server kennt die Verifizierung evtl. noch nicht (ältere Profile) → melden, nochmal versuchen
     if (r.status === 404) throw new Error('nokey');
     if (r.status === 403) throw new Error('unverified');
     if (!r.ok) throw new Error('net');
@@ -773,7 +775,7 @@ async function fillSafety() {
 function dataUrlToBytes(u) { const b = atob(u.slice(u.indexOf(',') + 1)); const a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
 function bytesToDataUrl(a) { let s = ''; for (let i = 0; i < a.length; i += 8192) s += String.fromCharCode.apply(null, a.subarray(i, i + 8192)); return 'data:image/jpeg;base64,' + btoa(s); }
 async function encryptImage(partner, dataUrl) {
-  const key = await sharedKeyWith(partner);
+  const key = await sharedKeyWith(partner, true); // beim Senden immer frischen Schlüssel des Kontakts holen (nie veralteten Zwischenspeicher)
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, dataUrlToBytes(dataUrl)));
   const out = new Uint8Array(12 + ct.length); out.set(iv, 0); out.set(ct, 12);
@@ -788,7 +790,7 @@ async function decryptBytes(partner, blob) {
 }
 async function decryptImage(partner, blob) { return bytesToDataUrl(await decryptBytes(partner, blob)); }
 async function encryptBytes(partner, bytes) {
-  const key = await sharedKeyWith(partner);
+  const key = await sharedKeyWith(partner, true); // beim Senden immer frischen Schlüssel des Kontakts holen (nie veralteten Zwischenspeicher)
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, bytes));
   const out = new Uint8Array(12 + ct.length); out.set(iv, 0); out.set(ct, 12);
@@ -954,14 +956,16 @@ async function voxFinish() {
     renderChatList();
   } catch (e) { toastMsg('🎤 ' + (IMG_ERR[e.message] || IMG_ERR.net).replace('Bild nicht gesendet', 'Nachricht nicht gesendet').replace(/Bilder|Bild/g, 'Sprachnachricht')); }
 }
+const MEDIA_WHY = { local: 'lokal nicht gespeichert', '404': 'war auf dem Server nicht mehr da', key: 'Schlüssel passt nicht – beide Chat neu öffnen/verifizieren', nokey: 'Schlüssel des Absenders fehlt', unverified: 'nicht verifiziert', net: 'Netzfehler beim Abholen' };
+const whyText = (e) => e ? ' (' + (MEDIA_WHY[e] || (String(e).startsWith('net:') ? 'Netzfehler ' + String(e).slice(4) : String(e).startsWith('http') ? 'Serverfehler ' + String(e).slice(4) : e)) + ')' : '';
 function voxHtml(m) {
-  return `<div class="vox" data-iid="${escapeHtml(m.iid)}" data-dur="${+m.dur || 0}"><button class="vox-play" type="button" aria-label="Abspielen">▶</button><div class="vox-track"><i></i></div><span class="vox-t">${voxFmt(m.dur)}</span></div>`;
+  return `<div class="vox" data-err="${escapeHtml(m.err || '')}" data-iid="${escapeHtml(m.iid)}" data-dur="${+m.dur || 0}"><button class="vox-play" type="button" aria-label="Abspielen">▶</button><div class="vox-track"><i></i></div><span class="vox-t">${voxFmt(m.dur)}</span></div>`;
 }
 async function hydrateVoice(container) {
   for (const el of container.querySelectorAll('.vox:not([data-done])')) {
     el.dataset.done = '1';
     const url = await imgGet(container.dataset.room, el.dataset.iid);
-    if (url) el._url = url; else el.replaceWith(Object.assign(document.createElement('span'), { textContent: '🎤 Sprachnachricht nicht mehr vorhanden', className: 'img-gone' }));
+    if (url) el._url = url; else el.replaceWith(Object.assign(document.createElement('span'), { textContent: '🎤 Sprachnachricht nicht angekommen' + whyText(el.dataset.err || 'local'), className: 'img-gone' }));
   }
 }
 let VOXA = null, VOXEL = null;
@@ -982,32 +986,39 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && VOX
 
 // Bild vom Server abholen, entschlüsseln und lokal speichern. → 'ok' | 'gone' | 'retry'
 const IMG_RETRY = new Map();
+const MEDIA_INFLIGHT = new Set();
+// Poll und Long-Poll können dieselbe Nachricht gleichzeitig bearbeiten: zweiter Lauf fände den Blob schon gelöscht (404) und würde einen Platzhalter anlegen
 async function receiveServerImage(m, room) {
+  if (MEDIA_INFLIGHT.has(m.id)) return 'retry';
+  MEDIA_INFLIGHT.add(m.id);
+  try { return await receiveServerImageRun(m, room); } finally { MEDIA_INFLIGHT.delete(m.id); }
+}
+async function receiveServerImageRun(m, room) {
   const mt = String(m.message).match(/^(?:🖼IMG\|([a-f0-9]{32})\|\d+|🎤VOX\|([a-f0-9]{32})\|(\d+)\|\d+)$/);
   if (!mt) return 'gone';
   const id = mt[1] || mt[2], vox = !!mt[2], vdur = Math.min(60, +mt[3] || 0);
   const msgs = await loadRoomMessages(room);
   if (msgs.some(e => e.sid === m.id || e.iid === id)) return 'ok';
-  let status = 'gone', stored = false;
+  let status = 'gone', stored = false, why = '';
   try {
     const r = await tfetch(`${API}/messenger/image/${id}`, { headers: imgHdr() }, 60000);
-    if (r.status === 404) status = 'gone';
-    else if (!r.ok) status = 'retry';
+    if (r.status === 404) { status = 'gone'; why = '404'; }
+    else if (!r.ok) { status = 'retry'; why = 'http' + r.status; }
     else {
       const dataUrl = vox ? voxToDataUrl(await decryptBytes(m.sender_code, new Uint8Array(await r.arrayBuffer()))) : await decryptImage(m.sender_code, new Uint8Array(await r.arrayBuffer()));
       await imgPut(room, id, dataUrl); stored = true; status = 'ok';
       fetch(`${API}/messenger/image/${id}`, { method: 'DELETE', headers: imgHdr() }).catch(() => {});
     }
-  } catch (e) { status = (e && (e.message === 'nokey' || e.message === 'unverified')) ? 'gone' : (e && e.name === 'OperationError') ? 'gone' : 'retry'; }
+  } catch (e) { why = (e && (e.message === 'nokey' || e.message === 'unverified')) ? e.message : (e && e.name === 'OperationError') ? 'key' : 'net:' + String((e && (e.name || e.message)) || '?').slice(0, 24); status = (e && (e.message === 'nokey' || e.message === 'unverified')) ? 'gone' : (e && e.name === 'OperationError') ? 'gone' : 'retry'; }
   if (status === 'retry') {
     const n = (IMG_RETRY.get(m.id) || 0) + 1; IMG_RETRY.set(m.id, n);
     if (n < 6) return 'retry';
-    status = 'gone';
+    status = 'gone'; why = why || 'net';
   }
   if (!stored && status !== 'gone') return status;
   const cur = await loadRoomMessages(room);
-  cur.push(vox ? { from: m.sender_code, fromName: m.sender_name, kind: 'voice', iid: id, dur: vdur, sid: m.id, text: '🎤 Sprachnachricht', ts: new Date(m.created_at).getTime() }
-    : { from: m.sender_code, fromName: m.sender_name, kind: 'image', iid: id, sid: m.id, text: '📷 Bild', ts: new Date(m.created_at).getTime() });
+  cur.push(vox ? { from: m.sender_code, fromName: m.sender_name, kind: 'voice', iid: id, dur: vdur, sid: m.id, text: '🎤 Sprachnachricht', ts: new Date(m.created_at).getTime(), ...(stored ? {} : { err: why || 'gone' }) }
+    : { from: m.sender_code, fromName: m.sender_name, kind: 'image', iid: id, sid: m.id, text: '📷 Bild', ts: new Date(m.created_at).getTime(), ...(stored ? {} : { err: why || 'gone' }) });
   await saveRoomMessages(room, cur);
   return 'ok';
 }
@@ -1034,7 +1045,7 @@ async function hydrateImages(container) {
   for (const el of nodes) {
     el.dataset.done = '1';
     const url = await imgGet(container.dataset.room, el.dataset.iid);
-    if (url) el.src = url; else el.replaceWith(Object.assign(document.createElement('span'), { textContent: '🖼 Bild nicht mehr vorhanden', className: 'img-gone' }));
+    if (url) el.src = url; else el.replaceWith(Object.assign(document.createElement('span'), { textContent: '🖼 Bild nicht angekommen' + whyText(el.dataset.err || 'local'), className: 'img-gone' }));
   }
 }
 document.addEventListener('click', (e) => {
@@ -1939,7 +1950,7 @@ async function renderMessages(appendOnly = false) {
     const body = m.kind === 'voice'
       ? voxHtml(m)
       : m.kind === 'image'
-      ? `<img class="chat-img ${isMine ? '' : 'blur'}" data-iid="${escapeHtml(m.iid)}" alt="Bild">${isMine ? '' : '<div class="img-tap">Tippen zum Anzeigen</div>'}`
+      ? `<img class="chat-img ${isMine ? '' : 'blur'}" data-err="${escapeHtml(m.err || '')}" data-iid="${escapeHtml(m.iid)}" alt="Bild">${isMine ? '' : '<div class="img-tap">Tippen zum Anzeigen</div>'}`
       : qHtml + escapeHtml(txt);
     if (!isMed && comicOn()) {
       const pm = parseMood(txt);
@@ -2148,8 +2159,9 @@ async function syncVerified(force) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: CODE, token: TOKEN, partners })
     }, 15000);
-    if (r.ok) lsSet('sm_chat_vsync', String(Date.now()));
+    if (r.ok) { lsSet('sm_chat_vsync', String(Date.now())); return true; }
   } catch (e) {}
+  return false;
 }
 function verifiedFx(code) {
   playMood('verify', 'in');
