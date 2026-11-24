@@ -724,14 +724,15 @@ async function myEcdh() {
   return _ecdh;
 }
 const imgHdr = () => ({ 'x-spotme-code': CODE, 'x-spotme-token': TOKEN });
-async function publishPub() {
+let PUB_DONE = false;
+async function publishPub(force) {
   if (!CODE || !TOKEN || !window.crypto || !crypto.subtle) return;
   try {
     const k = await myEcdh(), pub = JSON.stringify(k.pub), fp = CODE + '|' + pub;
     const lastPub = Number(lsGet('sm_chat_pubpub_ts') || 0);
-    if (lsGet(PUBPUB_KEY) === fp && Date.now() - lastPub < 24 * 3600 * 1000) return; // 1×/Tag erneut melden: heilt verlorene Server-Einträge
+    if (!force && PUB_DONE) return; // bei JEDEM App-Start neu melden (nicht nur 1×/Tag): heilt veraltete/verlorene Server-Einträge
     const r = await tfetch(`${API}/messenger/pubkey`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...imgHdr() }, body: JSON.stringify({ pub }) });
-    if (r.ok) { lsSet(PUBPUB_KEY, fp); lsSet('sm_chat_pubpub_ts', String(Date.now())); }
+    if (r.ok && CODE && lsGet('sm_chat_code') === CODE) { PUB_DONE = true; lsSet(PUBPUB_KEY, fp); lsSet('sm_chat_pubpub_ts', String(Date.now())); }
   } catch (e) {}
 }
 async function sharedKeyWith(partner, refetch) {
@@ -768,6 +769,10 @@ async function safetyNumber(partner) {
   const k = 'sm_chat_pk_' + partner, cur = pub.x + '.' + pub.y, old = lsGet(k);
   const changed = !!old && old !== cur; lsSet(k, cur);
   return { num, changed };
+}
+async function keyResync() {
+  try { PARTNER_KEYS.clear(); PUB_DONE = false; await publishPub(true); toastMsg('🔑 Schlüssel neu gemeldet – Nummer wird neu berechnet'); } catch (e) { toastMsg('🔑 Gerade nicht möglich'); }
+  fillSafety();
 }
 async function fillSafety() {
   const el = document.getElementById('vcSafe'); if (!el) return;
@@ -2593,7 +2598,7 @@ function renderVerCard() {
     else if (vp.st === 'judge') html = `<b>🔏 ${nm} antwortet</b><p>Deine Frage: <i>„${escapeHtml(vp.q)}“</i><br>Antwort: <i>„${escapeHtml(vp.a || '')}“</i></p><p>Ist das die richtige Antwort?</p><div class="vc-btns"><button onclick="verJudge(true)">✔ Stimmt</button><button class="vc-no" onclick="verJudge(false)">✖ Stimmt nicht</button><button class="vc-ghost" onclick="verCancel()">Abbrechen</button></div>`;
   } else if (m.ver) {
     if (!VC_OPEN) { el.className = 'ver-card hidden'; return; }
-    html = `<b>✔ Verifiziert</b><p>Du und ${nm} habt euch gegenseitig bestätigt. Der grüne Haken bleibt am Namen.</p><p id="vcSafe" class="vc-wait">🔐 …</p><div class="vc-btns"><button onclick="recPick()">🤝 Kontakt empfehlen</button>${m.h ? `<button onclick="recLink()">🔗 Per Link empfehlen</button>` : ''}<button class="vc-ghost" onclick="verUnverify()">Verifizierung aufheben</button><button class="vc-ghost" onclick="toggleVerCard()">Schließen</button></div>`;
+    html = `<b>✔ Verifiziert</b><p>Du und ${nm} habt euch gegenseitig bestätigt. Der grüne Haken bleibt am Namen.</p><p id="vcSafe" class="vc-wait">🔐 …</p><div class="vc-btns"><button onclick="recPick()">🤝 Kontakt empfehlen</button>${m.h ? `<button onclick="recLink()">🔗 Per Link empfehlen</button>` : ''}<button class="vc-ghost" onclick="keyResync()">🔑 Schlüssel abgleichen</button><button class="vc-ghost" onclick="verUnverify()">Verifizierung aufheben</button><button class="vc-ghost" onclick="toggleVerCard()">Schließen</button></div>`;
   } else {
     const note = { no: 'Die Antwort wurde nicht bestätigt – keine Verifizierung.', x: 'Die Verifizierung wurde abgebrochen.', un: 'Die Verifizierung wurde aufgehoben.' }[m.vnote || ''];
     if (!VC_OPEN && !note) { el.className = 'ver-card hidden'; return; }
