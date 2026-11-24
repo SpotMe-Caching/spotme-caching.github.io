@@ -59,6 +59,7 @@
   <div id="seeFx" class="hidden" onclick="hideSee()" role="status"><svg viewBox="-60 -60 120 120" class="see-star" aria-hidden="true"><defs><radialGradient id="seeG"><stop offset="0" stop-color="#fff6d8"/><stop offset=".45" stop-color="#ffb347"/><stop offset="1" stop-color="#ff7a59" stop-opacity="0"/></radialGradient></defs><circle r="55" fill="url(#seeG)" opacity=".55"/><path d="M0-50 9-9 50 0 9 9 0 50-9 9-50 0-9-9Z" fill="#ffc861"/><path d="M0-30 5-5 30 0 5 5 0 30-5 5-30 0-5-5Z" fill="#fff"/></svg><b>I see you</b><span id="seeName"></span></div>
 
 <script src="webrtc.js"></script>
+<script src="eggs.js"></script>
 
   <!-- Erster Aufruf: nur Name eingeben, Profil wird automatisch angelegt -->
   <div id="loginScreen" class="hidden">
@@ -155,6 +156,7 @@
             <div class="hub-tile"><b id="tHd">–</b><span>@ Handle</span></div>
             <div class="hub-tile"><b id="tBk">–</b><span>💾 Sicherung</span></div>
           </div>
+          <button class="link-btn hub-full" id="eggLink" onclick="location.href='eier.html'">🥚 Eiersuche &amp; Eier-Lotse</button>
           <div class="hub-h">Deine ID</div>
           <div class="copy-row"><input type="text" id="setId" readonly><button onclick="copyId()">Kopieren</button></div>
           <button class="link-btn hub-full" onclick="shareId()">🔗 Link teilen</button>
@@ -252,6 +254,7 @@
   <div class="chat-header">
     <div class="hd-avatar" id="headerAvatar">?</div>
     <span id="owlBadge" class="owl-badge hidden" title="Nachteule" aria-hidden="true">🌙</span>
+    <span id="eggBadge" class="egg-badge hidden" aria-hidden="true"></span>
     <div class="header-info">
       <div class="header-name" id="headerName">...</div>
       <div class="header-code" id="headerCode"></div>
@@ -263,6 +266,7 @@
         </span>
       </div>
     </div>
+    <button id="eggBtn" class="ver-btn egg-btn hidden" onclick="openEggHelp()" aria-label="Easter Egg Hinweis senden" title="Easter Egg Hinweis senden">🥚</button>
     <button id="verBtn" class="ver-btn" onclick="toggleVerCard()" aria-label="Verifizieren" title="Verifizieren">✓</button>
     <button class="back-btn" onclick="goBackToList()" aria-label="Zurück" title="Zurück">✕</button>
   </div>
@@ -558,6 +562,7 @@ function startApp() {
   pingVisit();
   { const need = lsGet('sm_chat_vsync_v') !== 'v66'; syncVerified(need).then(ok => { if (ok && need) lsSet('sm_chat_vsync_v', 'v66'); }); }
   bgSync();
+  eggPublish(false); eggLinkUpdate(); setTimeout(eggRefreshAll, 3000);
   devStart();
   goneCheck();
   publishPub();
@@ -1678,7 +1683,7 @@ async function renderChatList() {
   const chats = Object.entries(byRoom).map(([room, c]) => Object.assign({ room }, c)).sort((a, b) => b.lastTs - a.lastTs);
   container.innerHTML = chats.map(c => `
     <div class="chat-item" data-room="${escapeHtml(c.room)}" data-code="${escapeHtml(c.partnerCode)}" data-name="${escapeHtml(c.partnerName)}">
-      <div class="avatar${(metaAll[c.partnerCode] || {}).gone ? ' gone' : ''}">${escapeHtml((c.partnerName[0] || '?').toUpperCase())}</div>
+      <div class="avatar${(metaAll[c.partnerCode] || {}).gone ? ' gone' : ''}">${escapeHtml((c.partnerName[0] || '?').toUpperCase())}${eggRankKind((metaAll[c.partnerCode] || {}).e || 0) ? `<span class="egg-badge ek-${eggRankKind(metaAll[c.partnerCode].e)}">${EGG_IC[eggRankKind(metaAll[c.partnerCode].e)]}</span>` : ''}</div>
       <div class="chat-info">
         <div class="chat-name">${escapeHtml(c.partnerName)}${(metaAll[c.partnerCode] || {}).ver ? ' <span class="ver-tick" title="Verifiziert">✔</span>' : ''}</div>
         <div class="chat-preview">${((metaAll[c.partnerCode] || {}).vp && ['ask-in', 'judge'].includes(metaAll[c.partnerCode].vp.st)) ? '<span class="chat-tag ver">🔏 Frage wartet</span> ' : ''}${((metaAll[c.partnerCode] || {}).rc || []).length ? '<span class="chat-tag ver">🤝 Empfehlung</span> ' : ''}${(metaAll[c.partnerCode] || {}).gone ? '<span class="chat-tag gone">🗑 Konto gelöscht</span> ' : (metaAll[c.partnerCode] || {}).paused ? '<span class="chat-tag">⏸ pausiert</span> ' : (metaAll[c.partnerCode] || {}).req ? '<span class="chat-tag req">📨 Anfrage</span> ' : ''}${escapeHtml(c.lastText)}</div>
@@ -1764,6 +1769,7 @@ function applyChatState(extra) {
   if (extra) { html = escapeHtml(extra); cls = 'chat-note wait'; }
   note.innerHTML = html; note.className = cls;
   const hav = document.getElementById('headerAvatar'); if (hav) hav.classList.toggle('gone', !!m.gone);
+  try { eggBtnUpdate(); } catch (e) {}
   input.disabled = lock; input.placeholder = ph;
   if (send) send.disabled = lock;
   if (cam) cam.disabled = lock;
@@ -1794,7 +1800,7 @@ async function openChat(room, partnerCode, partnerName) {
   fitChatToViewport();
 
   document.getElementById('headerName').textContent = partnerName;
-  owlBadge();
+  owlBadge(); eggBadgeHdr();
   cancelReply();
   VC_OPEN = false;
   updateHeaderCode();
@@ -1932,7 +1938,7 @@ async function renderMessages(appendOnly = false) {
 
   const renderMsg = (m) => {
     const isMine = m.from === CODE;
-    const isMed = m.kind === 'image' || m.kind === 'voice';
+    const isMed = m.kind === 'image' || m.kind === 'voice' || m.kind === 'egghint';
     const qq = isMed ? null : parseQuote(m.text);
     const txt0 = qq ? qq.body : m.text;
     const sn = !isMed && SNAIL_RE.test(txt0), txt = sn ? txt0.replace(SNAIL_RE, '') : txt0;
@@ -1947,7 +1953,9 @@ async function renderMessages(appendOnly = false) {
           : '<span class="msg-status sent" title="Gesendet">✓</span>')
       : '';
     const time = new Date(m.ts).toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'}) + (sn ? ' 🐌' : '');
-    const body = m.kind === 'voice'
+    const body = m.kind === 'egghint'
+      ? eggHintHtml(m, isMine)
+      : m.kind === 'voice'
       ? voxHtml(m)
       : m.kind === 'image'
       ? `<img class="chat-img ${isMine ? '' : 'blur'}" data-err="${escapeHtml(m.err || '')}" data-iid="${escapeHtml(m.iid)}" alt="Bild">${isMine ? '' : '<div class="img-tap">Tippen zum Anzeigen</div>'}`
@@ -1959,7 +1967,7 @@ async function renderMessages(appendOnly = false) {
       const tilt = ((m.ts % 5) - 2) * 0.35;
       return `<div class="message ${isMine ? 'mine' : 'other'} cm cm-${pm.mood}${snCls}" data-ts="${m.ts}" style="--tilt:${tilt}deg;${snSty}">${badge ? `<span class="cm-badge${/^[?!♥…]$/.test(badge) || /\p{Extended_Pictographic}/u.test(badge) ? '' : ' w'}">${badge}</span>` : ''}${qHtml}<span class="cm-txt">${escapeHtml(pm.text)}</span><div class="msg-time">${time}${statusTick}</div>${snEl}</div>`;
     }
-    return `<div class="message ${isMine ? 'mine' : 'other'}${m.kind === 'image' ? ' has-img' : m.kind === 'voice' ? ' has-vox' : ''}${snCls}" data-ts="${m.ts}"${snSty ? ` style="${snSty}"` : ''}>${body}<div class="msg-time">${time}${statusTick}</div>${snEl}</div>`;
+    return `<div class="message ${isMine ? 'mine' : 'other'}${m.kind === 'image' ? ' has-img' : m.kind === 'voice' ? ' has-vox' : m.kind === 'egghint' ? ' has-egg' : ''}${snCls}" data-ts="${m.ts}"${snSty ? ` style="${snSty}"` : ''}>${body}<div class="msg-time">${time}${statusTick}</div>${snEl}</div>`;
   };
 
   // FIX: Bei jeder eingehenden Nachricht wurde vorher die komplette Liste
@@ -2227,7 +2235,111 @@ function setSeen(on) {
 
 // ── Easter Egg 🐉 Drachenfeuer: Logo im Hub 7× antippen ───────────────────────
 // Gefundene Eier merkt sich sm_chat_egg_<name> (Grundlage für die spätere Easter-Egg-Seite im Hub).
-function eggFound(name) { try { lsSet('sm_chat_egg_' + name, '1'); } catch (e) {} }
+function eggFound(name) { try { lsSet('sm_chat_egg_' + name, '1'); } catch (e) {} try { eggPubSoon(); eggLinkUpdate(); } catch (e) {} }
+// ── 🥚 Eier-Lotse: Rang-Abzeichen am Profilbild + Hinweis-Karten (nur Kontakte, max. 3/Tag je Kontakt) ──
+// Lokal: sm_chat_egg_<id>. Server bekommt nur die Anzahl (ab 3, sonst 0) und nur wenn sm_chat_eggshow nicht '0' ist.
+const EGG_IC = { crack: '🥚', chick: '🐣', gold: '🐉' };
+function eggCount() { let n = 0; try { for (const e of EGGS) if (lsGet('sm_chat_egg_' + e.id) === '1') n++; } catch (x) {} return n; }
+function eggRankKind(n) { return n >= 7 ? 'gold' : n >= 5 ? 'chick' : n >= 3 ? 'crack' : ''; }
+function eggBadgeEl(el, n) {
+  if (!el) return; const k = eggRankKind(n || 0);
+  el.className = (el.className.replace(/\b(hidden|ek-\w+)\b/g, '').trim() + (k ? ' ek-' + k : ' hidden')).trim();
+  el.textContent = k ? EGG_IC[k] : '';
+  el.title = k ? (k === 'gold' ? 'Goldener Lotse' : k === 'chick' ? 'Lotse Profi' : 'Eier-Lotse') : '';
+}
+function eggBadgeHdr() { eggBadgeEl(document.getElementById('eggBadge'), PARTNER_CODE ? (metaOf(PARTNER_CODE).e || 0) : 0); eggBtnUpdate(); }
+function eggLinkUpdate() { const b = document.getElementById('eggLink'); if (b) { const n = eggCount(); b.innerHTML = '🥚 Eiersuche &amp; Eier-Lotse · ' + n + ' von ' + EGGS.length; } }
+let _eggPubT = null;
+function eggPubSoon() { clearTimeout(_eggPubT); _eggPubT = setTimeout(() => eggPublish(false), 4000); }
+async function eggPublish(force) {
+  try {
+    if (!CODE || !TOKEN) return;
+    const n = eggCount(), show = lsGet('sm_chat_eggshow') !== '0', pn = show && n >= 3 ? n : 0, fp = pn + '|' + (show ? 1 : 0);
+    if (!force && lsGet('sm_chat_eggpub') === fp) return;
+    if (!force && lsGet('sm_chat_eggpub') == null && pn === 0 && show) { lsSet('sm_chat_eggpub', fp); return; } // nie etwas gemeldet, nichts zu melden
+    const r = await tfetch(`${API}/messenger/eggs`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...imgHdr() }, body: JSON.stringify({ n: pn, show }) }, 15000);
+    if (r.ok) lsSet('sm_chat_eggpub', fp);
+  } catch (e) {}
+}
+// Tageslimit je Kontakt: s = gesendet, r = empfangen (max. 3)
+const EGG_DAY_MAX = 3;
+function eggLim(code, key, inc) {
+  let o = {}; try { o = JSON.parse(lsGet('sm_chat_egghints') || '{}') || {}; } catch (e) {}
+  const day = new Date().toDateString(); let c = o[code];
+  if (!c || c.d !== day) c = { d: day, s: 0, r: 0 };
+  if (inc) { c[key]++; o[code] = c; for (const k of Object.keys(o)) if (o[k].d !== day) delete o[k]; lsSet('sm_chat_egghints', JSON.stringify(o)); }
+  return c[key];
+}
+const EGG_H_RE = /^🥚\|H\|([a-z]{3,10})\|([0-2])$/;
+function eggById(id) { return EGGS.find(e => e.id === id) || null; }
+function eggHintHtml(m, isMine) {
+  const e = eggById(m.egg), l = Math.max(0, Math.min(2, m.lvl | 0));
+  if (!e) return '🥚 Easter Egg Hinweis';
+  const who = isMine ? 'DEIN HINWEIS AN ' + (PARTNER_NAME || '').toUpperCase() : 'DEIN EASTER EGG HELFER · ' + (m.fromName || '');
+  return `<div class="egg-card"><div class="egg-hd">🥚 ${escapeHtml(who)}</div><div class="egg-bd">${e.ic} ${escapeHtml(e.h[l])}</div><div class="egg-lv">${escapeHtml(LEVEL_NAMES[l])}</div></div>`;
+}
+async function receiveEggHint(m, room) {
+  const mm = String(m.message).match(EGG_H_RE); if (!mm || !eggById(mm[1])) return false;
+  const from = m.sender_code, mt = metaOf(from);
+  if (!getContacts()[from] || mt.req || getClosedByMe()[from]) return false;
+  if (lsGet('sm_chat_egghints_off') === '1') return false;
+  if (eggLim(from, 'r') >= EGG_DAY_MAX) return false;
+  setMeta(from, { heard: true, paused: false, out: 0 });
+  const msgs = await loadRoomMessages(room);
+  if (msgs.some(x => x.sid === m.id)) return false;
+  eggLim(from, 'r', true);
+  msgs.push({ from, fromName: m.sender_name, kind: 'egghint', egg: mm[1], lvl: +mm[2], text: '🥚 Easter Egg Hinweis', sid: m.id, ts: new Date(m.created_at).getTime() });
+  await saveRoomMessages(room, msgs);
+  return true;
+}
+function eggBtnUpdate() {
+  const b = document.getElementById('eggBtn'); if (!b) return;
+  const mt = PARTNER_CODE ? metaOf(PARTNER_CODE) : {};
+  const ok = !!PARTNER_CODE && eggCount() >= 3 && !!getContacts()[PARTNER_CODE] && !mt.req && !mt.paused && !mt.gone && mt.heard && !getClosedByMe()[PARTNER_CODE];
+  b.classList.toggle('hidden', !ok);
+}
+let EGG_SEL = null, EGG_LVL = 0;
+function openEggHelp() {
+  if (!PARTNER_CODE) return;
+  let el = document.getElementById('eggModal'); if (!el) { el = document.createElement('div'); el.id = 'eggModal'; el.className = 'egg-modal'; document.body.appendChild(el); el.addEventListener('click', eggModalClick); }
+  EGG_SEL = null; EGG_LVL = 0; eggModalRender(); el.classList.remove('hidden');
+}
+function eggModalRender() {
+  const el = document.getElementById('eggModal'); if (!el) return;
+  const left = EGG_DAY_MAX - eggLim(PARTNER_CODE, 's'), e = eggById(EGG_SEL);
+  el.innerHTML = `<div class="egg-sheet"><h3>🥚 Dein Easter Egg Helfer</h3>
+    <p class="egg-sub">Hinweis für ${escapeHtml(PARTNER_NAME || '')}. Heute noch ${left} von ${EGG_DAY_MAX}.</p>
+    <div class="egg-grid">${EGGS.map(x => `<button type="button" data-egg="${x.id}" class="${x.id === EGG_SEL ? 'on' : ''}">${x.ic}<small>${escapeHtml(x.name)}</small></button>`).join('')}</div>
+    <div class="egg-seg">${LEVEL_NAMES.map((l, i) => `<button type="button" data-lvl="${i}" class="${i === EGG_LVL ? 'on' : ''}">${l}</button>`).join('')}</div>
+    ${e ? `<div class="egg-card"><div class="egg-hd">🥚 VORSCHAU</div><div class="egg-bd">${e.ic} ${escapeHtml(e.h[EGG_LVL])}</div></div>` : '<p class="egg-sub">Wähle ein Ei.</p>'}
+    <div class="egg-act"><button type="button" data-act="close">Abbrechen</button><button type="button" data-act="send" class="go"${e && left > 0 ? '' : ' disabled'}>Senden</button></div></div>`;
+}
+async function eggModalClick(ev) {
+  const t = ev.target, el = document.getElementById('eggModal');
+  if (t === el) { el.classList.add('hidden'); return; }
+  const b = t.closest && t.closest('button'); if (!b) return;
+  if (b.dataset.egg) { EGG_SEL = b.dataset.egg; eggModalRender(); }
+  else if (b.dataset.lvl) { EGG_LVL = +b.dataset.lvl; eggModalRender(); }
+  else if (b.dataset.act === 'close') el.classList.add('hidden');
+  else if (b.dataset.act === 'send') { b.disabled = true; const ok = await sendEggHint(EGG_SEL, EGG_LVL); if (ok) el.classList.add('hidden'); else eggModalRender(); }
+}
+async function sendEggHint(egg, lvl) {
+  const partner = PARTNER_CODE, room = CURRENT_ROOM;
+  if (!partner || !room || !eggById(egg) || eggCount() < 3) return false;
+  if (eggLim(partner, 's') >= EGG_DAY_MAX) { toastMsg('Heute schon 3 Hinweise an diesen Kontakt'); return false; }
+  const ok = await sendCtrl(partner, '🥚|H|' + egg + '|' + lvl);
+  if (!ok) { toastMsg('Hinweis nicht gesendet – bitte später erneut'); return false; }
+  eggLim(partner, 's', true);
+  const msgs = await loadRoomMessages(room);
+  msgs.push({ from: CODE, fromName: PROFILE?.name || CODE, kind: 'egghint', egg, lvl, text: '🥚 Easter Egg Hinweis', ts: Date.now(), status: 'sent' });
+  await saveRoomMessages(room, msgs);
+  if (room === CURRENT_ROOM) await renderMessages(true);
+  renderChatList();
+  return true;
+}
+async function eggRefreshAll() {
+  try { for (const code of Object.keys(getContacts())) { await refreshPartnerHandle(code); } renderChatList(); } catch (e) {}
+}
 // ── Easter Egg: Nachteule ────────────────────────────────────────────────────
 // Nur eigene Uhr (0:00–4:59). Es wird nie die Uhrzeit des Partners verraten oder gesendet:
 // "Beide nachts" = beide Nachrichten tragen auf MEINER Uhr eine Nachtzeit.
@@ -2449,8 +2561,8 @@ async function refreshPartnerHandle(code) {
     const r = await tfetch(`${API}/profile/${code}?spot=messenger`, {}, 10000);
     if (!r.ok) return;
     const j = await r.json();
-    setMeta(code, { h: j.handle || '', hts: Date.now() });
-    if (PARTNER_CODE === code) updateHeaderCode();
+    setMeta(code, { h: j.handle || '', hts: Date.now(), e: Math.max(0, Math.min(7, parseInt(j.eggs, 10) || 0)) });
+    if (PARTNER_CODE === code) { updateHeaderCode(); eggBadgeHdr(); }
   } catch (e) {}
 }
 function updateHeaderVer() {
@@ -2773,7 +2885,7 @@ async function initPolling() {
   pollOnce();                                // und sofort beim Start
 }
 // sofort neu abholen, sobald die App wieder sichtbar ist oder Netz zurückkehrt
-document.addEventListener('visibilitychange', () => { if (!document.hidden) pollOnce(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { pollOnce(); eggPublish(false); } });
 window.addEventListener('online', () => pollOnce());
 window.addEventListener('focus', () => pollOnce());
 
@@ -2815,6 +2927,14 @@ async function pollOnce() {
               if (rr === 'retry') { retryIds.add(m.id); continue; }
               listNeedsUpdate = true; sndText = String(m.message).startsWith(VOX_MARK) ? '🎤 Sprachnachricht' : '📷 Bild';
               if (room === CURRENT_ROOM) { markSeen(room); await renderMessages(true); renderedAny = true; applyChatState(); }
+              continue;
+            }
+            // 🥚 Eier-Lotse-Hinweis (nur von Kontakten, max. 3/Tag; Text kommt nie vom Absender, nur Ei-ID + Stufe)
+            if (String(m.message).startsWith('🥚|')) {
+              if (await receiveEggHint(m, room)) {
+                listNeedsUpdate = true; sndText = '🥚 Easter Egg Hinweis';
+                if (room === CURRENT_ROOM) { markSeen(room); await renderMessages(true); renderedAny = true; applyChatState(); }
+              }
               continue;
             }
             // Verifizierungs-Schritte: nie als Chat-Nachricht anzeigen
@@ -2985,6 +3105,7 @@ function quoteExcerpt(m) {
   if (!m) return '';
   if (m.kind === 'image') return '📷 Bild';
   if (m.kind === 'voice') return '🎤 Sprachnachricht';
+  if (m.kind === 'egghint') return '🥚 Easter Egg Hinweis';
   return parseMood(stripQuoteText(m.text)).text.replace(/\s+/g, ' ').trim().slice(0, 80);
 }
 function findQuoted(msgs, m, q) {

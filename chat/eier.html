@@ -54,6 +54,7 @@ h2{font-size:1.3rem;margin:2rem 0 .7rem}
 .btn.p{background:linear-gradient(135deg,#ffb347,#ff7a59);color:#1a1020}
 .btn.g{background:transparent;border:1px solid var(--bord);color:var(--text)}
 .rules li{margin:.3rem 0 .3rem 1.2rem;color:#c3cde0;font-size:.95rem}
+.opt{display:flex;gap:.6rem;align-items:center;margin:.5rem 0;font-size:.95rem}.opt input{width:20px;height:20px;accent-color:#22d3ee}
 .fine{color:var(--muted);font-size:.85rem}
 footer{text-align:center;margin-top:2rem}
 </style>
@@ -72,6 +73,11 @@ footer{text-align:center;margin-top:2rem}
   <h2>Dein Easter Egg Helfer</h2>
   <div class="card" id="help"></div>
 
+  <div class="card" id="live" style="display:none"><h2 style="margin-top:0">Einstellungen</h2>
+    <label class="opt"><input type="checkbox" id="optShow"> 🥚 Mein Eier-Rang am Profilbild zeigen (ab 3 Eiern)</label>
+    <label class="opt"><input type="checkbox" id="optHints"> 💬 Eier-Hinweise von Kontakten erhalten</label>
+    <p class="fine">Gilt auf diesem Gerät. Gefundene Eier sieht nur dein Gerät; der Server kennt höchstens deine Rang-Zahl ab 3, und nur wenn der Rang an ist.</p></div>
+
   <h2>Eier-Ränge</h2>
   <div class="ranks" id="ranks"></div>
 
@@ -87,33 +93,8 @@ footer{text-align:center;margin-top:2rem}
   <div id="cta"></div>
   <footer class="fine"><a href="../datenschutz.html">Datenschutz</a> · <a href="landing.html?info=1">Was ist der Messenger?</a></footer>
 </div>
+<script src="eggs.js"></script>
 <script>
-/* ===== Eier, Hinweise und Ränge – hier steht ALLES, was die Seite zeigt ===== */
-var EGGS = [
-  {id:'snail', ic:'🐌', name:'Schneckenpost', riddle:'Manche Nachrichten haben es nicht eilig.',
-   h:['Der Sendeknopf kann mehr als tippen.','Halte den Sendeknopf ➤ gedrückt, statt kurz zu tippen.','Sendeknopf lang drücken: die Nachricht kriecht als Schnecke in den Chat. (Nicht sichtbar, wenn „Animationen entfernen“ am Handy an ist.)']},
-  {id:'blow', ic:'💨', name:'Pusten', riddle:'Wer pustet, kommt zurück.',
-   h:['Dein Handy hört zu, wenn du es erlaubst.','Im Hub → Aussehen den Schalter „Pusten“ einschalten und Mikrofon erlauben.','Im offenen Chat kräftig ins Mikrofon pusten: du bläst den Chat weg und landest wieder in der Kontaktliste.']},
-  {id:'dragon', ic:'🐉', name:'Drachenfeuer', riddle:'Der Drache schläft im Logo.',
-   h:['Im Hub gibt es etwas, das man oft antippt.','Tippe im Hub schnell mehrmals auf das Logo.','Hub-Logo 7× schnell antippen: der Drache erwacht und speit Feuer.']},
-  {id:'shake', ic:'🫨', name:'Schütteln', riddle:'Manchmal hilft nur kräftiges Rütteln.',
-   h:['Dein Handy kennt Bewegung.','Öffne einen Chat und bewege das Handy.','Im offenen Chat das Handy kräftig schütteln: die Blasen wackeln, „Hoppla!“. (Auf dem iPhone muss man die Bewegung beim ersten Mal erlauben.)']},
-  {id:'words', ic:'🤫', name:'Geheimwörter', riddle:'Ein Schrägstrich öffnet eine Tür.',
-   h:['Manche Wörter tun etwas, wenn man sie sendet.','Sende ein Wort mit „/“ davor. Denk an Himmel, Winter, Liebe oder ein Fabeltier.','/schnee, /stern, /herz und /drache lösen Effekte im Chat aus.']},
-  {id:'owl', ic:'🦉', name:'Nachteule', riddle:'Wer spät wach ist, ist nicht allein.',
-   h:['Die Uhrzeit spielt eine Rolle.','Zwischen Mitternacht und fünf Uhr morgens, und ihr beide müsst schreiben.','Nachts (0–5 Uhr, deine Uhr) schreiben beide innerhalb von 20 Minuten im selben Chat: „Zwei Nachteulen im Chat!“.']},
-  {id:'stars', ic:'🌟', name:'Sternbild', riddle:'Vertrauen leuchtet.',
-   h:['Im Hub zählt eine Kachel deine verifizierten Kontakte.','Tippe im Hub zweimal schnell auf die Kachel „Verifizierte“.','Doppeltipp auf die Hub-Kachel „✔ Verifizierte“: jeder verifizierte Kontakt ist ein Stern im Sternbild.']}
-];
-var LEVEL_NAMES = ['Kurz','Deutlich','Lösung'];
-/* Ränge: ab min Eiern. Das Profilbild bekommt ab 3 ein Ei-Abzeichen. */
-var RANKS = [
-  {min:0, name:'Leeres Nest', ic:'🪺', note:'Noch kein Ei gefunden.', badge:'none'},
-  {min:1, name:'Ei-Sucher',   ic:'🥚', note:'Du bist auf der Spur. Kein Abzeichen.', badge:'ring'},
-  {min:3, name:'Eier-Lotse',  ic:'🥚', note:'Gesprungenes Ei am Profilbild. Du kannst anderen helfen.', badge:'crack'},
-  {min:5, name:'Lotse Profi', ic:'🐣', note:'Schlüpfendes Küken am Profilbild.', badge:'chick'},
-  {min:7, name:'Goldener Lotse', ic:'🐉', note:'Goldenes Drachenei, alle Eier gefunden. Eine Ehre, keine Belohnung.', badge:'gold'}
-];
 function $(i){return document.getElementById(i)}
 function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function rankOf(n){var r=RANKS[0];RANKS.forEach(function(x){if(n>=x.min)r=x});return r}
@@ -152,8 +133,15 @@ function miniSvg(kind,uid){ return '<svg viewBox="0 0 100 100"><defs><linearGrad
     else if(k==='h'&&/^[A-Za-z0-9_]{3,20}$/.test(v)) handle=v;
     else if(!kv[1]&&/^[A-Za-z0-9_]{3,20}$/.test(k)) handle=k;
   });
+  var live=!location.search;
+  function ls(k){try{return localStorage.getItem(k)}catch(e){return null}}
+  function lset(k,v){try{localStorage.setItem(k,v)}catch(e){}}
   var found={};
-  if(list) list.forEach(function(id){found[id]=1});
+  if(live){ $('sandbox').style.display='none'; $('live').style.display=''; EGGS.forEach(function(e){if(ls('sm_chat_egg_'+e.id)==='1')found[e.id]=1});
+    $('optShow').checked=ls('sm_chat_eggshow')!=='0'; $('optHints').checked=ls('sm_chat_egghints_off')!=='1';
+    $('optShow').onchange=function(){lset('sm_chat_eggshow',this.checked?'1':'0')};
+    $('optHints').onchange=function(){lset('sm_chat_egghints_off',this.checked?'0':'1')}; }
+  else if(list) list.forEach(function(id){found[id]=1});
   else if(n!=null) EGGS.slice(0,n).forEach(function(e){found[e.id]=1});
   var count=Object.keys(found).length, R=rankOf(count);
   var who=handle?'@'+handle:'Du';
@@ -186,11 +174,11 @@ function miniSvg(kind,uid){ return '<svg viewBox="0 0 100 100"><defs><linearGrad
   // Ränge
   $('ranks').innerHTML=RANKS.map(function(r,i){
     var cur=(R===r);
-    return '<div class="rank'+(cur&&hasParam?' cur':'')+'">'+miniSvg(r.badge,'r'+i)+'<div><b>'+r.ic+' '+esc(r.name)+' <small>· ab '+r.min+' '+(r.min===1?'Ei':'Eiern')+'</small></b><small>'+esc(r.note)+'</small></div></div>';
+    return '<div class="rank'+(cur&&(hasParam||live)?' cur':'')+'">'+miniSvg(r.badge,'r'+i)+'<div><b>'+r.ic+' '+esc(r.name)+' <small>· ab '+r.min+' '+(r.min===1?'Ei':'Eiern')+'</small></b><small>'+esc(r.note)+'</small></div></div>';
   }).join('');
   // Knopf
-  var go=handle?'./?'+encodeURIComponent(handle):'landing.html?info=1';
-  $('cta').innerHTML='<a class="btn p" href="'+go+'">'+(handle?'🚀 @'+esc(handle)+' im Messenger anschreiben':'🚀 Zum Messenger')+'</a><a class="btn g" href="landing.html?info=1">Mehr über den Messenger</a>';
+  var go=live?'./':handle?'./?'+encodeURIComponent(handle):'landing.html?info=1';
+  $('cta').innerHTML='<a class="btn p" href="'+go+'">'+(live?'⬅ Zurück zum Messenger':handle?'🚀 @'+esc(handle)+' im Messenger anschreiben':'🚀 Zum Messenger')+'</a><a class="btn g" href="landing.html?info=1">Mehr über den Messenger</a>';
   if(!hasParam) { /* ohne Parameter: neutral, Hinweis bleibt */ }
 })();
 </script>
