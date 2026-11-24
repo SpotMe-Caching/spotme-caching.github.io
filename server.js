@@ -461,6 +461,8 @@ async function initDB() {
     await pool.query(`CREATE TABLE IF NOT EXISTS messenger_images (
       id TEXT PRIMARY KEY, sender TEXT NOT NULL, recipient TEXT NOT NULL, blob BYTEA NOT NULL, size INTEGER NOT NULL, created_at BIGINT NOT NULL)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS messenger_images_rcpt ON messenger_images (recipient)`);
+    // Easter-Egg-Rang (nur die Anzahl gefundener Eier, freiwillig – Eier-Lotse ab 3). Kein Inhalt, keine Zeit.
+    await pool.query(`CREATE TABLE IF NOT EXISTS messenger_eggs (code TEXT PRIMARY KEY, n INTEGER NOT NULL, at BIGINT NOT NULL)`);
     await pool.query(`CREATE TABLE IF NOT EXISTS messenger_img_log (sender TEXT NOT NULL, at BIGINT NOT NULL)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS messenger_img_log_s ON messenger_img_log (sender, at)`);
     await pool.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS last_visit BIGINT`);
@@ -1096,6 +1098,8 @@ app.get("/api/profile/:code", async (req, res) => {
       out.rec = rc.rows.length > 0;
       const pr = await pool.query("SELECT text FROM messenger_pubrec WHERE code=$1", [code]);
       out.pub = pr.rows.length > 0; out.pubtext = pr.rows[0]?.text || "";
+      const eg = await pool.query("SELECT n FROM messenger_eggs WHERE code=$1", [code]);
+      out.eggs = eg.rows[0]?.n || 0; // gefundene Easter Eggs (nur wenn der Nutzer den Rang zeigt)
     }
     res.json(out);
   } catch (e) {
@@ -1496,6 +1500,16 @@ app.get("/api/messenger/pubkey/:partner", async (req, res) => {
     if (!r.rows.length) return res.status(404).json({ error: "Kontakt hat noch keinen Schlüssel" });
     res.json({ pub: r.rows[0].pub });
   } catch (e) { console.error("GET pubkey:", e.message); if (!res.headersSent) res.status(500).json({ error: "Datenbankfehler" }); }
+});
+// Easter-Egg-Rang melden: {n: 0..7, show: bool}. show=false löscht den Eintrag (Rang unsichtbar). Nur die Zahl, nichts weiter.
+app.post("/api/messenger/eggs", async (req, res) => {
+  try {
+    const code = await msgrAuthHdr(req, res); if (!code) return;
+    const n = Math.max(0, Math.min(7, parseInt(req.body?.n, 10) || 0));
+    if (!req.body?.show || n < 1) { await pool.query("DELETE FROM messenger_eggs WHERE code=$1", [code]); return res.json({ ok: true, shown: false }); }
+    await pool.query("INSERT INTO messenger_eggs (code, n, at) VALUES ($1,$2,$3) ON CONFLICT (code) DO UPDATE SET n=$2, at=$3", [code, n, Date.now()]);
+    res.json({ ok: true, shown: true, n });
+  } catch (e) { console.error("POST eggs:", e.message); if (!res.headersSent) res.status(500).json({ error: "Datenbankfehler" }); }
 });
 // Verschlüsseltes Bild hochladen → id; der Chat verweist danach per Nachricht "🖼IMG|id|ts" darauf
 app.post("/api/messenger/image/:recipient", express.raw({ type: "application/octet-stream", limit: "480kb" }), async (req, res) => {
@@ -1971,6 +1985,7 @@ app.delete("/api/account/:code", async (req, res) => {
       await run("messenger_images", "DELETE FROM messenger_images WHERE sender=$1 OR recipient=$1", [normCode(code)]);
       await run("messenger_img_log", "DELETE FROM messenger_img_log WHERE sender=$1", [normCode(code)]);
       await run("messenger_pubkeys", "DELETE FROM messenger_pubkeys WHERE code=$1", [normCode(code)]);
+      await run("messenger_eggs", "DELETE FROM messenger_eggs WHERE code=$1", [normCode(code)]);
       if (isMsgCode(normCode(code))) await run("messenger_gone", "INSERT INTO messenger_gone (code, at) VALUES ($1,$2) ON CONFLICT (code) DO UPDATE SET at=$2", [normCode(code), Date.now()]);
       await client.query("COMMIT");
     } catch (e) {
@@ -2342,6 +2357,8 @@ app.post("/api/message", async (req, res) => {
             ? `${String(sender_name || sender_code).slice(0, 50)}: 🔏 Verifizierung`
             : clean.startsWith(MSGR_IMG_MARK)
               ? `${String(sender_name || sender_code).slice(0, 50)}: 📷 Bild`
+              : clean.startsWith("🥚|")
+                ? `${String(sender_name || sender_code).slice(0, 50)}: 🥚 Dein Easter Egg Helfer`
               : clean.startsWith("🎤VOX|")
                 ? `${String(sender_name || sender_code).slice(0, 50)}: 🎤 Sprachnachricht`
                 : `${String(sender_name || sender_code).slice(0, 50)}: ${stripQuote(clean).slice(0, 80)}`,
@@ -2460,7 +2477,7 @@ app.get("/api/messenger/wait/:code", async (req, res) => {
       let nm = r.sender_code;
       try { nm = decrypt(r.sender_name); } catch {}
       return { id: r.id, from: r.sender_code, name: nm,
-        text: txt.startsWith("🔏") ? "🔏 Verifizierung" : txt.startsWith(MSGR_IMG_MARK) ? "📷 Bild" : txt.startsWith("🎤VOX|") ? "🎤 Sprachnachricht" : stripQuote(txt).slice(0, 80), ctrl: txt.startsWith("🔏") };
+        text: txt.startsWith("🔏") ? "🔏 Verifizierung" : txt.startsWith(MSGR_IMG_MARK) ? "📷 Bild" : txt.startsWith("🎤VOX|") ? "🎤 Sprachnachricht" : txt.startsWith("🥚|") ? "🥚 Dein Easter Egg Helfer" : stripQuote(txt).slice(0, 80), ctrl: txt.startsWith("🔏") };
     });
   };
   try {
