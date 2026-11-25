@@ -2348,8 +2348,15 @@ app.post("/api/message", async (req, res) => {
     let delivered = false;
     // Empfänger hat genau diesen Chat gerade offen → kein Push (Nachricht kommt beim nächsten Abholen)
     const skipPush = chatType === "messenger_chat" && msgrIsActiveWith(recipient, sender_code);
+    // Push-Bremse: bei Schnellschreibern höchstens 1 Push je Absender→Empfänger alle 30 s (Nachrichten kommen trotzdem per Abholen)
+    let burstQuiet = false;
+    if (chatType === "messenger_chat" && !skipPush) {
+      const pm = (globalThis.__msgrPushLast = globalThis.__msgrPushLast || new Map()), pk = sender_code + ">" + recipient, pn = Date.now();
+      if (pn - (pm.get(pk) || 0) < 30000) burstQuiet = true;
+      else { pm.set(pk, pn); if (pm.size > 5000) for (const [k, v] of pm) if (pn - v > 30000) pm.delete(k); }
+    }
     try {
-      if (!skipPush) delivered = await Promise.race([
+      if (!skipPush && !burstQuiet) delivered = await Promise.race([
         sendPushToCode(
           recipient,
           "💬 Neue Nachricht",
