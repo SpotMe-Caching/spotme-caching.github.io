@@ -76,6 +76,7 @@ footer{text-align:center;margin-top:2rem}
   <div class="card" id="live" style="display:none"><h2 style="margin-top:0">Einstellungen</h2>
     <label class="opt"><input type="checkbox" id="optShow"> 🥚 Mein Eier-Rang am Profilbild zeigen (ab 3 Eiern)</label>
     <label class="opt"><input type="checkbox" id="optHints"> 💬 Eier-Hinweise von Kontakten erhalten</label>
+    <p id="optMsg" class="fine" style="color:#22d3ee;min-height:1.2em"></p>
     <p class="fine">Gilt auf diesem Gerät. Gefundene Eier sieht nur dein Gerät; der Server kennt höchstens deine Rang-Zahl ab 3, und nur wenn der Rang an ist.</p></div>
 
   <h2>Eier-Ränge</h2>
@@ -139,8 +140,13 @@ function miniSvg(kind,uid){ return '<svg viewBox="0 0 100 100"><defs><linearGrad
   var found={};
   if(live){ $('sandbox').style.display='none'; $('live').style.display=''; EGGS.forEach(function(e){if(ls('sm_chat_egg_'+e.id)==='1')found[e.id]=1});
     $('optShow').checked=ls('sm_chat_eggshow')!=='0'; $('optHints').checked=ls('sm_chat_egghints_off')!=='1';
-    $('optShow').onchange=function(){lset('sm_chat_eggshow',this.checked?'1':'0')};
-    $('optHints').onchange=function(){lset('sm_chat_egghints_off',this.checked?'0':'1')}; }
+    function msg(t){$('optMsg').textContent=t}
+    function pub(){ try{ var code=ls('sm_chat_code'),tok=ls('sm_chat_token'); if(!code||!tok) return; var n=Object.keys(found).length,show=ls('sm_chat_eggshow')!=='0',pn=show&&n>=3?n:0;
+      fetch('https://spotme-chat-obom.onrender.com/api/messenger/eggs',{method:'POST',headers:{'Content-Type':'application/json','x-spotme-code':code,'x-spotme-token':tok},body:JSON.stringify({n:pn,show:show})}).then(function(r){if(r.ok)lset('sm_chat_eggpub',pn+'|'+(show?1:0))}).catch(function(){}); }catch(e){} }
+    $('optShow').onchange=function(){lset('sm_chat_eggshow',this.checked?'1':'0');pub();
+      msg(this.checked?(Object.keys(found).length>=3?'✓ Gespeichert – dein Rang ist für deine Kontakte sichtbar.':'✓ Gespeichert – sichtbar, sobald du 3 Eier hast.'):'✓ Gespeichert – dein Rang ist versteckt.')};
+    $('optHints').onchange=function(){lset('sm_chat_egghints_off',this.checked?'0':'1');
+      msg(this.checked?'✓ Gespeichert – Kontakte mit Lotsen-Rang dürfen dir Hinweise schicken.':'✓ Gespeichert – du bekommst keine Eier-Hinweise mehr.')}; }
   else if(list) list.forEach(function(id){found[id]=1});
   else if(n!=null) EGGS.slice(0,n).forEach(function(e){found[e.id]=1});
   var count=Object.keys(found).length, R=rankOf(count);
@@ -163,6 +169,7 @@ function miniSvg(kind,uid){ return '<svg viewBox="0 0 100 100"><defs><linearGrad
     var e=EGGS.filter(function(x){return x.id===sel})[0];
     var h='<p class="fine">So sieht es aus, wenn ein Eier-Lotse einem Kontakt hilft. Wähle oben ein Ei und hier die Stufe.</p>';
     if(!e){ $('help').innerHTML=h+'<p style="margin-top:.8rem">👆 Tippe oben ein Ei an.</p>'; return; }
+    if(live && !found[e.id]){ $('help').innerHTML=h+'<p style="margin-top:.8rem">🔒 Dieses Ei hast du noch nicht gefunden. Die Hinweise dazu siehst du erst, wenn du es hast – oder ein Eier-Lotse hilft dir.</p>'; return; }
     h+='<div class="seg">'+LEVEL_NAMES.map(function(l,i){return '<button type="button" data-l="'+i+'" class="'+(i===lvl?'on':'')+'">'+l+'</button>'}).join('')+'</div>'
       +'<div class="bubble"><div class="hd">🥚 DEIN EASTER EGG HELFER · '+esc(who)+'</div><div class="bd">'+e.ic+' '+esc(e.h[lvl])+'</div></div>'
       +'<p class="fine">'+(lotse||!handle?'':'(Hinweise schicken darf man ab 3 Eiern.) ')+'Testansicht, es wird nichts gesendet. Im Messenger kommt das als Karte im Chat an, Antworten ist ganz normal möglich.</p>';
