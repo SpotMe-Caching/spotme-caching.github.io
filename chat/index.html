@@ -298,12 +298,16 @@
   <div id="replyBar" class="reply-bar hidden"><div class="rb-txt"><b id="replyWho"></b><span id="replyTxt"></span></div><button type="button" onclick="cancelReply()" aria-label="Antwort abbrechen">✕</button></div>
   <div id="msgMenu" class="msg-menu hidden"><button type="button" onclick="menuReply()">↩ Antworten</button><button type="button" onclick="menuCopy()">📋 Kopieren</button></div>
   <div class="input-bar">
-    <button id="moodBtn" class="img-btn" onclick="toggleMoodTray()" aria-label="Stimmung" title="Stimmung der Sprechblase">💬</button>
-    <button id="imgBtn" class="img-btn" onclick="pickImage()" aria-label="Bild senden" title="Bild senden">📷</button>
+    <div id="attMenu" class="att-menu hidden"></div>
+    <div class="ib-pill">
+      <button id="moodBtn" class="img-btn ib-mood" onclick="toggleMoodTray()" aria-label="Stimmung" title="Stimmung der Sprechblase">💬</button>
+      <textarea id="msgInput" placeholder="Nachricht..." rows="1"></textarea>
+      <button id="attBtn" class="img-btn ib-att" onclick="toggleAttMenu(event)" aria-label="Mehr" title="Mehr: Verifizierung, Hinweise …"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1l-9.2 9.2a5.5 5.5 0 0 1-7.8-7.8l9.2-9.2a3.7 3.7 0 0 1 5.2 5.2l-9.2 9.2a1.8 1.8 0 0 1-2.6-2.6l8.5-8.5"/></svg></button>
+      <button id="imgBtn" class="img-btn ib-cam" onclick="pickImage()" aria-label="Bild senden" title="Bild senden"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 8"/></svg></button>
+    </div>
     <input type="file" id="imgFile" accept="image/*" class="hidden" onchange="onImagePicked(this)">
-    <button id="micBtn" class="img-btn" onclick="voxStart()" aria-label="Sprachnachricht aufnehmen" title="Sprachnachricht aufnehmen">🎤</button>
-    <textarea id="msgInput" placeholder="Nachricht..." rows="1"></textarea>
-    <button onclick="sendMessage()">➤</button>
+    <button id="micBtn" class="img-btn ib-round" onclick="voxStart()" aria-label="Sprachnachricht aufnehmen" title="Sprachnachricht aufnehmen"><svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M12 15a3.5 3.5 0 0 0 3.5-3.5V6a3.5 3.5 0 0 0-7 0v5.5A3.5 3.5 0 0 0 12 15zm6-3.5a1 1 0 0 0-2 0 4 4 0 0 1-8 0 1 1 0 0 0-2 0 6 6 0 0 0 5 5.9V20H9a1 1 0 0 0 0 2h6a1 1 0 0 0 0-2h-2v-2.6a6 6 0 0 0 5-5.9z"/></svg></button>
+    <button id="sendBtn" class="ib-round ib-send" onclick="sendMessage()" aria-label="Senden">➤</button>
     <div id="voxBar" class="vox-bar-rec hidden"><span class="vox-dot"></span><span id="voxTime">0:00</span><span class="vox-hint">Aufnahme läuft</span><button class="vox-x" onclick="voxCancel()" aria-label="Verwerfen">🗑</button><button class="vox-ok" onclick="voxStop(true)" aria-label="Senden">➤</button></div>
   </div>
 </div>
@@ -1778,6 +1782,7 @@ function applyChatState(extra) {
   input.disabled = lock; input.placeholder = ph;
   if (send) send.disabled = lock;
   if (cam) cam.disabled = lock;
+  { const mic = document.getElementById('micBtn'), att = document.getElementById('attBtn'); if (mic) mic.disabled = lock; if (att) att.disabled = lock; }
   refreshImageState();
 }
 document.addEventListener('click', (e) => {
@@ -2052,6 +2057,21 @@ function toggleMoodMore() {
   const b = document.getElementById('moodMore'); const on = t.classList.contains('more');
   b.innerHTML = (on ? '◂' : '▸') + '<span>' + (on ? 'weniger' : 'mehr') + '</span>';
 }
+function composerSync() { const i = document.getElementById('msgInput'), b = document.querySelector('.input-bar'); if (i && b) b.classList.toggle('typing', i.value.trim().length > 0); }
+setInterval(composerSync, 600);
+// 📎 Mehr-Menü (Platz für weitere Chat-Funktionen)
+function toggleAttMenu(ev) {
+  if (ev) ev.stopPropagation();
+  const m = document.getElementById('attMenu'); if (!m) return;
+  if (!m.classList.contains('hidden')) { m.classList.add('hidden'); return; }
+  const it = [['✔', 'Verifizierung', 'toggleVerCard()']];
+  try { if (document.getElementById('eggBtn') && !document.getElementById('eggBtn').classList.contains('hidden')) it.push(['🥚', 'Easter Egg Hinweis senden', 'openEggHelp()']); } catch (e) {}
+  it.push(['🌟', 'Sternkarte', 'starMap()']);
+  it.push(['🥚', 'Eiersuche', "location.href='eier.html'"]);
+  m.innerHTML = it.map(x => `<button type="button" onclick="document.getElementById('attMenu').classList.add('hidden');${x[2]}"><span>${x[0]}</span>${x[1]}</button>`).join('');
+  m.classList.remove('hidden');
+}
+document.addEventListener('click', (e) => { const m = document.getElementById('attMenu'); if (m && !m.classList.contains('hidden') && !m.contains(e.target)) m.classList.add('hidden'); });
 function toggleMoodTray() { document.getElementById('moodTray').classList.toggle('hidden'); }
 function pickMood(m) {
   CUR_MOOD = m;
@@ -2796,7 +2816,7 @@ async function sendMessage() {
   await saveMessages(msgs);
   await renderMessages(true);
   input.value = '';
-  input.style.height = 'auto';
+  input.style.height = 'auto'; composerSync();
   playMood(parseMood(stripQuoteText(text)).mood, 'out');
 
   // Priority: P2P → Server Fallback

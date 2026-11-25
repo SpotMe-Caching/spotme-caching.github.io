@@ -97,3 +97,31 @@
 :root:not([data-theme="light"]) .mood-tray button.sel { background: var(--card); border-color: var(--acc); color: var(--acc); }
 :root:not([data-theme="light"]) .mood-tray button.more { color: var(--acc); }
 
+
+/* ── Eingabeleiste im WhatsApp-Stil: Pille (💬 · Text · 📎 · Bild) + großes rundes Mikro/Senden rechts ── */
+:root .input-bar { align-items: flex-end; gap: 0.45rem; padding: 0.5rem 0.55rem max(0.5rem, env(safe-area-inset-bottom)); }
+:root .input-bar .ib-pill { flex: 1; min-width: 0; display: flex; align-items: flex-end; gap: 0.1rem; background: var(--card, #111820); border-radius: 24px; padding: 0 0.3rem; border: 1px solid var(--bord2, rgba(255,255,255,0.11)); }
+:root .input-bar .ib-pill:focus-within { border-color: var(--acc, #ff9f00); }
+:root:not([data-theme="light"]) .input-bar .ib-pill textarea,
+:root .input-bar .ib-pill textarea { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; padding: 0.7rem 0.3rem; border-radius: 0; }
+:root:not([data-theme="light"]) .input-bar .ib-pill textarea:focus { outline: 0; }
+:root:not([data-theme="light"]) .input-bar .ib-pill .img-btn { width: 40px; height: 44px; flex-shrink: 0; border-radius: 50%; background: transparent; border: 0; box-shadow: none; opacity: 0.75; display: flex; align-items: center; justify-content: center; padding: 0; color: var(--text); }
+:root:not([data-theme="light"]) .input-bar .ib-pill .ib-mood { font-size: 1.35rem; }
+:root:not([data-theme="light"]) .input-bar .ib-pill .ib-mood.on { opacity: 1; box-shadow: none; }
+:root:not([data-theme="light"]) .input-bar .ib-pill .ib-cam:not(.on), :root:not([data-theme="light"]) .input-bar .ib-pill .ib-att { opacity: 0.75; }
+:root:not([data-theme="light"]) .input-bar .ib-pill .ib-cam.on { opacity: 1; color: var(--ok, #22c55e); box-shadow: none; }
+:root:not([data-theme="light"]) .input-bar button.ib-round { width: 50px; height: 50px; flex-shrink: 0; border-radius: 50%; border: 0; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; background: var(--card, #111820); color: var(--text); opacity: 0.7; }
+:root:not([data-theme="light"]) .input-bar button.ib-round.on { opacity: 1; background: linear-gradient(135deg, var(--acc), var(--acc2)); color: #1c1208; box-shadow: none; }
+:root:not([data-theme="light"]) .input-bar button.ib-send { background: linear-gradient(135deg, var(--acc), var(--acc2)); color: #1c1208; opacity: 1; }
+/* Beim Tippen: nur 💬 + Text + Senden */
+:root .input-bar .ib-send { display: none !important; }
+:root .input-bar.typing .ib-send { display: flex !important; }
+:root .input-bar.typing .ib-att, :root .input-bar.typing .ib-cam, :root .input-bar.typing #micBtn { display: none !important; }
+.att-menu { position: absolute; left: .6rem; bottom: calc(100% + 6px); z-index: 300; background: var(--card, #111820); border: 1px solid var(--bord2, rgba(255,255,255,0.15)); border-radius: 16px; padding: .35rem; box-shadow: 0 8px 28px rgba(0,0,0,.5); min-width: 220px; }
+.att-menu.hidden { display: none; }
+.att-menu button { display: flex; align-items: center; gap: .7rem; width: 100%; background: transparent; border: 0; color: var(--text, #e8eef2); font: inherit; font-size: .95rem; text-align: left; padding: .7rem .8rem; border-radius: 10px; }
+.att-menu button:active { background: rgba(255,255,255,.08); }
+.att-menu button span { width: 1.4rem; text-align: center; }
+/* 📎-Menü: dunkle Zeilen statt Akzent-Verlauf der Eingabeleisten-Knöpfe */
+:root:not([data-theme="light"]) .input-bar .att-menu button { background: transparent; color: var(--text, #e8eef2); border: 0; box-shadow: none; opacity: 1; border-radius: 10px; }
+:root:not([data-theme="light"]) .input-bar .att-menu button:active { background: rgba(255,255,255,.1); }
