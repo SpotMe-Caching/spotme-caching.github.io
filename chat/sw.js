@@ -11,7 +11,7 @@
 //   • Externe Ressourcen      → Stale-While-Revalidate
 // ══════════════════════════════════════════════════════════════════════════════
 
-const CACHE_VERSION = "chat-v1.0.70";
+const CACHE_VERSION = "chat-v1.0.71";
 const CACHE_STATIC = `spot-static-${CACHE_VERSION}`;
 const CACHE_API = `spot-api-${CACHE_VERSION}`;
 const CACHE_RUNTIME = `spot-runtime-${CACHE_VERSION}`;
@@ -246,6 +246,7 @@ self.addEventListener("push", (event) => {
         if (old.length) {
           const n = ((old[0].data && old[0].data.count) || 1) + 1;
           options.data.count = n;
+          options.renotify = false; // bestehende Benachrichtigung still aktualisieren (kein erneutes Summen)
           options.body = tag.startsWith("chat-") ? `${n} neue Nachrichten – tippe zum Öffnen` : `${n} neue Mitteilungen – tippe zum Öffnen`;
         }
       } catch (e) {}
