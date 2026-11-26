@@ -66,6 +66,24 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
 @keyframes sp{0%{opacity:0;transform:scale(.7)}50%{opacity:1;transform:scale(1.05)}100%{opacity:1;transform:scale(1)}}
 @keyframes sp2{0%,40%{opacity:0}100%{opacity:1}}
 @media (prefers-reduced-motion:reduce){.splash img,.splash p{animation:none}}
+@keyframes fly{0%{transform:translate(450px,-40px);opacity:0}6%{opacity:1}72%{opacity:1}86%{transform:translate(205px,176px);opacity:0}100%{transform:translate(205px,176px);opacity:0}}
+.cm{animation:fly 18s linear infinite}
+.cm.still{animation:none;transform:translate(318px,48px);opacity:1}
+@media (prefers-reduced-motion:reduce){.cm{animation:none;transform:translate(318px,48px);opacity:1}}
+.cmbar{display:flex;align-items:center;gap:.6rem;margin-top:.6rem;font-size:.88rem;color:var(--muted)}
+.cmbar button{font:inherit;font-size:.88rem;background:#131d36;border:1px solid var(--bord);color:var(--text);border-radius:999px;padding:.3rem .8rem}
+.tag.c{background:rgba(255,138,91,.16);color:#ffb08f}
+.slots{display:grid;gap:.35rem;margin:.6rem 0;font-size:.88rem}
+.slots div{display:flex;justify-content:space-between;gap:.6rem;border:1px solid var(--bord);border-radius:10px;padding:.4rem .7rem;background:#0a1124}
+.slots .bz{color:var(--acc)}.slots .fr{color:var(--ok)}
+.frm label{display:block;font-size:.85rem;color:var(--muted);margin:.6rem 0 .2rem}
+.frm input[type=text],.frm input[type=date],.frm textarea{width:100%;font:inherit;font-size:.95rem;background:#0a1124;border:1px solid var(--bord);color:var(--text);border-radius:10px;padding:.5rem .65rem}
+.frm textarea{min-height:64px;resize:vertical}
+.frm .ck{display:flex;gap:.5rem;align-items:flex-start;color:var(--text);font-size:.85rem;margin-top:.7rem}
+.frm .ck input{margin-top:.25rem}
+.frm .rowd{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+#cMsg{margin-top:.6rem;font-size:.9rem}
+#cMsg.err{color:#ff9d7a}#cMsg.ok{color:var(--ok)}
 </style>
 </head>
 <body>
@@ -77,6 +95,22 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
 <div class="chips" id="scen"></div>
 <div class="sky" id="sky"></div>
 <div id="info"></div>
+<div class="cmbar"><span>☄️ Komet im Anflug: <b style="color:var(--text)">@DragonsChain</b></span><button type="button" id="cmShow">Ansehen</button><button type="button" id="cmTog" aria-pressed="true">Komet: an</button></div>
+<div id="cmInfo"></div>
+
+<h2>☄️ Komet werden</h2>
+<p class="fine">Werbung, die ins Universum gehört. Pro Zeitraum fliegt nur ein Komet – für alle Nutzer sichtbar, immer als Partner gekennzeichnet.</p>
+<div class="card frm">
+  <b>Freie Zeiträume</b>
+  <div class="slots" id="slots"></div>
+  <label for="cH">Dein Profil (@Handle)</label><input type="text" id="cH" maxlength="20" placeholder="@DragonsChain" autocomplete="off">
+  <div class="rowd"><div><label for="cA">Von</label><input type="date" id="cA"></div><div><label for="cB">Bis</label><input type="date" id="cB"></div></div>
+  <label for="cT">Worum geht es? <span id="cN">0/140</span></label><textarea id="cT" maxlength="140" placeholder="Handgefertigte Kettenhemden aus Spanien …"></textarea>
+  <label class="ck"><input type="checkbox" id="cK"><span>Mein Komet wird als <b>Partner</b> gekennzeichnet. Es gibt kein Tracking und keine Weitergabe von Nutzerdaten.</span></label>
+  <div style="margin-top:.8rem"><button class="btn p" type="button" id="cSend">Bewerbung senden (nur Test)</button></div>
+  <div id="cMsg" role="status"></div>
+  <div class="fine" style="margin-top:.5rem">Das Universum (Admin) prüft jede Bewerbung. Bei Eignung kommt dein Komet zum gewählten Zeitraum.</div>
+</div>
 
 <h2>🕰 Zeit als Zutat</h2>
 <p class="fine">Eine Nachricht kann Geduld haben. Probier den Umschlag:</p>
@@ -134,7 +168,7 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
     verblasst:{name:'Lange still',c:[
       {n:'Gesa',d:300,r:.9,f:60,v:1},{n:'Wolfgang',d:280,r:.8,f:90,v:1},{n:'Mara',d:150,r:.7,f:120}]}
   };
-  var cur='neu',sel=-1;
+  var cur='neu',sel=-1,comet=true;
   function closeness(c){ // 0..1 – nur lokal berechnet
     if(c.req) return .05;
     var rec=Math.exp(-c.f/45);                 // Frische
@@ -162,6 +196,7 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
     var P=c.map(function(x,i){return pos(i,n,x)});
     (S.link||[]).forEach(function(l){var a=P[l[0]],b=P[l[1]];if(a&&b)h+='<line x1="'+a.x+'" y1="'+a.y+'" x2="'+b.x+'" y2="'+b.y+'" stroke="#7ec8ff" stroke-opacity=".28" stroke-width="1"/>'});
     P.forEach(function(p,i){if(c[i].v||c[i].r>.6)h+='<line x1="'+cx+'" y1="'+cy+'" x2="'+p.x+'" y2="'+p.y+'" stroke="'+(c[i].v?'#ffd45a':'#22d3ee')+'" stroke-opacity="'+(.12+p.cl*.3)+'" stroke-width="'+(.6+p.cl*1.4)+'"/>'});
+    if(comet){var CO=W+40;h+='<g data-comet="1" style="cursor:pointer"><g class="cm"><g transform="rotate(138)"><defs><linearGradient id="ct" x1="0" x2="1"><stop offset="0" stop-color="#ffb08f" stop-opacity=".9"/><stop offset="1" stop-color="#ffb08f" stop-opacity="0"/></linearGradient></defs><path d="M0 -3 L120 -1 L120 1 L0 3Z" fill="url(#ct)" transform="rotate(180)"/><path d="M0 -6 L70 -1 L70 1 L0 6Z" fill="url(#ct)" opacity=".5" transform="rotate(180) rotate(6)"/></g><circle r="22" fill="transparent"/><circle r="6" fill="#fff3e6"/><circle r="10" fill="#ff8a5b" opacity=".35"/><text y="-14" text-anchor="middle" fill="#ffd9c4" font-size="9.5" font-weight="700" transform="translate(0,0)">@DragonsChain · Partner</text></g></g>'}
     // Ich
     h+='<circle cx="'+cx+'" cy="'+cy+'" r="22" fill="#0b1630" stroke="#f59e0b" stroke-width="2"/>'+star(cx,cy,13,'#f59e0b',1)+'<text x="'+cx+'" y="'+(cy+40)+'" text-anchor="middle" fill="#e8edf5" font-size="12" font-weight="700">@'+esc(me)+'</text>';
     P.forEach(function(p,i){var x=c[i],r=5+p.cl*9,col=x.req?'#ff8a5b':x.v?'#ffd45a':'#9fd8ff',op=.35+p.cl*.65;
@@ -188,7 +223,7 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
       (surprise(x)?'<p class="fine" style="margin-top:.5rem">✉️ Dieser Stern hält eine Überraschung bereit – entsteht aus langer Freundschaft und lebendigem Verlauf, nie aus Zufall.</p>':''))+
       '<div style="margin-top:.7rem"><button class="btn p" disabled>Chat öffnen (nur Test)</button></div></div>';
   }
-  $('sky').addEventListener('click',function(ev){var g=ev.target.closest&&ev.target.closest('[data-i]');if(!g)return;sel=+g.getAttribute('data-i');draw()});
+  $('sky').addEventListener('click',function(ev){if(ev.target.closest&&ev.target.closest('[data-comet]')){cmCard();return}var g=ev.target.closest&&ev.target.closest('[data-i]');if(!g)return;sel=+g.getAttribute('data-i');draw()});
   function chips(){$('scen').innerHTML=Object.keys(SC).map(function(k){return '<button type="button" data-k="'+k+'" class="'+(k===cur?'on':'')+'">'+esc(SC[k].name)+'</button>'}).join('')}
   $('scen').addEventListener('click',function(ev){var b=ev.target.closest('[data-k]');if(!b)return;cur=b.getAttribute('data-k');sel=-1;chips();draw();inv()});
   function inv(){var n=SC[cur].c.length;$('inv').textContent='✨ @'+me+' sucht Sternenstaub für ein gemeinsames Sternbild'+(n?' – schon '+n+(n===1?' Stern':' Sterne')+' leuchten.':'.')+' Komm in mein Universum.'}
@@ -207,7 +242,30 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
   $('icons').innerHTML=[96,64,48,32].map(function(z){return '<div style="text-align:center"><img class="ci" src="wesee/mark.png" width="'+z+'" height="'+z+'" alt=""><div class="fine">'+z+'</div></div>'}).join('')+[96,64,48,32].map(function(z){return '<div style="text-align:center"><img class="sq" src="wesee/mark.png" width="'+z+'" height="'+z+'" alt=""><div class="fine">'+z+'</div></div>'}).join('');
   $('splash').onclick=function(){var s=$('splash');var c=s.cloneNode(true);s.parentNode.replaceChild(c,s);c.id='splash';c.onclick=arguments.callee};
   $('lpt').textContent='@'+me+' im WeSee.Q-Universum';
-  chips();wait();env();inv();draw();
+  // Komet
+  var CM={h:'DragonsChain',a:'2026-11-26',b:'2026-12-26',t:'Designer von Unikat-Rüstungen aus Edelstahl'};
+  function cmCard(){var d=Math.max(0,Math.round((new Date(CM.b)-new Date('2026-11-26'))/864e5));
+    $('cmInfo').innerHTML='<div class="card"><h4>☄️ @'+esc(CM.h)+'</h4><div style="margin:.2rem 0"><span class="tag c">Partner · Komet</span></div><p class="fine" style="color:var(--text)">'+esc(CM.t)+'</p><div class="why"><span>Zeitraum</span><b>26.11. – 26.12.2026</b><span>Verbleibend (Beispiel)</span><b>'+d+' Tage</b></div><p class="fine" style="margin-top:.5rem">Du siehst den Komet, er sieht dich nicht: kein Tracking, nur ein anonymer Tipp-Zähler.</p><div style="margin-top:.7rem"><button class="btn p" disabled>Profil ansehen (nur Test)</button></div></div>'}
+  $('cmShow').onclick=cmCard;
+  function cmTog(){var t=$('cmTog');t.textContent='Komet: '+(comet?'an':'aus');t.setAttribute('aria-pressed',comet);draw()}
+  $('cmTog').onclick=function(){comet=!comet;if(!comet)$('cmInfo').innerHTML='';cmTog()};
+  var BK=[['2026-11-26','2026-12-26','@DragonsChain']];
+  function fd(x){var a=x.split('-');return a[2]+'.'+a[1]+'.'+a[0]}
+  function slots(){var h=BK.map(function(b){return '<div><span>'+fd(b[0])+' – '+fd(b[1])+'</span><span class="bz">vergeben · '+esc(b[2])+'</span></div>'}).join('');
+    h+='<div><span>ab '+fd('2026-12-27')+'</span><span class="fr">frei</span></div>';$('slots').innerHTML=h}
+  function msg(t,k){var m=$('cMsg');m.textContent=t;m.className=k||''}
+  $('cT').oninput=function(){$('cN').textContent=$('cT').value.length+'/140'};
+  $('cSend').onclick=function(){
+    var h=$('cH').value.replace(/^@/,'').trim(),a=$('cA').value,b=$('cB').value,t=$('cT').value.trim();
+    if(!/^[A-Za-z0-9_]{1,20}$/.test(h))return msg('Bitte dein @Handle angeben (Buchstaben, Zahlen, _).','err');
+    if(!a||!b)return msg('Bitte Zeitraum wählen (von – bis).','err');
+    if(b<a)return msg('Das Ende liegt vor dem Start.','err');
+    if(Math.round((new Date(b)-new Date(a))/864e5)>31)return msg('Ein Komet fliegt höchstens 31 Tage.','err');
+    for(var i=0;i<BK.length;i++)if(a<=BK[i][1]&&b>=BK[i][0])return msg('Dieser Zeitraum ist schon vergeben ('+fd(BK[i][0])+' – '+fd(BK[i][1])+').','err');
+    if(t.length<10)return msg('Beschreibe kurz (mind. 10 Zeichen), worum es geht.','err');
+    if(!$('cK').checked)return msg('Bitte die Kennzeichnung als Partner bestätigen.','err');
+    msg('✅ Bewerbung eingegangen. Das Universum prüft sie. (Test: nichts wurde gesendet)','ok')};
+  chips();wait();env();inv();slots();cmTog();
 })();
 </script>
 </body>
