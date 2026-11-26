@@ -28,7 +28,7 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
 .sky{position:relative;width:100%;aspect-ratio:1/1.12;border-radius:22px;border:1px solid var(--bord);overflow:hidden;background:radial-gradient(circle at 50% 50%,#0f1c3d 0,#070b1a 55%,#04060f 100%)}
 .sky svg{position:absolute;inset:0;width:100%;height:100%;touch-action:manipulation}
 .sky .hint{position:absolute;left:0;right:0;bottom:12px;text-align:center;color:var(--muted);font-size:.82rem;pointer-events:none}
-.empty{position:absolute;left:0;right:0;top:58%;text-align:center;padding:0 1.4rem}
+.empty{position:absolute;left:0;right:0;top:46%;text-align:center;padding:0 1.4rem}
 .empty h3{font-size:1.15rem;margin-bottom:.25rem}
 .empty p{color:var(--muted);font-size:.9rem;margin-bottom:.7rem}
 .card{background:var(--card);border:1px solid var(--bord);border-radius:16px;padding:.9rem 1rem;margin-top:.8rem}
@@ -54,6 +54,18 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
 .pl{animation:pulse 2s ease-out infinite}
 .spin{transform-origin:50% 50%;animation:drift 90s linear infinite}
 @media (prefers-reduced-motion:reduce){.tw,.pl,.spin{animation:none}}
+.icons{display:flex;gap:1rem;align-items:flex-end;flex-wrap:wrap;margin-top:.7rem}
+.icons img{display:block;background:#070b1a;padding:9%;box-sizing:border-box}
+.icons .ci{border-radius:50%}.icons .sq{border-radius:22%}
+.lp{margin-top:.7rem;border:1px solid var(--bord);border-radius:14px;overflow:hidden;background:#0a1020}
+.lpimg{aspect-ratio:1200/630;overflow:hidden;background:#04060f}.lpimg img{width:100%;height:100%;object-fit:contain;display:block}
+.lpt{padding:.6rem .8rem}.lpt small{display:block;color:var(--muted);font-size:.75rem}.lpt b{display:block;font-size:.95rem;line-height:1.3}.lpt span{color:var(--muted);font-size:.85rem}
+.splash{margin-top:.7rem;border-radius:16px;background:#04060f;border:1px solid var(--bord);height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.6rem;cursor:pointer}
+.splash img{width:104px;height:104px;border-radius:22%;background:#070b1a;padding:9%;box-sizing:border-box;animation:sp 2.4s ease both}
+.splash p{color:#cfe3ff;letter-spacing:.12em;font-weight:300;animation:sp2 2.4s ease both}
+@keyframes sp{0%{opacity:0;transform:scale(.7)}50%{opacity:1;transform:scale(1.05)}100%{opacity:1;transform:scale(1)}}
+@keyframes sp2{0%,40%{opacity:0}100%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.splash img,.splash p{animation:none}}
 </style>
 </head>
 <body>
@@ -61,7 +73,7 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
 <div class="sandbox">🧪 <b>Testseite.</b> Alles hier ist Beispiel-Daten – nichts wird gesendet oder gespeichert. Zum Anschauen und Verbessern.</div>
 
 <h2 style="margin-top:.4rem">🌌 Dein Universum</h2>
-<p class="fine">Startseite des Messengers. Wähle ein Szenario:</p>
+<p class="fine">Startseite des Messengers. Du stehst oben links im goldenen Schnitt – im Fokus ist dein Raum mit deinen Sternen. Wähle ein Szenario:</p>
 <div class="chips" id="scen"></div>
 <div class="sky" id="sky"></div>
 <div id="info"></div>
@@ -79,6 +91,21 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
   <b>So würde dein geteiltes Universum aussehen</b>
   <q id="inv"></q>
   <div class="fine">Als Link-Vorschau mit Sternbild-Bild – wie bei den Sternstufen.</div>
+</div>
+
+<h2>🎨 Logo „WeSee.Q“ im Test</h2>
+<p class="fine">Entwurf aus deinem Bild (JPEG, daher leicht weich). Nur zum Anschauen – die App-Icons bleiben unverändert.</p>
+<div class="card">
+  <b>App-Icon</b> <span class="fine">· rund (Android) und abgerundet (iPhone) in 4 Größen</span>
+  <div class="icons" id="icons"></div>
+</div>
+<div class="card">
+  <b>Link-Vorschau</b> <span class="fine">· so sieht der Post auf Bluesky aus</span>
+  <div class="lp"><div class="lpimg"><img src="wesee/full.jpg" alt="WeSee.Q"></div><div class="lpt"><small>spotme-chat-obom.onrender.com</small><b id="lpt">im WeSee.Q-Universum</b><span>Ich sehe dich. Nicht deine Daten.</span></div></div>
+</div>
+<div class="card">
+  <b>Splash</b> <span class="fine">· beim Start (tippen zum Wiederholen)</span>
+  <div class="splash" id="splash"><img src="wesee/mark.png" alt=""><p>we see you …</p></div>
 </div>
 
 <h2>Wie „nah“ ein Stern ist</h2>
@@ -117,23 +144,26 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
   function surprise(c){ // Überraschung hängt an Kontaktdauer + Verlauf
     return !!c.env;
   }
-  var W=400,H=448,cx=W/2,cy=H/2-8;
+  var W=400,H=448,cx=W*.382,cy=H*.382; // ich: Schnittpunkt des goldenen Schnitts (oben links)
+  var SK=.5*W,SKY=.5*H; // Mitte des Raums
   function pos(i,n,c){
-    var cl=closeness(c),rad=62+(1-cl)*(Math.min(W,H)/2-36-62);
-    var a=-Math.PI/2+(i/Math.max(n,1))*Math.PI*2+(i%2?.12:-.08);
-    return {x:cx+Math.cos(a)*rad*1.0,y:cy+Math.sin(a)*rad*1.04,cl:cl};
+    // Der Raum liegt rechts unten von mir. Entfernung = Nähe, Richtung = verteilt (Goldener Winkel, kein Gedränge)
+    var cl=closeness(c),rad=64+(1-cl)*230;
+    var t=((i+1)*0.6180339)%1,a=(-34+t*150)*Math.PI/180;
+    var x=cx+Math.cos(a)*rad,y=cy+Math.sin(a)*rad*1.04;
+    return {x:Math.max(30,Math.min(W-30,x)),y:Math.max(30,Math.min(H-34,y)),cl:cl};
   }
   function star(x,y,r,fill,op){var p='';for(var i=0;i<10;i++){var rr=i%2?r*.42:r,a=-Math.PI/2+i*Math.PI/5;p+=(i?'L':'M')+(x+Math.cos(a)*rr).toFixed(1)+' '+(y+Math.sin(a)*rr).toFixed(1)}return '<path d="'+p+'Z" fill="'+fill+'" opacity="'+op+'"/>'}
   function dust(n){var s='',seed=7;function rnd(){seed=(seed*9301+49297)%233280;return seed/233280}
-    for(var i=0;i<n;i++){var a=rnd()*Math.PI*2,r=20+rnd()*140;s+='<circle class="tw" style="--d:'+(2+rnd()*3).toFixed(1)+'s" cx="'+(cx+Math.cos(a)*r).toFixed(1)+'" cy="'+(cy+Math.sin(a)*r*1.05).toFixed(1)+'" r="'+(.6+rnd()*1.4).toFixed(1)+'" fill="#cfe3ff" opacity=".6"/>'}return s}
+    for(var i=0;i<n;i++){var a=rnd()*Math.PI*2,r=20+rnd()*230;s+='<circle class="tw" style="--d:'+(2+rnd()*3).toFixed(1)+'s" cx="'+(SK+Math.cos(a)*r*.85).toFixed(1)+'" cy="'+(SKY+Math.sin(a)*r).toFixed(1)+'" r="'+(.6+rnd()*1.4).toFixed(1)+'" fill="#cfe3ff" opacity=".6"/>'}return s}
   function draw(){
     var S=SC[cur],c=S.c,n=c.length,h='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Dein Universum">';
-    h+='<g class="spin">'+dust(n?46:80)+'</g>';
+    h+='<g class="spin" style="transform-origin:50% 50%">'+dust(n?46:80)+'</g>';
     var P=c.map(function(x,i){return pos(i,n,x)});
     (S.link||[]).forEach(function(l){var a=P[l[0]],b=P[l[1]];if(a&&b)h+='<line x1="'+a.x+'" y1="'+a.y+'" x2="'+b.x+'" y2="'+b.y+'" stroke="#7ec8ff" stroke-opacity=".28" stroke-width="1"/>'});
     P.forEach(function(p,i){if(c[i].v||c[i].r>.6)h+='<line x1="'+cx+'" y1="'+cy+'" x2="'+p.x+'" y2="'+p.y+'" stroke="'+(c[i].v?'#ffd45a':'#22d3ee')+'" stroke-opacity="'+(.12+p.cl*.3)+'" stroke-width="'+(.6+p.cl*1.4)+'"/>'});
     // Ich
-    h+='<circle cx="'+cx+'" cy="'+cy+'" r="26" fill="#0b1630" stroke="#f59e0b" stroke-width="2"/>'+star(cx,cy,15,'#f59e0b',1)+'<text x="'+cx+'" y="'+(cy+44)+'" text-anchor="middle" fill="#e8edf5" font-size="12" font-weight="700">@'+esc(me)+'</text>';
+    h+='<circle cx="'+cx+'" cy="'+cy+'" r="22" fill="#0b1630" stroke="#f59e0b" stroke-width="2"/>'+star(cx,cy,13,'#f59e0b',1)+'<text x="'+cx+'" y="'+(cy+40)+'" text-anchor="middle" fill="#e8edf5" font-size="12" font-weight="700">@'+esc(me)+'</text>';
     P.forEach(function(p,i){var x=c[i],r=5+p.cl*9,col=x.req?'#ff8a5b':x.v?'#ffd45a':'#9fd8ff',op=.35+p.cl*.65;
       if(x.req)h+='<circle class="pl" cx="'+p.x+'" cy="'+p.y+'" r="14" fill="none" stroke="#ff8a5b" stroke-width="2"/>';
       h+='<g data-i="'+i+'" style="cursor:pointer">'+'<circle cx="'+p.x+'" cy="'+p.y+'" r="'+(r+12)+'" fill="transparent"/>'+(i===sel?'<circle cx="'+p.x+'" cy="'+p.y+'" r="'+(r+7)+'" fill="none" stroke="#22d3ee" stroke-width="1.5"/>':'')+star(p.x,p.y,r,col,op)+
@@ -174,6 +204,9 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
     $('skip').disabled=left<=0;$('skip').textContent=wsel==='meet'?'📍 Check-in simulieren':'⏩ Zeit vorspulen';$('openE').disabled=left>0}
   $('skip').onclick=function(){left=0;env()};
   $('openE').onclick=function(){opened=true;env()};
+  $('icons').innerHTML=[96,64,48,32].map(function(z){return '<div style="text-align:center"><img class="ci" src="wesee/mark.png" width="'+z+'" height="'+z+'" alt=""><div class="fine">'+z+'</div></div>'}).join('')+[96,64,48,32].map(function(z){return '<div style="text-align:center"><img class="sq" src="wesee/mark.png" width="'+z+'" height="'+z+'" alt=""><div class="fine">'+z+'</div></div>'}).join('');
+  $('splash').onclick=function(){var s=$('splash');var c=s.cloneNode(true);s.parentNode.replaceChild(c,s);c.id='splash';c.onclick=arguments.callee};
+  $('lpt').textContent='@'+me+' im WeSee.Q-Universum';
   chips();wait();env();inv();draw();
 })();
 </script>
