@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fokus-Chat – SpotMe Messenger</title>
+<meta name="description" content="Testseite: Die neue Nachricht im Fokus, ältere laufen nach hinten.">
+<meta name="theme-color" content="#04060f">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="icons/spot_192.png">
+<link rel="stylesheet" href="../fonts.css">
+<style>
+:root{--bg:#04060f;--card:#0d1426;--bord:rgba(255,255,255,.09);--gold:#ffd45a;--acc:#f59e0b;--cy:#22d3ee;--ok:#10b981;--text:#e8edf5;--muted:#8793ab;--sans:'Outfit',system-ui,-apple-system,'Segoe UI',sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+html{background:var(--bg)}
+body{font-family:var(--sans);background:radial-gradient(ellipse at 50% 0%,#14224a,var(--bg) 60%) fixed;color:var(--text);font-size:17px;line-height:1.5;-webkit-text-size-adjust:100%}
+.wrap{max-width:520px;margin:0 auto;padding:0 16px 60px}
+.sandbox{background:rgba(245,158,11,.12);border:1px dashed var(--acc);color:#ffd9a0;border-radius:12px;padding:.6rem .9rem;font-size:.9rem;margin:14px 0}
+h2{font-size:1.25rem;margin:1.2rem 0 .5rem}
+.fine{color:var(--muted);font-size:.85rem}
+.chips{display:flex;flex-wrap:wrap;gap:.4rem;margin:.4rem 0}
+.chips button{font:inherit;font-size:.88rem;background:#131d36;border:1px solid var(--bord);color:var(--text);border-radius:999px;padding:.4rem .8rem}
+.chips button.on{border-color:var(--cy);background:#0e2a33;color:var(--cy)}
+
+/* ── Chat-Bühne ── */
+.phone{border:1px solid var(--bord);border-radius:22px;overflow:hidden;background:#070b1a;margin-top:.6rem}
+.hd{display:flex;align-items:center;gap:.6rem;padding:.6rem .9rem;border-bottom:1px solid var(--bord);background:#0a1020}
+.hd .av{width:34px;height:34px;border-radius:50%;background:#0e2a33;border:2px solid var(--cy);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--cy)}
+.hd b{display:block;line-height:1.1}.hd small{color:var(--ok);font-size:.75rem}
+.stage{position:relative;height:var(--H,500px);overflow:hidden;perspective:var(--P,640px);perspective-origin:50% 100%;background:radial-gradient(circle at 50% 100%,#10204a 0,#070b1a 70%)}
+.deck{position:absolute;inset:0;transform-style:preserve-3d}
+.m{position:absolute;left:0;right:0;top:0;padding:0 12px;display:flex;transform-origin:50% 100%;will-change:transform,opacity;transition:transform .55s cubic-bezier(.2,.8,.2,1),opacity .55s}
+.m.me{justify-content:flex-end}.m.th{justify-content:flex-start}
+.rm .m{transition:none}
+.b{max-width:82%;padding:.55rem .8rem;border-radius:18px;font-size:.98rem;line-height:1.4;overflow:auto;max-height:calc(var(--H,500px)*.62);position:relative}
+.me .b{background:linear-gradient(135deg,#ffb347,#ff8a5b);color:#2a1300;border-bottom-right-radius:6px}
+.th .b{background:#121c38;border:1px solid rgba(34,211,238,.28);border-bottom-left-radius:6px}
+.b small{display:block;opacity:.6;font-size:.68rem;margin-top:.2rem;font-family:ui-monospace,monospace}
+.img{width:200px;height:130px;border-radius:12px;background:linear-gradient(135deg,#2a3b6e,#6b3f8c 60%,#c0577a);display:flex;align-items:center;justify-content:center;font-size:2rem}
+.vox{display:flex;align-items:center;gap:.6rem;min-width:190px}
+.vox i{width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;font-style:normal;font-size:.8rem}
+.vox s{flex:1;height:18px;background:repeating-linear-gradient(90deg,currentColor 0 2px,transparent 2px 5px);opacity:.55;-webkit-mask:linear-gradient(0deg,#000 40%,transparent);mask:linear-gradient(0deg,#000 40%,transparent)}
+.b.wow{background:#ffd45a;color:#2a1b00;font-weight:800;font-size:1.15rem;padding:1rem 1.3rem;border:0;border-radius:0;clip-path:polygon(0 25%,12% 18%,8% 0,28% 12%,40% 0,50% 12%,65% 0,72% 14%,92% 4%,88% 24%,100% 34%,90% 50%,100% 66%,86% 72%,92% 100%,70% 86%,58% 100%,46% 88%,30% 100%,26% 82%,6% 92%,12% 70%,0 62%,10% 46%)}
+.b.q{border-radius:18px;border-bottom-left-radius:4px}
+.hl .b{box-shadow:0 0 0 2px var(--cy),0 0 22px rgba(34,211,238,.5)}
+/* Lesemodus */
+.stage.read{overflow-y:auto;perspective:none}
+.stage.read .deck{position:relative;inset:auto;transform-style:flat;padding:10px 0 14px}
+.stage.read .m{transition:none;position:relative;transform:none!important;opacity:1!important;margin:6px 0;pointer-events:auto!important}
+.back{position:absolute;right:12px;bottom:12px;z-index:5;font:inherit;font-size:.85rem;background:#0e7490;color:#fff;border:1px solid var(--cy);border-radius:999px;padding:.4rem .8rem;display:none}
+.stage.read .back{display:block}
+.pill{position:absolute;left:0;right:0;top:8px;text-align:center;z-index:4;font-size:.72rem;color:var(--muted);pointer-events:none}
+.comp{display:flex;gap:.5rem;padding:.6rem;border-top:1px solid var(--bord);background:#0a1020}
+.comp input{flex:1;font:inherit;font-size:.95rem;background:#0f1730;border:1px solid var(--bord);color:var(--text);border-radius:999px;padding:.55rem .9rem;min-width:0}
+.comp button{font:inherit;background:linear-gradient(135deg,#ffb347,#ff8a5b);border:0;color:#2a1300;font-weight:800;border-radius:999px;padding:.5rem 1rem}
+.card{background:var(--card);border:1px solid var(--bord);border-radius:16px;padding:.8rem 1rem;margin-top:.8rem}
+.row{display:grid;grid-template-columns:7.2rem 1fr 2.6rem;align-items:center;gap:.5rem;margin:.35rem 0;font-size:.9rem}
+.row output{color:var(--cy);text-align:right;font-size:.85rem}
+input[type=range]{width:100%;accent-color:var(--cy)}
+.tg{display:flex;align-items:center;gap:.6rem;margin:.5rem 0;font-size:.9rem}.tg input{width:20px;height:20px;accent-color:var(--cy)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="sandbox">🧪 <b>Testseite.</b> Beispiel-Gespräch, nichts wird gesendet oder gespeichert. Probiere aus, wie sich die Fokus-Ansicht anfühlt.</div>
+
+<h2 style="margin-top:.4rem">🎬 Fokus-Chat</h2>
+<p class="fine">Die neue Nachricht steht groß im Fokus, ältere laufen nach hinten. Wische nach oben, um zu lesen. Tippe eine ältere Nachricht an, um zu ihr zu springen.</p>
+<div class="chips" id="presets"></div>
+
+<div class="phone">
+  <div class="hd"><div class="av">G</div><div><b>Gesa <span style="color:var(--ok)">✔</span></b><small>P2P Aktiv</small></div></div>
+  <div class="stage" id="stage"><div class="pill" id="pill"></div><div class="deck" id="deck"></div><button class="back" id="back" type="button">⬇ Zum Fokus</button></div>
+  <div class="comp"><input id="inp" placeholder="Nachricht …" autocomplete="off"><button id="send" type="button">➤</button></div>
+</div>
+<div class="chips" id="adds"></div>
+
+<h2>Einstellungen zum Ausprobieren</h2>
+<div class="card">
+  <div class="row"><label for="lv">Sichtbare Stufen</label><input type="range" id="lv" min="1" max="7" value="4"><output id="lvo"></output></div>
+  <div class="row"><label for="tilt">Neigung</label><input type="range" id="tilt" min="0" max="40" value="12"><output id="tilto"></output></div>
+  <div class="row"><label for="shr">Schrumpfen</label><input type="range" id="shr" min="65" max="96" value="86"><output id="shro"></output></div>
+  <div class="row"><label for="fade">Verblassen</label><input type="range" id="fade" min="0" max="40" value="20"><output id="fadeo"></output></div>
+  <label class="tg"><input type="checkbox" id="rmt"> Bewegung reduzieren (wie „Animationen entfernen“)</label>
+  <p class="fine" id="rmnote"></p>
+</div>
+<p class="fine" style="margin-top:1rem">Zurück zum <a href="./" style="color:var(--cy)">Messenger</a></p>
+</div>
+
+<script>
+(function(){
+  function $(i){return document.getElementById(i)}
+  function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+  var S={lv:4,tilt:12,shr:86,fade:20},MSG=[],read=false,t0=Date.now();
+  var stage=$('stage'),deck=$('deck');
+  var mq=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)');
+  function rm(){return $('rmt').checked||(mq&&mq.matches)}
+  var LONG='Hey, ich hab gestern lange über das neue Stück nachgedacht. Das Muster mit den Schuppen in Silber gefällt mir, aber ich frag mich, ob die Ringe nicht eine Nummer kleiner sein könnten, damit es auf der Schulter besser liegt. Ich schick dir später noch ein Foto vom Entwurf. Sag mir ehrlich, was du denkst!';
+  var SAMPLE=[
+    {me:0,k:'t',x:'Hey 👋 schön, dass du da bist!'},{me:1,k:'t',x:'Ich auch. Hast du das Foto gesehen?'},
+    {me:0,k:'img'},{me:1,k:'t',x:'Wahnsinn, die Schuppen!'},{me:0,k:'vox',x:'0:14'},
+    {me:1,k:'q',x:'Kommst du am Samstag zum Treffen?'},{me:0,k:'t',x:'Klar, ich bring den Entwurf mit.'}
+  ];
+  var DEMO=[{me:0,k:'t',x:'Ich hab eine Überraschung für dich …'},{me:0,k:'wow',x:'WOW!'},{me:1,k:'t',x:LONG},{me:0,k:'vox',x:'0:27'},{me:0,k:'img'}];
+  var demoI=0;
+  function fmt(){var d=Math.floor((Date.now()-t0)/1000);return ('0'+Math.floor(d/60)%60).slice(-2)+':'+('0'+d%60).slice(-2)}
+  function bubble(m){
+    var c='b'+(m.k==='wow'?' wow':m.k==='q'?' q':'');
+    var inner=m.k==='img'?'<div class="img">🖼</div>':m.k==='vox'?'<div class="vox"><i>▶</i><s></s><span>'+esc(m.x)+'</span></div>':esc(m.x);
+    return '<div class="m '+(m.me?'me':'th')+'" data-i="'+m.i+'"><div class="'+c+'">'+inner+(m.k==='wow'?'':'<small>'+m.t+'</small>')+'</div></div>';
+  }
+  function build(){deck.innerHTML=MSG.map(bubble).join('');layout()}
+  function layout(){
+    var els=deck.children,n=els.length;
+    $('pill').textContent=read?'Lesemodus':'';
+    if(read) return;
+    var H=stage.clientHeight,pad=14,gap=10,bottom=H-pad,s=S.shr/100,tilt=S.tilt;
+    deck.style.setProperty('--x','0');
+    for(var a=0;a<n;a++){
+      var el=els[n-1-a],h=el.offsetHeight,sc=Math.pow(s,a),op=a<S.lv?Math.max(.08,1-a*(S.fade/100)):0;
+      var ty=bottom-h;
+      el.style.transform='translateY('+ty.toFixed(1)+'px) scale('+sc.toFixed(3)+') rotateX('+(a?tilt:0)+'deg)';
+      el.style.opacity=op;
+      el.style.pointerEvents=op?'auto':'none';
+      el.dataset.age=a;
+      bottom=bottom-h*sc-gap*sc;
+    }
+  }
+  function add(m){
+    m.i=MSG.length;m.t=fmt();MSG.push(m);
+    if(read) exitRead(true);
+    var tmp=document.createElement('div');tmp.innerHTML=bubble(m);var el=tmp.firstChild;
+    // neue Nachricht startet klein unten und wächst in den Fokus
+    if(!rm()){el.style.transition='none';el.style.opacity=0;el.style.transform='translateY('+(stage.clientHeight)+'px) scale(.9)'}
+    deck.appendChild(el);
+    void el.offsetHeight;el.style.transition='';
+    layout();
+  }
+  function enterRead(target){
+    if(read) return;read=true;stage.classList.add('read');$('pill').textContent='Lesemodus';
+    for(var i=0;i<deck.children.length;i++){deck.children[i].style.transform='';deck.children[i].style.opacity=''}
+    if(target!=null){var el=deck.querySelector('[data-i="'+target+'"]');if(el){stage.scrollTop=el.offsetTop-stage.clientHeight/2+el.offsetHeight/2;el.classList.add('hl');setTimeout(function(){el.classList.remove('hl')},1600)}}
+    else stage.scrollTop=stage.scrollHeight;
+  }
+  function exitRead(){
+    if(!read) return;read=false;stage.classList.remove('read');stage.scrollTop=0;layout();
+  }
+  $('back').onclick=function(){exitRead()};
+  stage.addEventListener('wheel',function(e){if(!read&&e.deltaY<0)enterRead()},{passive:true});
+  var ty0=null;
+  stage.addEventListener('touchstart',function(e){ty0=e.touches[0].clientY},{passive:true});
+  stage.addEventListener('touchmove',function(e){if(!read&&ty0!=null&&e.touches[0].clientY-ty0>28)enterRead()},{passive:true});
+  var idle=null;
+  stage.addEventListener('scroll',function(){if(!read)return;clearTimeout(idle);idle=setTimeout(function(){if(read&&stage.scrollTop+stage.clientHeight>=stage.scrollHeight-4)exitRead()},900)});
+  deck.addEventListener('click',function(e){var m=e.target.closest('.m');if(!m||read)return;if(+m.dataset.age>0)enterRead(+m.dataset.i)});
+  function send(){var v=$('inp').value.trim();if(!v)return;$('inp').value='';add({me:1,k:'t',x:v});setTimeout(function(){add({me:0,k:'t',x:'👍 verstanden'})},900)}
+  $('send').onclick=send;$('inp').addEventListener('keydown',function(e){if(e.key==='Enter')send()});
+  $('adds').innerHTML=[['t','＋ Text'],['long','＋ Lange Nachricht'],['img','＋ Bild'],['vox','＋ Voice'],['wow','＋ Comic WOW']].map(function(a){return '<button type="button" data-a="'+a[0]+'">'+a[1]+'</button>'}).join('')+'<button type="button" data-a="demo">▶ Demo-Folge</button>';
+  $('adds').addEventListener('click',function(e){var b=e.target.closest('[data-a]');if(!b)return;var a=b.dataset.a;
+    if(a==='t')add({me:0,k:'t',x:'Kurze Antwort #'+(MSG.length+1)});
+    else if(a==='long')add({me:0,k:'t',x:LONG});
+    else if(a==='img')add({me:0,k:'img'});
+    else if(a==='vox')add({me:0,k:'vox',x:'0:'+(10+Math.floor(Math.random()*40))});
+    else if(a==='wow')add({me:0,k:'wow',x:'WOW!'});
+    else{var d=DEMO[demoI++%DEMO.length];add({me:d.me,k:d.k,x:d.x})}});
+  var PRE={sanft:{lv:4,tilt:12,shr:86,fade:20,name:'Sanft'},mittel:{lv:5,tilt:24,shr:82,fade:20,name:'Mittel'},sw:{lv:6,tilt:38,shr:76,fade:16,name:'Star Wars'},flach:{lv:4,tilt:0,shr:90,fade:24,name:'Flach (nur Staffelung)'}};
+  function sync(){['lv','tilt','shr','fade'].forEach(function(k){$(k).value=S[k]});$('lvo').value=S.lv;$('tilto').value=S.tilt+'°';$('shro').value=S.shr+'%';$('fadeo').value=S.fade+'%';
+    $('rmnote').textContent=rm()?'Bewegung aus: gleiche Staffelung, aber ohne Animation und ohne Neigung.':'';}
+  $('presets').innerHTML=Object.keys(PRE).map(function(k){return '<button type="button" data-p="'+k+'" class="'+(k==='sanft'?'on':'')+'">'+PRE[k].name+'</button>'}).join('');
+  $('presets').addEventListener('click',function(e){var b=e.target.closest('[data-p]');if(!b)return;var p=PRE[b.dataset.p];S.lv=p.lv;S.tilt=p.tilt;S.shr=p.shr;S.fade=p.fade;[].forEach.call($('presets').children,function(x){x.classList.toggle('on',x===b)});sync();layout()});
+  ['lv','tilt','shr','fade'].forEach(function(k){$(k).addEventListener('input',function(){S[k]=+this.value;[].forEach.call($('presets').children,function(x){x.classList.remove('on')});sync();layout()})});
+  function applyRm(){var r=rm();document.body.classList.toggle('rm',r);stage.classList.toggle('rm',r);S.tiltEff=r?0:S.tilt;sync()}
+  // reduzierte Bewegung: keine Neigung, keine Übergänge
+  var oLayout=layout;layout=function(){if(read)return oLayout();var keep=S.tilt;if(rm())S.tilt=0;oLayout();S.tilt=keep};
+  $('rmt').addEventListener('change',function(){stage.classList.toggle('rm',rm());sync();layout()});
+  if(mq)mq.addEventListener&&mq.addEventListener('change',function(){stage.classList.toggle('rm',rm());sync();layout()});
+  SAMPLE.forEach(function(m){m.i=MSG.length;m.t='09:'+(10+MSG.length*3);MSG.push(m)});
+  stage.classList.toggle('rm',rm());sync();build();
+  window.addEventListener('resize',function(){layout()});
+})();
+</script>
+</body>
+</html>
