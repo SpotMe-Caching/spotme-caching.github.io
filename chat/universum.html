@@ -60,12 +60,17 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
 .lp{margin-top:.7rem;border:1px solid var(--bord);border-radius:14px;overflow:hidden;background:#0a1020}
 .lpimg{aspect-ratio:1200/630;overflow:hidden;background:#04060f}.lpimg img{width:100%;height:100%;object-fit:contain;display:block}
 .lpt{padding:.6rem .8rem}.lpt small{display:block;color:var(--muted);font-size:.75rem}.lpt b{display:block;font-size:.95rem;line-height:1.3}.lpt span{color:var(--muted);font-size:.85rem}
-.splash{margin-top:.7rem;border-radius:16px;background:#04060f;border:1px solid var(--bord);height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.6rem;cursor:pointer}
-.splash img{width:104px;height:104px;border-radius:22%;background:#070b1a;padding:9%;box-sizing:border-box;animation:sp 2.4s ease both}
-.splash p{color:#cfe3ff;letter-spacing:.12em;font-weight:300;animation:sp2 2.4s ease both}
-@keyframes sp{0%{opacity:0;transform:scale(.7)}50%{opacity:1;transform:scale(1.05)}100%{opacity:1;transform:scale(1)}}
-@keyframes sp2{0%,40%{opacity:0}100%{opacity:1}}
-@media (prefers-reduced-motion:reduce){.splash img,.splash p{animation:none}}
+.splash{position:relative;overflow:hidden;margin-top:.7rem;border-radius:16px;background:radial-gradient(circle at 50% 50%,#0f1c3d 0,#04060f 70%);border:1px solid var(--bord);height:260px;cursor:pointer}
+.splash .st{position:absolute;left:50%;top:50%;width:3px;height:3px;border-radius:50%;background:#cfe3ff;opacity:0;animation:warp 3.8s ease-in both;animation-delay:var(--dl,0s)}
+.splash img{position:absolute;left:50%;top:50%;width:104px;height:104px;margin:-52px 0 0 -52px;border-radius:22%;background:#070b1a;padding:9%;box-sizing:border-box;animation:zoomthru 3.8s cubic-bezier(.5,0,.8,.4) both}
+.splash .t1,.splash .t2{position:absolute;left:0;right:0;text-align:center;letter-spacing:.12em;font-weight:300;color:#cfe3ff}
+.splash .t1{bottom:26px;animation:t1 3.8s ease both}
+.splash .t2{top:50%;margin-top:-14px;font-size:1.2rem;letter-spacing:.08em;animation:t2 3.8s ease both}
+@keyframes zoomthru{0%{transform:scale(.45);opacity:0;filter:blur(3px)}18%{transform:scale(1);opacity:1;filter:none}40%{transform:scale(1.08);opacity:1}72%{transform:scale(2.4);opacity:1;filter:none}100%{transform:scale(20);opacity:0;filter:blur(6px)}}
+@keyframes warp{0%,35%{transform:translate(0,0) scale(.3);opacity:0}60%{opacity:.9}100%{transform:translate(var(--dx),var(--dy)) scale(2.2);opacity:0}}
+@keyframes t1{0%,12%{opacity:0}28%,50%{opacity:1}66%,100%{opacity:0}}
+@keyframes t2{0%,74%{opacity:0;transform:scale(.94)}100%{opacity:1;transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.splash .st{display:none}.splash img{animation:none;opacity:1;transform:none}.splash .t1{animation:none;opacity:1}.splash .t2{display:none}}
 @keyframes fly{0%{transform:translate(450px,-40px);opacity:0}6%{opacity:1}72%{opacity:1}86%{transform:translate(205px,176px);opacity:0}100%{transform:translate(205px,176px);opacity:0}}
 .cm{animation:fly 18s linear infinite}
 .cm.still{animation:none;transform:translate(318px,48px);opacity:1}
@@ -151,7 +156,7 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
 </div>
 <div class="card">
   <b>Splash</b> <span class="fine">· beim Start (tippen zum Wiederholen)</span>
-  <div class="splash" id="splash"><img src="wesee/mark.png" alt=""><p>we see you …</p></div>
+  <div class="splash" id="splash"><img src="wesee/mark.png" alt=""><div class="t1">we see you …</div><div class="t2">Dein Universum</div></div>
 </div>
 
 <h2>Wie „nah“ ein Stern ist</h2>
@@ -252,7 +257,10 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
   $('skip').onclick=function(){left=0;env()};
   $('openE').onclick=function(){opened=true;env()};
   $('icons').innerHTML=[96,64,48,32].map(function(z){return '<div style="text-align:center"><img class="ci" src="wesee/mark.png" width="'+z+'" height="'+z+'" alt=""><div class="fine">'+z+'</div></div>'}).join('')+[96,64,48,32].map(function(z){return '<div style="text-align:center"><img class="sq" src="wesee/mark.png" width="'+z+'" height="'+z+'" alt=""><div class="fine">'+z+'</div></div>'}).join('');
-  $('splash').onclick=function(){var s=$('splash');var c=s.cloneNode(true);s.parentNode.replaceChild(c,s);c.id='splash';c.onclick=arguments.callee};
+  (function(){var sp=$('splash'),x=11;function r(){x=(x*9301+49297)%233280;return x/233280}
+    for(var i=0;i<46;i++){var a=r()*Math.PI*2,d=90+r()*170,e=document.createElement('i');e.className='st';e.style.cssText='--dx:'+(Math.cos(a)*d).toFixed(0)+'px;--dy:'+(Math.sin(a)*d*.8).toFixed(0)+'px;--dl:'+(r()*.9).toFixed(2)+'s';sp.insertBefore(e,sp.firstChild)}
+    function replay(){var c=sp.cloneNode(true);sp.parentNode.replaceChild(c,sp);sp=c;c.onclick=replay}
+    sp.onclick=replay})();
   $('lpt').textContent='@'+me+' im WeSee.Q-Universum';
   // Fusion
   var CL=[3,6,9,4,12];
