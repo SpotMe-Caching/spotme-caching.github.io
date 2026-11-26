@@ -84,6 +84,13 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
 .frm .rowd{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
 #cMsg{margin-top:.6rem;font-size:.9rem}
 #cMsg.err{color:#ff9d7a}#cMsg.ok{color:var(--ok)}
+.fu .row2{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.5rem 0}
+.fu select{font:inherit;font-size:.9rem;background:#0a1124;border:1px solid var(--bord);color:var(--text);border-radius:10px;padding:.4rem .6rem}
+.fu .st{font-size:.9rem;margin:.5rem 0}
+.fu .inv{display:flex;justify-content:space-between;align-items:center;gap:.5rem;border:1px solid var(--bord);border-radius:10px;padding:.35rem .6rem;background:#0a1124;margin:.3rem 0;font-size:.88rem}
+.fu .inv button{font:inherit;font-size:.8rem;background:#131d36;border:1px solid var(--bord);color:var(--text);border-radius:8px;padding:.25rem .55rem}
+.tag.f{background:rgba(185,166,255,.16);color:#cdbfff}
+.tag.o{background:rgba(135,147,171,.18);color:var(--muted)}
 </style>
 </head>
 <body>
@@ -98,6 +105,10 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
 <p class="fine" style="text-align:center;margin-top:.4rem">Tippe einen Stern an</p>
 <div class="cmbar"><span>☄️ Komet im Anflug: <b style="color:var(--text)">@DragonsChain</b></span><button type="button" id="cmShow">Ansehen</button><button type="button" id="cmTog" aria-pressed="true">☄️ an</button></div>
 <div id="cmInfo"></div>
+
+<h2>🌠 Sternbilder fusionieren</h2>
+<p class="fine">Zwei Sternbilder auf einer Karte. Du siehst nur deine Sterne mit Namen, die Sterne des anderen bleiben anonym.</p>
+<div class="card fu" id="fuBox"></div>
 
 <h2>☄️ Komet werden</h2>
 <p class="fine">Werbung, die ins Universum gehört. Pro Zeitraum fliegt nur ein Komet – für alle Nutzer sichtbar, immer als Partner gekennzeichnet.</p>
@@ -169,7 +180,7 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
     verblasst:{name:'Lange still',c:[
       {n:'Gesa',d:300,r:.9,f:60,v:1},{n:'Wolfgang',d:280,r:.8,f:90,v:1},{n:'Mara',d:150,r:.7,f:120}]}
   };
-  var cur='neu',sel=-1,comet=true;
+  var cur='neu',sel=-1,comet=true,fu={step:0,f:-1,n:8,inv:{},msg:''};
   function closeness(c){ // 0..1 – nur lokal berechnet
     if(c.req) return .05;
     var rec=Math.exp(-c.f/45);                 // Frische
@@ -197,6 +208,7 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
     var P=c.map(function(x,i){return pos(i,n,x)});
     (S.link||[]).forEach(function(l){var a=P[l[0]],b=P[l[1]];if(a&&b)h+='<line x1="'+a.x+'" y1="'+a.y+'" x2="'+b.x+'" y2="'+b.y+'" stroke="#7ec8ff" stroke-opacity=".28" stroke-width="1"/>'});
     P.forEach(function(p,i){if(c[i].v||c[i].r>.6)h+='<line x1="'+cx+'" y1="'+cy+'" x2="'+p.x+'" y2="'+p.y+'" stroke="'+(c[i].v?'#ffd45a':'#22d3ee')+'" stroke-opacity="'+(.12+p.cl*.3)+'" stroke-width="'+(.6+p.cl*1.4)+'"/>'});
+    h+=fuSvg(P);
     if(comet){var CO=W+40;h+='<g data-comet="1" style="cursor:pointer"><g class="cm"><g transform="rotate(138)"><defs><linearGradient id="ct" x1="0" x2="1"><stop offset="0" stop-color="#ffb08f" stop-opacity=".9"/><stop offset="1" stop-color="#ffb08f" stop-opacity="0"/></linearGradient></defs><path d="M0 -3 L120 -1 L120 1 L0 3Z" fill="url(#ct)" transform="rotate(180)"/><path d="M0 -6 L70 -1 L70 1 L0 6Z" fill="url(#ct)" opacity=".5" transform="rotate(180) rotate(6)"/></g><circle r="22" fill="transparent"/><circle r="6" fill="#fff3e6"/><circle r="10" fill="#ff8a5b" opacity=".35"/><text y="-14" text-anchor="middle" fill="#ffd9c4" font-size="9.5" font-weight="700" transform="translate(0,0)">@DragonsChain · Partner</text></g></g>'}
     // Ich
     h+='<circle cx="'+cx+'" cy="'+cy+'" r="22" fill="#0b1630" stroke="#f59e0b" stroke-width="2"/>'+star(cx,cy,13,'#f59e0b',1)+'<text x="'+cx+'" y="'+(cy+40)+'" text-anchor="middle" fill="#e8edf5" font-size="12" font-weight="700">@'+esc(me)+'</text>';
@@ -209,7 +221,7 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
     if(!n)h+='<div class="empty"><h3>Dein Universum wartet</h3><p>Noch ist es nur Sternenstaub. Jeder Kontakt, dem du vertraust, wird ein Stern – lade den ersten ein.</p><button class="btn p" id="first">✨ Ersten Stern einladen</button></div>';
     $('sky').innerHTML=h;
     var f=$('first');if(f)f.onclick=function(){$('inv').scrollIntoView({behavior:'smooth',block:'center'})};
-    info();
+    info();fuUI();
   }
   function info(){
     var c=SC[cur].c,x=c[sel];
@@ -225,7 +237,7 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
   }
   $('sky').addEventListener('click',function(ev){if(ev.target.closest&&ev.target.closest('[data-comet]')){cmCard();return}var g=ev.target.closest&&ev.target.closest('[data-i]');if(!g)return;sel=+g.getAttribute('data-i');draw()});
   function chips(){$('scen').innerHTML=Object.keys(SC).map(function(k){return '<button type="button" data-k="'+k+'" class="'+(k===cur?'on':'')+'">'+esc(SC[k].name)+'</button>'}).join('')}
-  $('scen').addEventListener('click',function(ev){var b=ev.target.closest('[data-k]');if(!b)return;cur=b.getAttribute('data-k');sel=-1;chips();draw();inv()});
+  $('scen').addEventListener('click',function(ev){var b=ev.target.closest('[data-k]');if(!b)return;cur=b.getAttribute('data-k');sel=-1;fu={step:0,f:-1,n:8,inv:{},msg:''};chips();draw();inv()});
   function inv(){var n=SC[cur].c.length;$('inv').textContent='✨ @'+me+' sucht Sternenstaub für ein gemeinsames Sternbild'+(n?' – schon '+n+(n===1?' Stern':' Sterne')+' leuchten.':'.')+' Komm in mein Universum.'}
   // Umschlag
   var WAIT=[['evening','🌙 Heute Abend'],['morning','☀️ Morgen früh'],['meet','📍 Beim Treffen'],['year','🎁 In einem Jahr']],wsel=null,left=0,opened=false;
@@ -242,6 +254,54 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
   $('icons').innerHTML=[96,64,48,32].map(function(z){return '<div style="text-align:center"><img class="ci" src="wesee/mark.png" width="'+z+'" height="'+z+'" alt=""><div class="fine">'+z+'</div></div>'}).join('')+[96,64,48,32].map(function(z){return '<div style="text-align:center"><img class="sq" src="wesee/mark.png" width="'+z+'" height="'+z+'" alt=""><div class="fine">'+z+'</div></div>'}).join('');
   $('splash').onclick=function(){var s=$('splash');var c=s.cloneNode(true);s.parentNode.replaceChild(c,s);c.id='splash';c.onclick=arguments.callee};
   $('lpt').textContent='@'+me+' im WeSee.Q-Universum';
+  // Fusion
+  var CL=[3,6,9,4,12];
+  function fRnd(seed){var x=seed;return function(){x=(x*9301+49297)%233280;return x/233280}}
+  function cluster(P,i,n,seed){ // n<5: nur Sternenstaub-Wolke, keine einzelnen Punkte
+    var q=P[i],a=Math.atan2(q.y-cy,q.x-cx),d=n<5?62:70,ox=Math.max(40,Math.min(W-40,q.x+Math.cos(a)*d)),oy=Math.max(40,Math.min(H-44,q.y+Math.sin(a)*d)),o='';
+    if(n<5){var gid='cg'+seed;return '<defs><radialGradient id="'+gid+'"><stop offset="0" stop-color="#b9a6ff" stop-opacity=".45"/><stop offset="1" stop-color="#b9a6ff" stop-opacity="0"/></radialGradient></defs><circle data-cloud="1" class="tw" cx="'+ox+'" cy="'+oy+'" r="32" fill="url(#'+gid+')"/><text x="'+ox+'" y="'+(oy+4)+'" text-anchor="middle" fill="#cdbfff" font-size="8.5" opacity=".8">Sternenstaub</text>'}
+    var r=fRnd(seed);for(var k=0;k<n;k++){var aa=r()*Math.PI*2,rr=8+r()*34,x=Math.max(14,Math.min(W-14,ox+Math.cos(aa)*rr)),y=Math.max(14,Math.min(H-14,oy+Math.sin(aa)*rr));
+      o+='<line x1="'+q.x+'" y1="'+q.y+'" x2="'+x.toFixed(1)+'" y2="'+y.toFixed(1)+'" stroke="#b9a6ff" stroke-opacity=".12"/>'+'<circle data-anon="1" cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="'+(2+r()*1.8).toFixed(1)+'" fill="#b9a6ff" opacity="'+(.4+r()*.35).toFixed(2)+'"/>'}
+    return o}
+  function joined(){return Object.keys(fu.inv).filter(function(k){return fu.inv[k]==='y'}).map(Number)}
+  function fuSvg(P){
+    if(fu.step!==3||!P[fu.f])return '';
+    var o='',q=P[fu.f];
+    o+='<circle cx="'+q.x+'" cy="'+q.y+'" r="'+(5+q.cl*9+9)+'" fill="none" stroke="#b9a6ff" stroke-width="1.4" stroke-dasharray="3 3"/>';
+    o+=cluster(P,fu.f,fu.n,101);
+    joined().forEach(function(i){if(P[i]&&i!==fu.f)o+=cluster(P,i,CL[i%5],200+i)});
+    return o}
+  function others(){var c=SC[cur].c,r=[];c.forEach(function(x,i){if(i!==fu.f&&!x.req)r.push(i)});return r}
+  function fuUI(){
+    var c=SC[cur].c,cand=[];c.forEach(function(x,i){if(!x.req)cand.push(i)});
+    var h='';
+    if(!cand.length){$('fuBox').innerHTML='<p class="fine" style="color:var(--text)">Du brauchst zuerst mindestens einen Stern, mit dem du fusionieren kannst. Wähle oben ein Szenario mit Kontakten.</p>';return}
+    if(fu.step===0){
+      h='<b>Mit wem möchtest du fusionieren?</b><div class="row2"><select id="fuF" aria-label="Freund">'+cand.map(function(i){return '<option value="'+i+'"'+(fu.f===i?' selected':'')+'>'+esc(c[i].n)+'</option>'}).join('')+'</select>'+
+        '<select id="fuN" aria-label="Sterne des Freundes"><option value="3">Er hat 3 Sterne</option><option value="8">Er hat 8 Sterne</option><option value="21">Er hat 21 Sterne</option></select></div>'+
+        '<button class="btn p" id="fuGo" type="button">🌠 Fusion anfragen</button>'+(fu.msg?'<div class="st fine">'+esc(fu.msg)+'</div>':'')+
+        '<p class="fine" style="margin-top:.5rem">Die Zahl der Sterne dient nur dem Test.</p>';
+    }else if(fu.step===1){
+      h='<div class="st">⏳ Anfrage an <b>'+esc(c[fu.f].n)+'</b> gesendet. Bis er zustimmt, bleibt alles unsichtbar.</div><div class="row2"><button class="btn p" id="fuYes" type="button">✅ Zustimmung simulieren</button><button class="btn" id="fuNo" type="button">Ablehnung simulieren</button></div>';
+    }else{
+      var oth=others(),j=joined(),anon=fu.n>=5?fu.n:0,cl=fu.n<5?1:0;
+      j.forEach(function(i){var n=CL[i%5];if(n>=5)anon+=n;else cl++});
+      h='<div class="st"><span class="tag f">Galaxie</span> <b>@'+esc(me)+' &amp; '+esc(c[fu.f].n)+'</b></div>'+
+        '<div class="why"><span>Anonyme Sterne sichtbar</span><b id="fuCnt">'+anon+'</b><span>Sternenstaub-Wolken (unter 5)</span><b id="fuCl">'+cl+'</b><span>Mitglieder</span><b>'+(2+j.length)+'</b></div>'+
+        '<p class="fine" style="margin-top:.4rem">Du siehst weder Namen noch Kontakte von '+esc(c[fu.f].n)+'. Gruppen unter 5 Sternen bleiben Sternenstaub, damit niemand erraten werden kann.</p>'+
+        (oth.length?'<b style="display:block;margin-top:.7rem">Einladungen an deine anderen Sterne</b><p class="fine">Jeder entscheidet selbst. Ohne Antwort passiert nichts.</p>'+oth.map(function(i){var s=fu.inv[i]||'o';return '<div class="inv"><span>'+esc(c[i].n)+' <span class="tag '+(s==='y'?'v':s==='n'?'n':'o')+'">'+(s==='y'?'dabei':s==='n'?'raus':'offen')+'</span></span><span><button type="button" data-iv="y" data-i="'+i+'">Dabei</button> <button type="button" data-iv="n" data-i="'+i+'">Raus</button></span></div>'}).join(''):'')+
+        '<div style="margin-top:.8rem"><button class="btn" id="fuEnd" type="button">Fusion beenden</button></div>';
+    }
+    $('fuBox').innerHTML=h;
+    var f=$('fuF');if(f){if(fu.f<0)fu.f=+f.value;else f.value=fu.f;f.onchange=function(){fu.f=+f.value}}
+    var n=$('fuN');if(n){n.value=fu.n;n.onchange=function(){fu.n=+n.value}}
+  }
+  $('fuBox').addEventListener('click',function(ev){var t=ev.target;
+    if(t.id==='fuGo'){var f=$('fuF');fu.f=+f.value;fu.n=+$('fuN').value;fu.step=1;fu.msg='';fuUI();return}
+    if(t.id==='fuYes'){fu.step=3;draw();$('sky').scrollIntoView({behavior:'smooth',block:'nearest'});return}
+    if(t.id==='fuNo'){fu.step=0;fu.msg='Keine Fusion. Es wurde nichts sichtbar, und niemand wurde informiert.';fuUI();return}
+    if(t.id==='fuEnd'){fu={step:0,f:fu.f,n:fu.n,inv:{},msg:'Fusion beendet. Alle anonymen Sterne sind sofort verschwunden.'};draw();return}
+    var iv=t.getAttribute&&t.getAttribute('data-iv');if(iv){fu.inv[t.getAttribute('data-i')]=iv;draw()}});
   // Komet
   var CM={h:'DragonsChain',a:'2026-11-26',b:'2026-12-26',t:'Designer von Unikat-Rüstungen aus Edelstahl'};
   function cmCard(){var d=Math.max(0,Math.round((new Date(CM.b)-new Date('2026-11-26'))/864e5));
