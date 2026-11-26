@@ -70,8 +70,8 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
 .cm{animation:fly 18s linear infinite}
 .cm.still{animation:none;transform:translate(318px,48px);opacity:1}
 @media (prefers-reduced-motion:reduce){.cm{animation:none;transform:translate(318px,48px);opacity:1}}
-.cmbar{display:flex;align-items:center;gap:.6rem;margin-top:.6rem;font-size:.88rem;color:var(--muted)}
-.cmbar button{font:inherit;font-size:.88rem;background:#131d36;border:1px solid var(--bord);color:var(--text);border-radius:999px;padding:.3rem .8rem}
+.cmbar{flex-wrap:wrap;display:flex;align-items:center;gap:.6rem;margin-top:.6rem;font-size:.88rem;color:var(--muted)}
+.cmbar button{white-space:nowrap;font:inherit;font-size:.88rem;background:#131d36;border:1px solid var(--bord);color:var(--text);border-radius:999px;padding:.3rem .8rem}
 .tag.c{background:rgba(255,138,91,.16);color:#ffb08f}
 .slots{display:grid;gap:.35rem;margin:.6rem 0;font-size:.88rem}
 .slots div{display:flex;justify-content:space-between;gap:.6rem;border:1px solid var(--bord);border-radius:10px;padding:.4rem .7rem;background:#0a1124}
@@ -95,7 +95,8 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
 <div class="chips" id="scen"></div>
 <div class="sky" id="sky"></div>
 <div id="info"></div>
-<div class="cmbar"><span>☄️ Komet im Anflug: <b style="color:var(--text)">@DragonsChain</b></span><button type="button" id="cmShow">Ansehen</button><button type="button" id="cmTog" aria-pressed="true">Komet: an</button></div>
+<p class="fine" style="text-align:center;margin-top:.4rem">Tippe einen Stern an</p>
+<div class="cmbar"><span>☄️ Komet im Anflug: <b style="color:var(--text)">@DragonsChain</b></span><button type="button" id="cmShow">Ansehen</button><button type="button" id="cmTog" aria-pressed="true">☄️ an</button></div>
 <div id="cmInfo"></div>
 
 <h2>☄️ Komet werden</h2>
@@ -127,7 +128,7 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
   <div class="fine">Als Link-Vorschau mit Sternbild-Bild – wie bei den Sternstufen.</div>
 </div>
 
-<h2>🎨 Logo „WeSee.Q“ im Test</h2>
+<h2 id="logo">🎨 Logo „WeSee.Q“ im Test</h2>
 <p class="fine">Entwurf aus deinem Bild (JPEG, daher leicht weich). Nur zum Anschauen – die App-Icons bleiben unverändert.</p>
 <div class="card">
   <b>App-Icon</b> <span class="fine">· rund (Android) und abgerundet (iPhone) in 4 Größen</span>
@@ -206,7 +207,6 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
         (surprise(x)?'<text x="'+(p.x+r+3)+'" y="'+(p.y-r+3)+'" font-size="12">✉️</text>':'')+'</g>'});
     h+='</svg>';
     if(!n)h+='<div class="empty"><h3>Dein Universum wartet</h3><p>Noch ist es nur Sternenstaub. Jeder Kontakt, dem du vertraust, wird ein Stern – lade den ersten ein.</p><button class="btn p" id="first">✨ Ersten Stern einladen</button></div>';
-    else h+='<div class="hint">Tippe einen Stern an</div>';
     $('sky').innerHTML=h;
     var f=$('first');if(f)f.onclick=function(){$('inv').scrollIntoView({behavior:'smooth',block:'center'})};
     info();
@@ -247,7 +247,7 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
   function cmCard(){var d=Math.max(0,Math.round((new Date(CM.b)-new Date('2026-11-26'))/864e5));
     $('cmInfo').innerHTML='<div class="card"><h4>☄️ @'+esc(CM.h)+'</h4><div style="margin:.2rem 0"><span class="tag c">Partner · Komet</span></div><p class="fine" style="color:var(--text)">'+esc(CM.t)+'</p><div class="why"><span>Zeitraum</span><b>26.11. – 26.12.2026</b><span>Verbleibend (Beispiel)</span><b>'+d+' Tage</b></div><p class="fine" style="margin-top:.5rem">Du siehst den Komet, er sieht dich nicht: kein Tracking, nur ein anonymer Tipp-Zähler.</p><div style="margin-top:.7rem"><button class="btn p" disabled>Profil ansehen (nur Test)</button></div></div>'}
   $('cmShow').onclick=cmCard;
-  function cmTog(){var t=$('cmTog');t.textContent='Komet: '+(comet?'an':'aus');t.setAttribute('aria-pressed',comet);draw()}
+  function cmTog(){var t=$('cmTog');t.textContent='☄️ '+(comet?'an':'aus');t.setAttribute('aria-pressed',comet);draw()}
   $('cmTog').onclick=function(){comet=!comet;if(!comet)$('cmInfo').innerHTML='';cmTog()};
   var BK=[['2026-11-26','2026-12-26','@DragonsChain']];
   function fd(x){var a=x.split('-');return a[2]+'.'+a[1]+'.'+a[0]}

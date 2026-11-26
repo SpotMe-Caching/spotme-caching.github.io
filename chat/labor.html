@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Testlabor – SpotMe Messenger</title>
+<meta name="description" content="Interne Testseite: neue Funktionen ausprobieren, Notizen machen.">
+<meta name="theme-color" content="#04060f">
+<meta name="robots" content="noindex,nofollow">
+<style>
+:root{--bg:#04060f;--card:#0d1426;--bord:rgba(255,255,255,.09);--gold:#ffd45a;--acc:#f59e0b;--cy:#22d3ee;--ok:#10b981;--text:#e8edf5;--muted:#8793ab}
+*{margin:0;padding:0;box-sizing:border-box}
+html{background:var(--bg)}
+body{font-family:'Outfit',system-ui,-apple-system,'Segoe UI',sans-serif;background:radial-gradient(ellipse at 50% 0%,#14224a,var(--bg) 60%) fixed;color:var(--text);font-size:17px;line-height:1.5;-webkit-text-size-adjust:100%}
+.wrap{max-width:620px;margin:0 auto;padding:0 16px 60px}
+h1{font-size:1.5rem;margin:1.2rem 0 .2rem}
+.fine{color:var(--muted);font-size:.85rem}
+.card{background:var(--card);border:1px solid var(--bord);border-radius:16px;padding:.9rem 1rem;margin-top:.8rem}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:.6rem}
+.top h3{font-size:1.1rem}
+.tag{display:inline-block;font-size:.72rem;font-weight:700;border-radius:999px;padding:.1rem .6rem;white-space:nowrap}
+.tag.t{background:rgba(245,158,11,.18);color:var(--acc)}.tag.b{background:rgba(34,211,238,.15);color:var(--cy)}.tag.l{background:rgba(16,185,129,.16);color:var(--ok)}
+.row{display:flex;gap:.5rem;flex-wrap:wrap;margin:.6rem 0 .4rem}
+.btn,a.btn{font:inherit;font-size:.9rem;font-weight:600;background:#131d36;border:1px solid var(--bord);color:var(--text);border-radius:12px;padding:.5rem .85rem;text-decoration:none;display:inline-block}
+.btn.p{background:#0e7490;border-color:var(--cy)}
+.sw{display:flex;align-items:center;gap:.6rem;margin:.4rem 0;font-size:.92rem}
+.sw input{width:22px;height:22px;accent-color:#0e7490}
+textarea{width:100%;min-height:56px;resize:vertical;font:inherit;font-size:.92rem;background:#0a1124;border:1px solid var(--bord);color:var(--text);border-radius:10px;padding:.5rem .65rem;margin-top:.3rem}
+.warn{background:rgba(245,158,11,.12);border:1px dashed var(--acc);color:#ffd9a0;border-radius:12px;padding:.6rem .9rem;font-size:.88rem;margin:.8rem 0}
+.stage{display:none;margin-top:1rem;text-align:center}
+.stage.on{display:block}
+.phone{width:min(100%,390px);height:780px;margin:.5rem auto;border:10px solid #1b2440;border-radius:36px;overflow:hidden;background:#000}
+.phone iframe{width:100%;height:100%;border:0;background:#04060f}
+.wideonly{display:none}
+@media (min-width:900px){.wideonly{display:inline-block}}
+#msg{margin-top:.6rem;font-size:.9rem;color:var(--ok);min-height:1.3em}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>🧪 Testlabor</h1>
+<p class="fine">Neue Funktionen ausprobieren, bevor sie in den echten Messenger kommen. Nicht verlinkt, nicht im Index.</p>
+<div class="warn">Die Schalter merken sich nur deine Wahl auf diesem Gerät. Die App liest sie erst, wenn wir die Funktion einbauen – bis dahin ändern sie nichts.</div>
+<div id="list"></div>
+<div class="card">
+  <b>Alle Notizen</b>
+  <div class="row"><button class="btn p" type="button" id="copy">📋 Kopieren</button><button class="btn" type="button" id="clear">Notizen leeren</button></div>
+  <div id="msg" role="status"></div>
+  <div class="fine">Kopiert alles als Text – einfach im Chat einfügen.</div>
+</div>
+<div class="stage" id="stage"><b id="stT"></b><div class="phone"><iframe id="fr" title="Vorschau"></iframe></div><button class="btn" type="button" id="stX">Schließen</button></div>
+<p class="fine" style="margin-top:1rem">Zurück zum <a href="./" style="color:var(--cy)">Messenger</a></p>
+</div>
+<script>
+(function(){
+  function $(i){return document.getElementById(i)}
+  function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+  var KN='sm_chat_labor_notes',KF='sm_chat_labor_flags';
+  function lget(k){try{return JSON.parse(localStorage.getItem(k)||'{}')||{}}catch(e){return {}}}
+  function lset(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+  var ITEMS=[
+    {id:'universum',n:'🌌 Universum + Komet',s:'t',d:'Startseite mit Sternen, Umschlag „Zeit als Zutat“, Komet-Werbepartner und Bewerbung.',u:'universum.html',f:'Universum als Startseite'},
+    {id:'fokus',n:'🎬 Fokus-Chat',s:'t',d:'Neueste Nachricht im Fokus, ältere laufen nach hinten. Presets Sanft bis Star Wars.',u:'fokus.html',f:'Fokus-Ansicht im Chat'},
+    {id:'logo',n:'🎨 Logo WeSee.Q',s:'t',d:'Icons, Link-Vorschau und Splash mit dem neuen Zeichen.',u:'universum.html#logo'},
+    {id:'eier',n:'🥚 Eiersuche',s:'l',d:'Live in der App: Eier, Lotsen-Ränge und Einstellungen.',u:'eier.html'}
+  ];
+  var ST={t:['Test','t'],b:['bereit','b'],l:['live','l']};
+  var notes=lget(KN),flags=lget(KF);
+  function render(){
+    $('list').innerHTML=ITEMS.map(function(x){var st=ST[x.s];
+      return '<div class="card" data-id="'+x.id+'"><div class="top"><h3>'+esc(x.n)+'</h3><span class="tag '+st[1]+'">'+st[0]+'</span></div>'+
+      '<p class="fine" style="margin-top:.2rem">'+esc(x.d)+'</p>'+
+      '<div class="row"><a class="btn p" href="'+x.u+'">Öffnen</a><button class="btn wideonly" type="button" data-fr="'+x.u+'" data-t="'+esc(x.n)+'">📱 Im Handy-Rahmen</button></div>'+
+      (x.f?'<label class="sw"><input type="checkbox" data-flag="'+x.id+'"'+(flags[x.id]?' checked':'')+'><span>In meiner App an: '+esc(x.f)+'</span></label>':'')+
+      '<textarea data-note="'+x.id+'" placeholder="Notiz: was gefällt, was stört …" aria-label="Notiz zu '+esc(x.n)+'">'+esc(notes[x.id]||'')+'</textarea></div>'}).join('')}
+  $('list').addEventListener('input',function(e){var id=e.target.getAttribute('data-note');if(!id)return;notes[id]=e.target.value;lset(KN,notes)});
+  $('list').addEventListener('change',function(e){var id=e.target.getAttribute('data-flag');if(!id)return;flags[id]=e.target.checked;lset(KF,flags)});
+  $('list').addEventListener('click',function(e){var b=e.target.closest('[data-fr]');if(!b)return;$('fr').src=b.getAttribute('data-fr');$('stT').textContent=b.getAttribute('data-t');$('stage').classList.add('on');$('stage').scrollIntoView({behavior:'smooth'})});
+  $('stX').onclick=function(){$('stage').classList.remove('on');$('fr').src='about:blank'};
+  function msg(t){$('msg').textContent=t}
+  $('copy').onclick=function(){
+    var d=new Date().toLocaleDateString('de-DE'),t='Labor-Notizen '+d+'\n';
+    ITEMS.forEach(function(x){var n=(notes[x.id]||'').trim();var f=x.f?(flags[x.id]?' [Schalter an]':' [Schalter aus]'):'';if(n||flags[x.id])t+='\n'+x.n+f+'\n'+(n||'–')+'\n'});
+    if(t.indexOf('\n')===t.length-1)t+='\n(noch keine Notizen)';
+    function fb(){var a=document.createElement('textarea');a.value=t;a.style.cssText='position:fixed;opacity:0';document.body.appendChild(a);a.select();var ok=false;try{ok=document.execCommand('copy')}catch(e){}a.remove();msg(ok?'✅ Kopiert.':'Kopieren nicht möglich – bitte Notizen von Hand markieren.')}
+    if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(function(){msg('✅ Kopiert.')},fb);else fb()};
+  $('clear').onclick=function(){if(!confirm('Alle Notizen löschen?'))return;notes={};lset(KN,notes);render();msg('Notizen geleert.')};
+  render();
+})();
+</script>
+</body>
+</html>
