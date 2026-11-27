@@ -57,6 +57,24 @@ h2{font-size:1.25rem;margin:1.6rem 0 .5rem}
 .dots i{width:8px;height:8px;border-radius:50%;background:#2a3558}.dots i.on{background:var(--gold)}
 .hc .nav{display:flex;gap:.5rem;justify-content:space-between}
 @media (prefers-reduced-motion:reduce){#ov{transition:none}.pre,.end,#skip{transition:none}}
+#ov{touch-action:none}
+#cv.shake{animation:shake .14s linear 6}
+@keyframes shake{0%,100%{transform:translate(0,0)}25%{transform:translate(-5px,2px)}50%{transform:translate(4px,-3px)}75%{transform:translate(-3px,-2px)}}
+.stk{display:none;flex-direction:column}
+.stk.on{display:flex}
+.stkb{display:flex;flex-direction:column;align-items:center;gap:.5rem;padding:0 8vw}
+.stkb b{font-size:clamp(1.6rem,7vw,2.4rem);color:#ff8a5b;letter-spacing:.04em}
+.stkb span{color:#cfe3ff;font-size:clamp(1rem,4.2vw,1.25rem);font-weight:300}
+.stkb .arr{font-style:normal;font-size:2.2rem;color:var(--gold);animation:bob 1.6s ease-in-out infinite}
+.stkb .btn{pointer-events:auto;margin-top:.3rem}
+@keyframes bob{0%,100%{transform:translateY(4px);opacity:.6}50%{transform:translateY(-8px);opacity:1}}
+.typo{position:relative;display:inline-block}
+.typo s{text-decoration:none;position:relative}
+.typo s::after{content:'';position:absolute;left:-2%;right:-2%;top:52%;height:.12em;background:#ff8a5b;transform:scaleX(0);transform-origin:left;transition:transform .8s ease}
+.typo.fx s::after{transform:scaleX(1)}
+.typo em{position:absolute;left:50%;transform:translateX(-50%);top:108%;font-style:normal;font-size:.55em;letter-spacing:.04em;color:#9fe3b0;opacity:0;transition:opacity .8s ease .9s;white-space:nowrap}
+.typo.fx em{opacity:1}
+@media (prefers-reduced-motion:reduce){.stkb .arr{animation:none}}
 </style>
 </head>
 <body>
@@ -68,7 +86,7 @@ h2{font-size:1.25rem;margin:1.6rem 0 .5rem}
   <b>So wird es ausgelöst</b>
   <p class="fine" style="margin-top:.2rem">Tippe fünfmal schnell aufs Logo (Easter Egg), oder nimm den Knopf.</p>
   <img class="logo" id="logo" src="wesee/mark.png" alt="WeSee.Q Logo">
-  <div class="row"><button class="btn p" id="go" type="button">▶ Intro starten</button><button class="btn" id="hp" type="button">📖 Als Hilfe lesen</button></div>
+  <div class="row"><button class="btn p" id="go" type="button">▶ Intro starten</button><button class="btn" id="hp" type="button">📖 Als Hilfe lesen</button><button class="btn" id="gs" type="button">😅 Klemm-Version</button></div>
   <p class="fine" id="cnt" role="status" style="margin-top:.5rem"></p>
 </div>
 <div class="card fine" style="color:var(--text)">
@@ -82,6 +100,7 @@ h2{font-size:1.25rem;margin:1.6rem 0 .5rem}
   <div class="lay"><div class="pre" id="pre"></div></div>
   <div class="lay ttl" id="ttl"><img src="wesee/mark.png" alt=""><b>WeSee.Q</b><small>RAUM STATT POSTFACH</small></div>
   <div class="cw"><div class="pl"><div class="cr" id="cr"></div></div></div>
+  <div class="lay stk" id="stk"><div class="stkb"><b>Hmm. Klemmt.</b><span>Kannst du mal anschubsen?</span><i class="arr">↑</i><button class="btn p" id="push" type="button">Anschubsen</button></div></div>
   <div class="lay end" id="end"><img src="wesee/mark.png" alt=""><span>we see you …</span></div>
   <div class="help"><div class="hc"><h3 id="hh"></h3><p id="hp2"></p><div class="dots" id="dots"></div><div class="nav"><button class="btn" id="hb" type="button">‹ Zurück</button><button class="btn p" id="hn" type="button">Weiter ›</button></div></div></div>
   <button id="skip" type="button">Überspringen ✕</button>
@@ -97,13 +116,14 @@ h2{font-size:1.25rem;margin:1.6rem 0 .5rem}
     {t:'KAPITEL I · DER RAUM',x:'Früher wurden Nachrichten gejagt. Postfächer quollen über, Push-Meldungen brüllten, und zum Atmen blieb kein Platz. Wir haben das Universum gefragt. Es fand das auch doof.'},
     {t:'KAPITEL II · DIE STERNE',x:'Jeder, dem du vertraust, ist ein Stern. Alle anderen sind Sternenstaub. Nichts gegen Staub, aber der kriegt keinen Namen.'},
     {t:'KAPITEL III · DIE ZEIT',x:'Nachrichten dürfen warten. Umschläge gehen auf, wenn es passt, nicht wenn jemand nervös wird. Ab und zu fliegt ein Komet vorbei. Und manchmal findest du was. Was, verraten wir nicht.'},
-    {t:'KAPITEL IV · DAS VERSPRECHEN',x:'Niemand muss hetzen. Wir sehen dich. Deine Daten sehen wir nicht. Versprochen, und zwar ganz ohne Kleingedrucktes.'}
+    {t:'KAPITEL IV · DAS VERSPRECHEN',typo:['KAPITEL IV · DAS ','VERSPECHEN','VERSPRECHEN ✓ (zwei Daumen, sorry)'],x:'Niemand muss hetzen. Kein Anschupser, kein Gedrängel. Wir sehen dich. Deine Daten sehen wir nicht. Versprochen, und zwar ganz ohne Kleingedrucktes.'}
   ];  var PRE='Vor nicht allzu langer Zeit, in einer Welt voller Postfächer, die nie Feierabend hatten …';
   var ov=$('ov'),cv=$('cv'),ctx=cv.getContext('2d'),raf=0,t0=0,running=false,phase='',lastFocus=null;
+  var stuckMode=false,stuckActive=false,stuckDone=false,pausedAt=0,pauseTotal=0,preTxt='',preHold=false;
   function rmo(){return window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches}
   function lite(){return (navigator.hardwareConcurrency&&navigator.hardwareConcurrency<=4)||(navigator.deviceMemory&&navigator.deviceMemory<=2)}
   // Crawl-Text
-  $('cr').innerHTML=CH.map(function(c){return '<h3>'+esc(c.t)+'</h3><p>'+esc(c.x)+'</p>'}).join('');
+  $('cr').innerHTML=CH.map(function(c){var h=c.typo?esc(c.typo[0])+'<span class="typo" id="tpo"><s>'+esc(c.typo[1])+'</s><em>'+esc(c.typo[2])+'</em></span>':esc(c.t);return '<h3>'+h+'</h3><p>'+esc(c.x)+'</p>'}).join('');
   // Phasen (ms bei TS=1)
   var T={warp:4000,title:8000,crawl:28000,end:31000};
   // Sterne
@@ -121,7 +141,9 @@ h2{font-size:1.25rem;margin:1.6rem 0 .5rem}
   var last=0;
   function frame(now){
     if(!running)return;
-    var ms=(now-t0)*TS,dt=Math.min(50,now-last);last=now;
+    var ms=(now-t0-pauseTotal)*TS,dt=Math.min(50,now-last);last=now;
+    if(stuckMode&&!stuckDone&&!stuckActive&&ms>=2200){stuckActive=true;pausedAt=now;cv.classList.add('shake');setTimeout(function(){cv.classList.remove('shake')},900);$('stk').classList.add('on');setPhase('stuck');$('pre').classList.remove('on');$('skip').classList.add('on')}
+    if(stuckActive){if((now-pausedAt)*TS>12000)push(true);else{raf=requestAnimationFrame(frame);return}}
     speed+=(targetSpeed(ms)-speed)*.04;
     ctx.fillStyle='rgba(0,0,0,.28)';ctx.fillRect(0,0,W,H);
     var cx=W/2,cy=H*.46,f=Math.min(W,H)*.55,k=speed*dt*.00022*TS;
@@ -138,7 +160,7 @@ h2{font-size:1.25rem;margin:1.6rem 0 .5rem}
   function setPhase(p){if(phase===p)return;phase=p;ov.setAttribute('data-phase',p)}
   function stage(ms){
     var pre=$('pre'),ttl=$('ttl'),cr=$('cr'),end=$('end');
-    if(ms<T.warp){setPhase('warp');pre.textContent=PRE;pre.classList.toggle('on',ms>700&&ms<T.warp-700)}
+    if(ms<T.warp){setPhase('warp');pre.textContent=preTxt;pre.classList.toggle('on',preHold?true:stuckDone?false:(ms>700&&ms<T.warp-700))}
     else if(ms<T.title){setPhase('title');pre.classList.remove('on');
       var u=(ms-T.warp)/(T.title-T.warp);
       // Titel fliegt von groß (nah) nach klein (weit), blendet am Ende aus
@@ -146,12 +168,12 @@ h2{font-size:1.25rem;margin:1.6rem 0 .5rem}
       var sc=lerp(1.9,.15,ease(u));ttl.style.transform='scale('+sc.toFixed(3)+')'}
     else if(ms<T.crawl){setPhase('crawl');ttl.style.opacity=0;
       var v=(ms-T.title)/(T.crawl-T.title),ch=cr.offsetHeight;
-      cr.style.opacity=1;
+      cr.style.opacity=1;var tp=$('tpo');if(tp&&v>.5)tp.classList.add('fx');
       var y=-lerp(0,H+ch+40,v);cr.style.transform='translateY('+y.toFixed(1)+'px)'}
     else{setPhase('end');cr.style.opacity=0;end.classList.add('on')}
     $('skip').classList.toggle('on',ms>900)}
-  function open(){
-    if(running)return;
+  function open(o){
+    if(running)return;stuckMode=!!(o&&o.stuck)&&!rmo();stuckActive=false;stuckDone=false;pauseTotal=0;preHold=false;preTxt=PRE;$('stk').classList.remove('on');var tq=$('tpo');if(tq)tq.classList.remove('fx');
     if(rmo()){openHelp(0);return}
     lastFocus=document.activeElement;
     ov.hidden=false;ov.className='';fit();seed();ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
@@ -169,6 +191,21 @@ h2{font-size:1.25rem;margin:1.6rem 0 .5rem}
   document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!ov.hidden)close()});
   window.addEventListener('resize',function(){if(running)fit()});
   document.addEventListener('visibilitychange',function(){if(document.hidden&&running){running=false;cancelAnimationFrame(raf)}else if(!document.hidden&&!running&&!ov.hidden&&!ov.classList.contains('helpmode')){/* Intro bleibt pausiert beendet */close()}});
+  // Anschubsen (klemmende Version)
+  function push(auto){
+    if(!stuckActive)return;
+    stuckActive=false;stuckDone=true;pauseTotal+=performance.now()-pausedAt;
+    $('stk').classList.remove('on');
+    preTxt=auto?'Na gut, dann schubsen wir uns eben selbst.':'Danke. Rücken.';preHold=true;
+    setTimeout(function(){preHold=false},2000/TS);
+    setPhase('warp')}
+  var py=null;
+  ov.addEventListener('pointerdown',function(e){py=e.clientY});
+  ov.addEventListener('pointermove',function(e){if(py!==null&&stuckActive&&py-e.clientY>45){py=null;push()}});
+  ov.addEventListener('pointerup',function(){py=null});
+  ov.addEventListener('wheel',function(e){if(stuckActive&&e.deltaY<0)push()},{passive:true});
+  $('push').onclick=function(){push()};
+  document.addEventListener('keydown',function(e){if(stuckActive&&(e.key==='ArrowUp'||e.key===' '||e.key==='Enter')){e.preventDefault();push()}});
   // Hilfe-Modus (gleiche Kapitel)
   var hi=0;
   function openHelp(i){
@@ -191,13 +228,13 @@ h2{font-size:1.25rem;margin:1.6rem 0 .5rem}
   $('hn').onclick=function(){if(hi<CH.length-1){hi++;renderHelp()}else{T_hold=false;close()}};
   var oc=close;close=function(){T_hold=false;oc()};
   $('skip').onclick=function(){close()};
-  $('go').onclick=open;$('hp').onclick=function(){openHelp(0)};
+  $('go').onclick=function(){open()};$('gs').onclick=function(){open({stuck:true})};$('hp').onclick=function(){openHelp(0)};
   // Easter Egg: 5 schnelle Tipps aufs Logo
   var taps=[];
   $('logo').addEventListener('click',function(){var n=Date.now();taps.push(n);taps=taps.filter(function(x){return n-x<3000});
     $('cnt').textContent='';
-    if(taps.length>=5){taps=[];$('cnt').textContent='✨ Easter Egg gefunden.';open()}});
-  window.__intro={open:open,close:close,state:function(){return {running:running,phase:phase,hidden:ov.hidden,N:N}}};
+    if(taps.length>=5){taps=[];$('cnt').textContent='✨ Easter Egg gefunden.';open({stuck:true})}});
+  window.__intro={open:open,close:close,state:function(){return {running:running,phase:phase,hidden:ov.hidden,N:N,stuck:stuckActive,done:stuckDone}}};
 })();
 </script>
 </body>
