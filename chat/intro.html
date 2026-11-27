@@ -75,6 +75,9 @@ h2{font-size:1.25rem;margin:1.6rem 0 .5rem}
 .typo em{position:absolute;left:50%;transform:translateX(-50%);top:108%;font-style:normal;font-size:.55em;letter-spacing:.04em;color:#9fe3b0;opacity:0;transition:opacity .8s ease .9s;white-space:nowrap}
 .typo.fx em{opacity:1}
 @media (prefers-reduced-motion:reduce){.stkb .arr{animation:none}}
+.arrive .wrap{animation:arrive .8s ease both}
+@keyframes arrive{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.arrive .wrap{animation:none}}
 </style>
 </head>
 <body>
@@ -234,6 +237,8 @@ h2{font-size:1.25rem;margin:1.6rem 0 .5rem}
   $('logo').addEventListener('click',function(){var n=Date.now();taps.push(n);taps=taps.filter(function(x){return n-x<3000});
     $('cnt').textContent='';
     if(taps.length>=5){taps=[];$('cnt').textContent='✨ Easter Egg gefunden.';open({stuck:true})}});
+  if(/[?&]from=/.test(location.search))document.body.classList.add('arrive');
+  if(/[?&]help=1/.test(location.search))setTimeout(function(){openHelp(0)},60);else if(/[?&]play=1/.test(location.search))setTimeout(function(){open()},60);
   window.__intro={open:open,close:close,state:function(){return {running:running,phase:phase,hidden:ov.hidden,N:N,stuck:stuckActive,done:stuckDone}}};
 })();
 </script>

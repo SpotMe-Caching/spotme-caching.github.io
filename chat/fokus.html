@@ -58,6 +58,41 @@ h2{font-size:1.25rem;margin:1.2rem 0 .5rem}
 .row output{color:var(--cy);text-align:right;font-size:.85rem}
 input[type=range]{width:100%;accent-color:var(--cy)}
 .tg{display:flex;align-items:center;gap:.6rem;margin:.5rem 0;font-size:.9rem}.tg input{width:20px;height:20px;accent-color:var(--cy)}
+.phone{position:relative}
+.hd{padding:.4rem .5rem .4rem .3rem;gap:.15rem}
+.hd .sp{flex:1}
+.hb,.hi{font:inherit;background:transparent;border:0;color:var(--text);width:40px;height:40px;border-radius:50%;font-size:1.5rem;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer}
+.hb:active,.hi:active,.hid:active{background:rgba(255,255,255,.08)}
+.hi.star{color:var(--gold);font-size:1.25rem}
+.hid{display:flex;align-items:center;gap:.6rem;background:transparent;border:0;color:var(--text);font:inherit;text-align:left;padding:.15rem .4rem;border-radius:12px;cursor:pointer;min-width:0}
+.hid b{display:block;line-height:1.1}.hid small{color:var(--ok);font-size:.75rem}
+.menu{position:absolute;right:8px;top:54px;z-index:20;width:min(270px,86%);background:#0d1528;border:1px solid var(--bord);border-radius:16px;padding:.35rem;box-shadow:0 12px 32px rgba(0,0,0,.55);display:none}
+.menu.on{display:block}
+.menu h6{font-size:.68rem;letter-spacing:.12em;color:var(--muted);font-weight:700;margin:.5rem .6rem .15rem;text-transform:uppercase}
+.menu button{display:flex;align-items:center;gap:.6rem;width:100%;font:inherit;font-size:.95rem;background:transparent;border:0;color:var(--text);padding:.5rem .6rem;border-radius:10px;text-align:left;cursor:pointer}
+.menu button:hover,.menu button:focus-visible{background:rgba(255,255,255,.07);outline:none}
+.menu button i{font-style:normal;width:1.4rem;text-align:center}
+.menu button em{margin-left:auto;font-style:normal;color:var(--cy);font-size:.85rem}
+.scrim{position:absolute;inset:0;z-index:15;display:none}
+.scrim.on{display:block}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:25;background:#0d1528;border-top:1px solid var(--bord);border-radius:20px 20px 0 0;padding:1rem 1rem 1.1rem;transform:translateY(105%);transition:transform .5s cubic-bezier(.2,.8,.2,1);box-shadow:0 -12px 32px rgba(0,0,0,.5)}
+.sheet.on{transform:none}
+.sheet .top{display:flex;gap:.8rem;align-items:center;margin-bottom:.6rem}
+.sheet .av{width:48px;height:48px;border-radius:50%;background:#0e2a33;border:2px solid var(--cy);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--cy);font-size:1.2rem}
+.sheet .bar{height:6px;border-radius:99px;background:#1a2447;overflow:hidden;margin:.4rem 0 .15rem}
+.sheet .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--cy),var(--gold))}
+.sheet code{display:block;font-size:.8rem;color:var(--muted);letter-spacing:.06em;margin:.3rem 0 .7rem}
+.sheet .row2{display:flex;gap:.5rem}
+.sheet .row2 button{flex:1;font:inherit;font-size:.9rem;font-weight:700;background:#131d36;border:1px solid var(--bord);color:var(--text);border-radius:12px;padding:.55rem .6rem;cursor:pointer}
+.sheet .row2 .p{background:#0e7490;border-color:var(--cy)}
+.toast{position:absolute;left:50%;bottom:76px;transform:translateX(-50%);z-index:30;background:rgba(13,20,38,.95);border:1px solid var(--bord);border-radius:999px;padding:.4rem .9rem;font-size:.82rem;color:var(--text);opacity:0;pointer-events:none;transition:opacity .4s;white-space:nowrap;max-width:92%;overflow:hidden;text-overflow:ellipsis}
+.toast.on{opacity:1}
+.leave .phone{animation:leave .55s ease both}
+@keyframes leave{to{opacity:0;transform:scale(1.04);filter:blur(4px)}}
+.arrive .wrap{animation:arrive .8s ease both}
+@keyframes arrive{from{opacity:0}to{opacity:1}}
+.stage.lock .back{display:none!important}
+@media (prefers-reduced-motion:reduce){.leave .phone,.arrive .wrap{animation:none}.sheet{transition:none}.toast{transition:none}}
 </style>
 </head>
 <body>
@@ -69,7 +104,34 @@ input[type=range]{width:100%;accent-color:var(--cy)}
 <div class="chips" id="presets"></div>
 
 <div class="phone">
-  <div class="hd"><div class="av">G</div><div><b>Gesa <span style="color:var(--ok)">✔</span></b><small>P2P Aktiv</small></div></div>
+  <div class="hd">
+    <button class="hb" id="hBack" type="button" aria-label="Zurück zur Kontaktliste">‹</button>
+    <button class="hid" id="hId" type="button" aria-label="Kontaktkarte öffnen"><span class="av" id="hAv">G</span><span><b><span id="hName">Gesa</span> <span style="color:var(--ok)">✔</span></b><small>P2P Aktiv</small></span></button>
+    <span class="sp"></span>
+    <button class="hi star" id="hStar" type="button" aria-label="Zum Sternbild">✦</button>
+    <button class="hi" id="hMenu" type="button" aria-label="Menü" aria-haspopup="menu" aria-expanded="false">⋮</button>
+  </div>
+  <div class="scrim" id="scrim"></div>
+  <div class="menu" id="menu" role="menu" aria-label="Chat-Menü">
+    <h6>Dieser Chat</h6>
+    <button type="button" role="menuitem" data-act="ver"><i>🔏</i>Verifizierung</button>
+    <button type="button" role="menuitem" data-act="key"><i>🔑</i>Schlüssel abgleichen</button>
+    <button type="button" role="menuitem" data-act="foc"><i>🎬</i>Fokus-Ansicht<em id="focS">an</em></button>
+    <h6>Mein Universum</h6>
+    <button type="button" role="menuitem" data-act="star"><i>✦</i>Sternbild</button>
+    <button type="button" role="menuitem" data-act="map"><i>🗺</i>Sternkarte</button>
+    <button type="button" role="menuitem" data-act="egg"><i>🥚</i>Eiersuche</button>
+    <h6>Hilfe</h6>
+    <button type="button" role="menuitem" data-act="help"><i>📖</i>Kapitel lesen</button>
+    <button type="button" role="menuitem" data-act="intro"><i>🎞</i>Intro ansehen</button>
+  </div>
+  <div class="sheet" id="sheet" role="dialog" aria-label="Kontaktkarte" aria-hidden="true">
+    <div class="top"><span class="av" id="sAv">G</span><div><b id="sName" style="font-size:1.1rem">Gesa</b><div class="fine">✔ verifiziert · P2P aktiv</div></div></div>
+    <div class="fine">Nähe 95 %</div><div class="bar"><i style="width:95%"></i></div>
+    <code>Sicherheitsnummer (Beispiel): 48271 90356 11742 83019</code>
+    <div class="row2"><button class="p" type="button" id="sStar">✦ Im Sternbild zeigen</button><button type="button" id="sClose">Schließen</button></div>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
   <div class="stage" id="stage"><div class="pill" id="pill"></div><div class="deck" id="deck"></div><button class="back" id="back" type="button">⬇ Zum Fokus</button></div>
   <div class="comp"><input id="inp" placeholder="Nachricht …" autocomplete="off"><button id="send" type="button">➤</button></div>
 </div>
@@ -92,7 +154,7 @@ input[type=range]{width:100%;accent-color:var(--cy)}
 (function(){
   function $(i){return document.getElementById(i)}
   function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
-  var S={lv:4,tilt:12,shr:86,fade:20,curve:14},MSG=[],read=false,t0=Date.now();
+  var S={lv:4,tilt:12,shr:86,fade:20,curve:14},MSG=[],read=false,t0=Date.now(),lock=false;
   var stage=$('stage'),deck=$('deck');
   var mq=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)');
   function rm(){return $('rmt').checked||(mq&&mq.matches)}
@@ -130,6 +192,7 @@ input[type=range]{width:100%;accent-color:var(--cy)}
   }
   function add(m){
     m.i=MSG.length;m.t=fmt();MSG.push(m);
+    if(lock){deck.insertAdjacentHTML('beforeend',bubble(m));stage.scrollTop=stage.scrollHeight;return}
     if(read) exitRead(true);
     var tmp=document.createElement('div');tmp.innerHTML=bubble(m);var el=tmp.firstChild;
     // neue Nachricht startet klein unten und wächst in den Fokus
@@ -145,7 +208,7 @@ input[type=range]{width:100%;accent-color:var(--cy)}
     else stage.scrollTop=stage.scrollHeight;
   }
   function exitRead(){
-    if(!read) return;read=false;stage.classList.remove('read');stage.scrollTop=0;layout();
+    if(!read||lock) return;read=false;stage.classList.remove('read');stage.scrollTop=0;layout();
   }
   $('back').onclick=function(){exitRead()};
   stage.addEventListener('wheel',function(e){if(!read&&e.deltaY<0)enterRead()},{passive:true});
@@ -179,6 +242,34 @@ input[type=range]{width:100%;accent-color:var(--cy)}
   SAMPLE.forEach(function(m){m.i=MSG.length;m.t='09:'+(10+MSG.length*3);MSG.push(m)});
   stage.classList.toggle('rm',rm());sync();build();
   window.addEventListener('resize',function(){layout()});
+  // ── Navigation im Chatfenster ──
+  var NAME=decodeURIComponent((location.search.match(/[?&]c=([^&]+)/)||[])[1]||'Gesa');
+  $('hName').textContent=NAME;$('sName').textContent=NAME;$('hAv').textContent=$('sAv').textContent=NAME.charAt(0).toUpperCase();
+  if(/[?&]from=/.test(location.search))document.body.classList.add('arrive');
+  var menu=$('menu'),scrim=$('scrim'),sheet=$('sheet'),tt=null;
+  function toast(t){var e=$('toast');e.textContent=t;e.classList.add('on');clearTimeout(tt);tt=setTimeout(function(){e.classList.remove('on')},2200)}
+  function closeAll(){menu.classList.remove('on');scrim.classList.remove('on');$('hMenu').setAttribute('aria-expanded','false');sheet.classList.remove('on');sheet.setAttribute('aria-hidden','true')}
+  function openMenu(){closeAll();menu.classList.add('on');scrim.classList.add('on');$('hMenu').setAttribute('aria-expanded','true');var f=menu.querySelector('button');if(f)f.focus({preventScroll:true})}
+  function go(url){closeAll();if(rm()){location.href=url;return}document.body.classList.add('leave');setTimeout(function(){location.href=url},520)}
+  function toStar(){go('universum.html?star='+encodeURIComponent(NAME)+'&from=chat')}
+  $('hMenu').onclick=function(){menu.classList.contains('on')?closeAll():openMenu()};
+  $('hStar').onclick=toStar;$('sStar').onclick=toStar;
+  $('hBack').onclick=function(){toast('Test: zurück zur Kontaktliste')};
+  $('hId').onclick=function(){closeAll();sheet.classList.add('on');scrim.classList.add('on');sheet.setAttribute('aria-hidden','false');$('sClose').focus({preventScroll:true})};
+  $('sClose').onclick=closeAll;scrim.onclick=closeAll;
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeAll();$('hMenu').focus({preventScroll:true})}});
+  menu.addEventListener('keydown',function(e){var b=[].slice.call(menu.querySelectorAll('button')),i=b.indexOf(document.activeElement);if(e.key==='ArrowDown'){e.preventDefault();b[(i+1)%b.length].focus()}else if(e.key==='ArrowUp'){e.preventDefault();b[(i-1+b.length)%b.length].focus()}});
+  menu.addEventListener('click',function(e){var b=e.target.closest('[data-act]');if(!b)return;var a=b.dataset.act;
+    if(a==='ver'){closeAll();toast('Test: öffnet die Verifizierung')}
+    else if(a==='key'){closeAll();toast('Test: gleicht die Schlüssel ab')}
+    else if(a==='foc'){lock=!lock;$('focS').textContent=lock?'aus':'an';closeAll();
+      stage.classList.toggle('lock',lock);
+      if(lock){enterRead()}else{read=true;lock=false;exitRead()}
+      toast(lock?'Normale Ansicht (wie gewohnt)':'Fokus-Ansicht an')}
+    else if(a==='star'||a==='map')toStar();
+    else if(a==='egg')go('eier.html');
+    else if(a==='help')go('intro.html?help=1&from=chat');
+    else if(a==='intro')go('intro.html?play=1&from=chat')});
 })();
 </script>
 </body>

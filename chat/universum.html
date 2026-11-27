@@ -128,6 +128,11 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
 .skywrap:focus-visible{outline:2px solid var(--cy);outline-offset:3px;border-radius:22px}
 .lst button{display:flex;justify-content:space-between;width:100%;font:inherit;font-size:.92rem;background:#0a1124;border:1px solid var(--bord);color:var(--text);border-radius:10px;padding:.45rem .7rem;margin:.3rem 0;text-align:left}
 details.lst summary{cursor:pointer;font-weight:600}
+.arrive .wrap{animation:arrive .8s ease both}
+@keyframes arrive{from{opacity:0}to{opacity:1}}
+.leave .wrap{animation:leave .5s ease both}
+@keyframes leave{to{opacity:0}}
+@media (prefers-reduced-motion:reduce){.arrive .wrap,.leave .wrap{animation:none}}
 </style>
 </head>
 <body>
@@ -274,7 +279,7 @@ details.lst summary{cursor:pointer;font-weight:600}
       '<div class="why"><span>Gegenseitigkeit</span><b>'+Math.round(x.r*100)+' %</b><span>Kontakt besteht seit</span><b>'+x.d+' Tagen</b><span>Letzter Austausch</span><b>'+(x.f?'vor '+x.f+' Tagen':'heute')+'</b></div>'+
       (surprise(x)?'<p class="fine" style="margin-top:.5rem">✉️ Dieser Stern hält eine Überraschung bereit – entsteht aus langer Freundschaft und lebendigem Verlauf, nie aus Zufall.</p>':''))+
       (x.req?'':'<div class="sendrow"><input id="sendT" type="text" maxlength="60" placeholder="Kurze Nachricht …" aria-label="Nachricht an '+esc(x.n)+'" autocomplete="off"><button class="btn p" id="sendB" type="button">✉️ Senden</button></div><div id="sendS" role="status"></div>')+
-      '<div style="margin-top:.7rem"><button class="btn" disabled>Chat öffnen (nur Test)</button></div></div>';
+      '<div style="margin-top:.7rem"><button class="btn p" id="openChat" type="button">💬 Chat öffnen (Test)</button></div></div>';
   }
   $('sky').addEventListener('click',function(ev){if(dragMoved){dragMoved=false;return}if(ev.target.closest&&ev.target.closest('[data-comet]')){cmCard();return}var g=ev.target.closest&&ev.target.closest('[data-i]');if(!g){if(sel>=0&&!ev.target.closest('.empty')){sel=-1;draw()}return}selectStar(+g.getAttribute('data-i'))});
   $('cmsvg').addEventListener('click',function(ev){if(ev.target.closest('[data-comet]'))cmCard()});
@@ -384,6 +389,7 @@ details.lst summary{cursor:pointer;font-weight:600}
   function listBuild(c){
     $('lstBody').innerHTML=c.length?c.map(function(x,i){return '<button type="button" data-l="'+i+'"><span>'+esc(x.n)+'</span><span class="fine">'+(x.req?'Anfrage':x.v?'✔ verifiziert':'')+(surprise(x)?' ✉️':'')+'</span></button>'}).join(''):'<p class="fine">Noch keine Sterne.</p>'}
   $('lstBody').addEventListener('click',function(e){var b=e.target.closest('[data-l]');if(!b)return;selectStar(+b.getAttribute('data-l'));$('sky').scrollIntoView({behavior:rmo()?'auto':'smooth',block:'nearest'})});
+  $('info').addEventListener('click',function(ev){if(ev.target.id!=='openChat')return;var x=SC[cur].c[sel];if(!x)return;var u='fokus.html?c='+encodeURIComponent(x.n)+'&from=universum';if(rmo()){location.href=u;return}document.body.classList.add('leave');setTimeout(function(){location.href=u},480)});
   // Sende-Effekt
   function rmo(){return window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches}
   $('info').addEventListener('click',function(ev){if(ev.target.id!=='sendB')return;sendFx()});
@@ -499,6 +505,9 @@ details.lst summary{cursor:pointer;font-weight:600}
     if(!$('cK').checked)return msg('Bitte die Kennzeichnung als Partner bestätigen.','err');
     msg('✅ Bewerbung eingegangen. Das Universum prüft sie. (Test: nichts wurde gesendet)','ok')};
   chips();wait();env();inv();slots();draw();cmTog();
+  (function(){var m=location.search.match(/[?&]star=([^&]+)/);if(/[?&]from=/.test(location.search))document.body.classList.add('arrive');if(!m)return;var nm=decodeURIComponent(m[1]);
+    cur='voll';chips();draw();var i=SC[cur].c.findIndex(function(x){return x.n===nm});
+    if(i<0)i=0;V=homeV();selectStar(i);var w=$('skyw');if(w&&w.scrollIntoView)w.scrollIntoView({block:'center'})})();
 })();
 </script>
 </body>
