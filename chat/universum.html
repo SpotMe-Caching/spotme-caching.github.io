@@ -297,16 +297,16 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
     var trail=document.createElementNS(NS,'polyline');trail.setAttribute('fill','none');trail.setAttribute('stroke','#ffd45a');trail.setAttribute('stroke-width','2');trail.setAttribute('stroke-linecap','round');trail.setAttribute('stroke-opacity','.55');g.appendChild(trail);
     var dot=document.createElementNS(NS,'circle');dot.setAttribute('r','4');dot.setAttribute('fill','#fff6d6');g.appendChild(dot);
     var halo=document.createElementNS(NS,'circle');halo.setAttribute('r','9');halo.setAttribute('fill','#ffd45a');halo.setAttribute('opacity','.3');g.insertBefore(halo,dot);
-    var ax=cx,ay=cy,bx=tgt.x,by=tgt.y,dx=bx-ax,dy=by-ay,len=Math.sqrt(dx*dx+dy*dy)||1,kx=(ax+bx)/2-dy/len*len*.22,ky=(ay+by)/2+dx/len*len*.22,T=950,t0=performance.now(),pts=[];
+    var ax=cx,ay=cy,bx=tgt.x,by=tgt.y,dx=bx-ax,dy=by-ay,len=Math.sqrt(dx*dx+dy*dy)||1,kx=(ax+bx)/2-dy/len*len*.22,ky=(ay+by)/2+dx/len*len*.22,T=3200,t0=performance.now(),pts=[];
     function step(now){
-      var u=Math.min(1,(now-t0)/T),e=u<.5?2*u*u:1-Math.pow(-2*u+2,2)/2,m=1-e;
+      var u=Math.min(1,(now-t0)/T),e=-(Math.cos(Math.PI*u)-1)/2,m=1-e; // sanft an- und abschwellend, ruhig wie ein Asteroid
       var x=m*m*ax+2*m*e*kx+e*e*bx,y=m*m*ay+2*m*e*ky+e*e*by;
-      pts.push(x.toFixed(1)+','+y.toFixed(1));if(pts.length>9)pts.shift();
+      pts.push(x.toFixed(1)+','+y.toFixed(1));if(pts.length>26)pts.shift();
       trail.setAttribute('points',pts.join(' '));dot.setAttribute('cx',x);dot.setAttribute('cy',y);halo.setAttribute('cx',x);halo.setAttribute('cy',y);
       if(u<1&&g.isConnected){requestAnimationFrame(step);return}
       if(g.isConnected){
         var rg=document.createElementNS(NS,'circle');rg.setAttribute('class','pl');rg.setAttribute('cx',bx);rg.setAttribute('cy',by);rg.setAttribute('r','14');rg.setAttribute('fill','none');rg.setAttribute('stroke','#10b981');rg.setAttribute('stroke-width','2');svg.appendChild(rg);
-        g.remove();setTimeout(function(){rg.remove()},1300)}
+        g.remove();setTimeout(function(){rg.remove()},2200)}
       done()}
     requestAnimationFrame(step)}
   // Nahtloser Start
