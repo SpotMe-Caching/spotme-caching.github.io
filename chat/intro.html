@@ -94,12 +94,11 @@ h2{font-size:1.25rem;margin:1.6rem 0 .5rem}
   var TS=Math.max(1,+(location.search.match(/[?&]t=(\d+)/)||[])[1]||1); // nur für Tests: Zeitraffer
   // Kapitel: dieselbe Liste für Intro und Hilfe
   var CH=[
-    {t:'KAPITEL I · DER RAUM',x:'Es gab eine Zeit, da wurden Nachrichten gejagt. Postfächer füllten sich, Benachrichtigungen schrien, und niemand hatte mehr Raum.'},
-    {t:'KAPITEL II · DIE STERNE',x:'Jeder Mensch, dem du vertraust, ist ein Stern. Deine Sterne bilden dein Sternbild. Je näher ihr euch seid, desto näher leuchtet er.'},
-    {t:'KAPITEL III · DIE ZEIT',x:'Eine Nachricht darf Geduld haben. Ein Umschlag öffnet sich erst, wenn es passt. Ein Komet zieht selten vorbei. Und manchmal findest du etwas.'},
-    {t:'KAPITEL IV · DAS VERSPRECHEN',x:'Hier muss niemand hetzen. Ich sehe dich. Nicht deine Daten.'}
-  ];
-  var PRE='Vor nicht allzu langer Zeit, in einer Welt voller Postfächer …';
+    {t:'KAPITEL I · DER RAUM',x:'Früher wurden Nachrichten gejagt. Postfächer quollen über, Push-Meldungen brüllten, und zum Atmen blieb kein Platz. Wir haben das Universum gefragt. Es fand das auch doof.'},
+    {t:'KAPITEL II · DIE STERNE',x:'Jeder, dem du vertraust, ist ein Stern. Alle anderen sind Sternenstaub. Nichts gegen Staub, aber der kriegt keinen Namen.'},
+    {t:'KAPITEL III · DIE ZEIT',x:'Nachrichten dürfen warten. Umschläge gehen auf, wenn es passt, nicht wenn jemand nervös wird. Ab und zu fliegt ein Komet vorbei. Und manchmal findest du was. Was, verraten wir nicht.'},
+    {t:'KAPITEL IV · DAS VERSPRECHEN',x:'Niemand muss hetzen. Wir sehen dich. Deine Daten sehen wir nicht. Versprochen, und zwar ganz ohne Kleingedrucktes.'}
+  ];  var PRE='Vor nicht allzu langer Zeit, in einer Welt voller Postfächer, die nie Feierabend hatten …';
   var ov=$('ov'),cv=$('cv'),ctx=cv.getContext('2d'),raf=0,t0=0,running=false,phase='',lastFocus=null;
   function rmo(){return window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches}
   function lite(){return (navigator.hardwareConcurrency&&navigator.hardwareConcurrency<=4)||(navigator.deviceMemory&&navigator.deviceMemory<=2)}
