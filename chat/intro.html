@@ -35,15 +35,17 @@ h2{font-size:1.25rem;margin:1.6rem 0 .5rem}
 .ttl img{width:clamp(76px,22vw,120px);height:clamp(76px,22vw,120px);border-radius:24%;background:#070b1a;padding:9%;box-sizing:border-box;box-shadow:0 0 60px rgba(255,212,90,.35)}
 .ttl b{font-size:clamp(2.4rem,13vw,4.4rem);font-weight:800;letter-spacing:.14em;color:var(--gold);text-shadow:0 0 30px rgba(255,180,50,.5)}
 .ttl small{font-size:clamp(.8rem,3.2vw,1.05rem);letter-spacing:.34em;color:#cfe3ff;font-weight:300}
-.cw{position:absolute;inset:0;perspective:420px;perspective-origin:50% 100%;overflow:hidden;pointer-events:none;-webkit-mask-image:linear-gradient(to top,#000 50%,transparent 90%);mask-image:linear-gradient(to top,#000 50%,transparent 90%)}
-.pl{position:absolute;left:50%;bottom:0;width:min(84vw,500px);margin-left:calc(min(84vw,500px)/-2);height:100%;transform-origin:50% 100%;transform:rotateX(48deg)}
-.cr{position:absolute;left:0;right:0;top:100%;color:var(--gold);text-align:center;font-weight:600;font-size:clamp(1.3rem,5.8vw,2.1rem);line-height:1.5;opacity:0;will-change:transform}
-.cr h3{font-size:1.35em;letter-spacing:.12em;margin-bottom:1.1em}
-.cr p{margin-bottom:1.4em}
+.cw{position:absolute;inset:0;perspective:900px;perspective-origin:50% 20%;overflow:hidden;pointer-events:none;-webkit-mask-image:linear-gradient(to top,transparent 17%,#000 27%,#000 72%,transparent 82%);mask-image:linear-gradient(to top,transparent 17%,#000 27%,#000 72%,transparent 82%)}
+.pl{position:absolute;left:50%;bottom:20%;width:min(90vw,520px);margin-left:calc(min(90vw,520px)/-2);height:60%;transform-origin:50% 100%;transform:rotateX(30deg)}
+.cr{position:absolute;left:0;right:0;top:100%;color:var(--gold);text-align:center;font-weight:600;font-size:clamp(1.1rem,4.7vw,1.75rem);line-height:1.5;opacity:0;will-change:transform}
+.cr h3{font-size:1.25em;letter-spacing:.1em;margin-bottom:.9em}
+.cr p{margin-bottom:1.3em}
 .end{flex-direction:column;gap:.6rem;opacity:0;transition:opacity 2s ease}
 .end.on{opacity:1}
 .end img{width:96px;height:96px;border-radius:24%;background:#070b1a;padding:9%;box-sizing:border-box}
 .end span{color:#cfe3ff;letter-spacing:.12em;font-weight:300}
+#pz{position:absolute;left:0;right:0;bottom:calc(6% + env(safe-area-inset-bottom));text-align:center;z-index:3;font-size:.85rem;color:#cfe3ff;letter-spacing:.06em;opacity:0;transition:opacity .6s;pointer-events:none}
+#pz.on{opacity:.9}
 #skip{position:absolute;right:14px;top:max(14px,env(safe-area-inset-top));z-index:3;font:inherit;font-size:.9rem;color:#cfe3ff;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:.4rem .9rem;opacity:0;transition:opacity .6s}
 #skip.on{opacity:1}
 /* Hilfe-Karten */
@@ -82,7 +84,7 @@ h2{font-size:1.25rem;margin:1.6rem 0 .5rem}
 </head>
 <body>
 <div class="wrap">
-<div class="sandbox">🧪 <b>Testseite.</b> Kinoreifes Mini-Intro als Gimmick. Dauer etwa 30 Sekunden, jederzeit überspringbar.</div>
+<div class="sandbox">🧪 <b>Testseite.</b> Kinoreifes Mini-Intro als Gimmick. Dauer etwa 45 Sekunden, jederzeit überspringbar.</div>
 <h2 style="margin-top:.4rem">🎬 Blockbuster-Intro</h2>
 <p class="fine">Sternenflug, Titel, ein Text, der nach hinten wegläuft. Ruhig statt hektisch, so wie unser Universum.</p>
 <div class="card">
@@ -106,6 +108,7 @@ h2{font-size:1.25rem;margin:1.6rem 0 .5rem}
   <div class="lay stk" id="stk"><div class="stkb"><b>Hmm. Klemmt.</b><span>Kannst du mal anschubsen?</span><i class="arr">↑</i><button class="btn p" id="push" type="button">Anschubsen</button></div></div>
   <div class="lay end" id="end"><img src="wesee/mark.png" alt=""><span>we see you …</span></div>
   <div class="help"><div class="hc"><h3 id="hh"></h3><p id="hp2"></p><div class="dots" id="dots"></div><div class="nav"><button class="btn" id="hb" type="button">‹ Zurück</button><button class="btn p" id="hn" type="button">Weiter ›</button></div></div></div>
+  <div id="pz" aria-live="polite"></div>
   <button id="skip" type="button">Überspringen ✕</button>
 </div>
 
@@ -122,13 +125,13 @@ h2{font-size:1.25rem;margin:1.6rem 0 .5rem}
     {t:'KAPITEL IV · DAS VERSPRECHEN',typo:['KAPITEL IV · DAS ','VERSPECHEN','VERSPRECHEN ✓ (zwei Daumen, sorry)'],x:'Niemand muss hetzen. Kein Anschupser, kein Gedrängel. Wir sehen dich. Deine Daten sehen wir nicht. Versprochen, und zwar ganz ohne Kleingedrucktes.'}
   ];  var PRE='Vor nicht allzu langer Zeit, in einer Welt voller Postfächer, die nie Feierabend hatten …';
   var ov=$('ov'),cv=$('cv'),ctx=cv.getContext('2d'),raf=0,t0=0,running=false,phase='',lastFocus=null;
-  var stuckMode=false,stuckActive=false,stuckDone=false,pausedAt=0,pauseTotal=0,preTxt='',preHold=false;
+  var userPause=false,pzAt=0,stuckMode=false,stuckActive=false,stuckDone=false,pausedAt=0,pauseTotal=0,preTxt='',preHold=false;
   function rmo(){return window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches}
   function lite(){return (navigator.hardwareConcurrency&&navigator.hardwareConcurrency<=4)||(navigator.deviceMemory&&navigator.deviceMemory<=2)}
   // Crawl-Text
   $('cr').innerHTML=CH.map(function(c){var h=c.typo?esc(c.typo[0])+'<span class="typo" id="tpo"><s>'+esc(c.typo[1])+'</s><em>'+esc(c.typo[2])+'</em></span>':esc(c.t);return '<h3>'+h+'</h3><p>'+esc(c.x)+'</p>'}).join('');
   // Phasen (ms bei TS=1)
-  var T={warp:4000,title:8000,crawl:28000,end:31000};
+  var T={warp:4000,title:8000,crawl:40000,end:43000};
   // Sterne
   var stars=[],N=0,W=0,H=0,DPR=1,speed=.2;
   function fit(){DPR=Math.min(2,window.devicePixelRatio||1);W=cv.clientWidth;H=cv.clientHeight;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0)}
@@ -147,6 +150,7 @@ h2{font-size:1.25rem;margin:1.6rem 0 .5rem}
     var ms=(now-t0-pauseTotal)*TS,dt=Math.min(50,now-last);last=now;
     if(stuckMode&&!stuckDone&&!stuckActive&&ms>=2200){stuckActive=true;pausedAt=now;cv.classList.add('shake');setTimeout(function(){cv.classList.remove('shake')},900);$('stk').classList.add('on');setPhase('stuck');$('pre').classList.remove('on');$('skip').classList.add('on')}
     if(stuckActive){if((now-pausedAt)*TS>12000)push(true);else{raf=requestAnimationFrame(frame);return}}
+    if(userPause){raf=requestAnimationFrame(frame);return}
     speed+=(targetSpeed(ms)-speed)*.04;
     ctx.fillStyle='rgba(0,0,0,.28)';ctx.fillRect(0,0,W,H);
     var cx=W/2,cy=H*.46,f=Math.min(W,H)*.55,k=speed*dt*.00022*TS;
@@ -160,7 +164,8 @@ h2{font-size:1.25rem;margin:1.6rem 0 .5rem}
     stage(ms);
     if(ms>=T.end+3500){close();return}
     raf=requestAnimationFrame(frame)}
-  function setPhase(p){if(phase===p)return;phase=p;ov.setAttribute('data-phase',p)}
+  function setPhase(p){if(phase===p)return;phase=p;ov.setAttribute('data-phase',p);if(p==='crawl'){hint('Tippen hält den Text an',3600)}}
+  function hint(t,ms){var z=$('pz');z.textContent=t;z.classList.add('on');clearTimeout(hint.t);if(ms)hint.t=setTimeout(function(){z.classList.remove('on')},ms/TS)}
   function stage(ms){
     var pre=$('pre'),ttl=$('ttl'),cr=$('cr'),end=$('end');
     if(ms<T.warp){setPhase('warp');pre.textContent=preTxt;pre.classList.toggle('on',preHold?true:stuckDone?false:(ms>700&&ms<T.warp-700))}
@@ -170,9 +175,9 @@ h2{font-size:1.25rem;margin:1.6rem 0 .5rem}
       ttl.style.opacity=u<.12?u/.12:u>.78?Math.max(0,(1-u)/.22):1;
       var sc=lerp(1.9,.15,ease(u));ttl.style.transform='scale('+sc.toFixed(3)+')'}
     else if(ms<T.crawl){setPhase('crawl');ttl.style.opacity=0;
-      var v=(ms-T.title)/(T.crawl-T.title),ch=cr.offsetHeight;
+      var v=(ms-T.title)/(T.crawl-T.title),ch=cr.offsetHeight,ph=$('cr').parentNode.offsetHeight;
       cr.style.opacity=1;var tp=$('tpo');if(tp&&v>.5)tp.classList.add('fx');
-      var y=-lerp(0,H+ch+40,v);cr.style.transform='translateY('+y.toFixed(1)+'px)'}
+      var y=-lerp(0,ph+ch+24,v);cr.style.transform='translateY('+y.toFixed(1)+'px)'}
     else{setPhase('end');cr.style.opacity=0;end.classList.add('on')}
     $('skip').classList.toggle('on',ms>900)}
   function open(o){
@@ -183,10 +188,10 @@ h2{font-size:1.25rem;margin:1.6rem 0 .5rem}
     $('ttl').style.opacity=0;$('end').classList.remove('on');$('cr').style.opacity=0;$('pre').classList.remove('on');
     document.body.style.overflow='hidden';
     void ov.offsetWidth;ov.classList.add('on');
-    running=true;speed=.18;t0=performance.now();last=t0;phase='';raf=requestAnimationFrame(frame);
+    userPause=false;$('pz').classList.remove('on');running=true;speed=.18;t0=performance.now();last=t0;phase='';raf=requestAnimationFrame(frame);
     $('skip').focus({preventScroll:true})}
   function close(){
-    running=false;cancelAnimationFrame(raf);raf=0;
+    userPause=false;running=false;cancelAnimationFrame(raf);raf=0;
     ov.classList.remove('on','helpmode');
     var done=function(){ov.hidden=true;document.body.style.overflow='';ov.removeAttribute('data-phase');phase='';if(lastFocus&&lastFocus.focus)lastFocus.focus({preventScroll:true})};
     if(rmo()||TS>1)done();else setTimeout(done,800)}
@@ -209,6 +214,14 @@ h2{font-size:1.25rem;margin:1.6rem 0 .5rem}
   ov.addEventListener('wheel',function(e){if(stuckActive&&e.deltaY<0)push()},{passive:true});
   $('push').onclick=function(){push()};
   document.addEventListener('keydown',function(e){if(stuckActive&&(e.key==='ArrowUp'||e.key===' '||e.key==='Enter')){e.preventDefault();push()}});
+  // Tippen hält den Text an (zum Mitlesen)
+  var tap0=null;
+  ov.addEventListener('pointerdown',function(e){tap0={x:e.clientX,y:e.clientY,t:performance.now(),b:!!(e.target.closest&&e.target.closest('button'))}});
+  ov.addEventListener('pointerup',function(e){var a=tap0;tap0=null;if(!a||a.b||!running||stuckActive||phase!=='crawl')return;
+    if(Math.hypot(e.clientX-a.x,e.clientY-a.y)>10||performance.now()-a.t>500)return;
+    var now=performance.now();
+    if(!userPause){userPause=true;pzAt=now;hint('⏸ Pause · tippen zum Weiterlesen',0)}
+    else{userPause=false;pauseTotal+=now-pzAt;$('pz').classList.remove('on')}});
   // Hilfe-Modus (gleiche Kapitel)
   var hi=0;
   function openHelp(i){
@@ -239,7 +252,7 @@ h2{font-size:1.25rem;margin:1.6rem 0 .5rem}
     if(taps.length>=5){taps=[];$('cnt').textContent='✨ Easter Egg gefunden.';open({stuck:true})}});
   if(/[?&]from=/.test(location.search))document.body.classList.add('arrive');
   if(/[?&]help=1/.test(location.search))setTimeout(function(){openHelp(0)},60);else if(/[?&]play=1/.test(location.search))setTimeout(function(){open()},60);
-  window.__intro={open:open,close:close,state:function(){return {running:running,phase:phase,hidden:ov.hidden,N:N,stuck:stuckActive,done:stuckDone}}};
+  window.__intro={open:open,close:close,state:function(){return {running:running,phase:phase,hidden:ov.hidden,N:N,stuck:stuckActive,done:stuckDone,paused:userPause}}};
 })();
 </script>
 </body>
