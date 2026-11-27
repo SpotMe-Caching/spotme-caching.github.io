@@ -111,6 +111,23 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
 .sendrow input{flex:1;min-width:0;font:inherit;font-size:.92rem;background:#0a1124;border:1px solid var(--bord);color:var(--text);border-radius:10px;padding:.45rem .65rem}
 .sendrow button{white-space:nowrap}
 #sendS{margin-top:.4rem;font-size:.88rem;color:var(--ok);min-height:1.2em}
+.sky svg{touch-action:none;cursor:grab}
+.sky svg:active{cursor:grabbing}
+.foc [data-i]:not(.fs){opacity:.3;transition:opacity .8s ease}
+.foc .ln:not(.hot){opacity:.25}
+.sky svg [data-i]{transition:opacity .8s ease}
+.cmsvg{position:absolute;inset:0;width:100%;height:100%;border-radius:22px;overflow:hidden;pointer-events:none;z-index:2}
+.cmsvg [data-comet]{pointer-events:auto}
+.edges{position:absolute;inset:0;pointer-events:none;z-index:3}
+.edge{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:rgba(13,20,38,.84);border:1.5px solid var(--c);color:var(--c);display:none;align-items:center;justify-content:center;font-size:.85rem;padding:0;pointer-events:auto;cursor:pointer}
+.edge.on{display:flex}
+.edge i{font-style:normal;display:block}
+.ctl{position:absolute;right:10px;bottom:10px;display:flex;flex-direction:column;gap:6px;z-index:4;align-items:flex-end}
+.ctl button{width:40px;height:40px;border-radius:50%;background:rgba(13,20,38,.8);border:1px solid var(--bord);color:var(--text);font:inherit;font-size:1.15rem;line-height:1;padding:0}
+.ctl .home{width:auto;border-radius:999px;padding:0 .85rem;font-size:.85rem;height:38px}
+.skywrap:focus-visible{outline:2px solid var(--cy);outline-offset:3px;border-radius:22px}
+.lst button{display:flex;justify-content:space-between;width:100%;font:inherit;font-size:.92rem;background:#0a1124;border:1px solid var(--bord);color:var(--text);border-radius:10px;padding:.45rem .7rem;margin:.3rem 0;text-align:left}
+details.lst summary{cursor:pointer;font-weight:600}
 </style>
 </head>
 <body>
@@ -120,9 +137,10 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
 <h2 style="margin-top:.4rem">🌌 Dein Universum</h2>
 <p class="fine">Startseite des Messengers. Du stehst oben links im goldenen Schnitt – im Fokus ist dein Raum mit deinen Sternen. Wähle ein Szenario:</p>
 <div class="chips" id="scen"></div>
-<div class="skywrap"><div class="sky" id="sky"></div><div class="intro" id="intro" aria-hidden="true"><img src="wesee/mark.png" alt=""></div></div>
+<div class="skywrap" id="skyw" tabindex="0" role="group" aria-label="Dein Universum. Pfeiltasten bewegen den Himmel, Plus und Minus zoomen, Pos1 führt zu dir."><div class="sky" id="sky"></div><svg class="cmsvg" id="cmsvg" viewBox="0 0 400 448" preserveAspectRatio="xMidYMid slice" aria-hidden="true"></svg><div class="edges" id="edges"></div><div class="ctl"><button type="button" id="zin" aria-label="Näher heran">＋</button><button type="button" id="zout" aria-label="Weiter weg">－</button><button type="button" id="zhome" class="home" aria-label="Zurück zu mir">⌖ Zu mir</button></div><div class="intro" id="intro" aria-hidden="true"><img src="wesee/mark.png" alt=""></div></div>
 <div id="info"></div>
-<p class="fine" style="text-align:center;margin-top:.4rem">Tippe einen Stern an</p>
+<p class="fine" style="text-align:center;margin-top:.4rem">Zieh den Himmel · zwei Finger zoomen · tippe einen Stern an</p>
+<details class="card lst" id="lst"><summary>☰ Alle Sterne als Liste</summary><div id="lstBody"></div></details>
 <div class="cmbar"><span>☄️ Komet im Anflug: <b style="color:var(--text)">@DragonsChain</b></span><button type="button" id="cmShow">Ansehen</button><button type="button" id="cmTog" aria-pressed="true">☄️ an</button></div>
 <div id="cmInfo"></div>
 
@@ -201,7 +219,7 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
     verblasst:{name:'Lange still',c:[
       {n:'Gesa',d:300,r:.9,f:60,v:1},{n:'Wolfgang',d:280,r:.8,f:90,v:1},{n:'Mara',d:150,r:.7,f:120}]}
   };
-  var LP=[],cur='neu',sel=-1,comet=true,fu={step:0,f:-1,n:8,inv:{},msg:''};
+  var V={x:230-400*.382,y:260-448*.382,z:1},fly=null,inert=0,dragMoved=false,LP=[],cur='neu',sel=-1,comet=true,fu={step:0,f:-1,n:8,inv:{},msg:''};
   function closeness(c){ // 0..1 – nur lokal berechnet
     if(c.req) return .05;
     var rec=Math.exp(-c.f/45);                 // Frische
@@ -211,37 +229,38 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
   function surprise(c){ // Überraschung hängt an Kontaktdauer + Verlauf
     return !!c.env;
   }
-  var W=400,H=448,cx=W*.382,cy=H*.382; // ich: Schnittpunkt des goldenen Schnitts (oben links)
+  var W=400,H=448,WW=860,WH=980,cx=230,cy=260; // Raum ist größer als das Fenster; ich: startet im Schnittpunkt des goldenen Schnitts (oben links)
   var SK=.5*W,SKY=.5*H; // Mitte des Raums
   function pos(i,n,c){
     // Der Raum liegt rechts unten von mir. Entfernung = Nähe, Richtung = verteilt (Goldener Winkel, kein Gedränge)
-    var cl=closeness(c),rad=64+(1-cl)*230;
+    var cl=closeness(c),rad=c.req?150:(64+(1-cl)*230)*1.9; // Anfragen liegen immer nah und gut sichtbar
     var t=((i+1)*0.6180339)%1,a=(-34+t*150)*Math.PI/180;
     var x=cx+Math.cos(a)*rad,y=cy+Math.sin(a)*rad*1.04;
-    return {x:Math.max(30,Math.min(W-30,x)),y:Math.max(30,Math.min(H-34,y)),cl:cl};
+    return {x:Math.max(40,Math.min(WW-40,x)),y:Math.max(40,Math.min(WH-44,y)),cl:cl};
   }
   function star(x,y,r,fill,op){var p='';for(var i=0;i<10;i++){var rr=i%2?r*.42:r,a=-Math.PI/2+i*Math.PI/5;p+=(i?'L':'M')+(x+Math.cos(a)*rr).toFixed(1)+' '+(y+Math.sin(a)*rr).toFixed(1)}return '<path d="'+p+'Z" fill="'+fill+'" opacity="'+op+'"/>'}
-  function dust(n){var s='',seed=7;function rnd(){seed=(seed*9301+49297)%233280;return seed/233280}
-    for(var i=0;i<n;i++){var a=rnd()*Math.PI*2,r=20+rnd()*230;s+='<circle class="tw" style="--d:'+(2+rnd()*3).toFixed(1)+'s" cx="'+(SK+Math.cos(a)*r*.85).toFixed(1)+'" cy="'+(SKY+Math.sin(a)*r).toFixed(1)+'" r="'+(.6+rnd()*1.4).toFixed(1)+'" fill="#cfe3ff" opacity=".6"/>'}return s}
+  function dots(seed,n,rx,ry,r0,r1,op,tw){var o='',x=seed;function rnd(){x=(x*9301+49297)%233280;return x/233280}
+    for(var i=0;i<n;i++)o+='<circle'+(tw?' class="tw" style="--d:'+(2+rnd()*3).toFixed(1)+'s"':'')+' cx="'+(rnd()*rx).toFixed(0)+'" cy="'+(rnd()*ry).toFixed(0)+'" r="'+(r0+rnd()*(r1-r0)).toFixed(2)+'" fill="#cfe3ff" opacity="'+op+'"/>';return o}
+  function layers(n){return '<g class="par" data-f=".5">'+dots(3,110,WW*.5+W*2,WH*.5+H*2,.5,1,.35,0)+'</g><g class="par" data-f=".75">'+dots(5,70,WW*.75+W*2,WH*.75+H*2,.6,1.2,.5,0)+'</g><g class="spin" style="transform-origin:50% 50%">'+dots(7,n?90:130,WW,WH,.6,2,.6,1)+'</g>'}
   function draw(){
-    var S=SC[cur],c=S.c,n=c.length,h='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Dein Universum"><g class="world">';
-    h+='<g class="spin" style="transform-origin:50% 50%">'+dust(n?46:80)+'</g>';
+    var S=SC[cur],c=S.c,n=c.length,h='<svg viewBox="'+V.x+' '+V.y+' '+W/V.z+' '+H/V.z+'" role="img" aria-label="Dein Universum"'+(sel>=0?' class="foc"':'')+'><g class="world">';
+    h+=layers(n);
     var P=c.map(function(x,i){return pos(i,n,x)});LP=P;
-    (S.link||[]).forEach(function(l){var a=P[l[0]],b=P[l[1]];if(a&&b)h+='<line x1="'+a.x+'" y1="'+a.y+'" x2="'+b.x+'" y2="'+b.y+'" stroke="#7ec8ff" stroke-opacity=".28" stroke-width="1"/>'});
-    P.forEach(function(p,i){if(c[i].v||c[i].r>.6)h+='<line x1="'+cx+'" y1="'+cy+'" x2="'+p.x+'" y2="'+p.y+'" stroke="'+(c[i].v?'#ffd45a':'#22d3ee')+'" stroke-opacity="'+(.12+p.cl*.3)+'" stroke-width="'+(.6+p.cl*1.4)+'"/>'});
+    (S.link||[]).forEach(function(l){var a=P[l[0]],b=P[l[1]];if(a&&b)h+='<line class="ln" x1="'+a.x+'" y1="'+a.y+'" x2="'+b.x+'" y2="'+b.y+'" stroke="#7ec8ff" stroke-opacity=".28" stroke-width="1"/>'});
+    P.forEach(function(p,i){if(c[i].v||c[i].r>.6)h+='<line class="ln'+(i===sel?' hot':'')+'" x1="'+cx+'" y1="'+cy+'" x2="'+p.x+'" y2="'+p.y+'" stroke="'+(c[i].v?'#ffd45a':'#22d3ee')+'" stroke-opacity="'+(.12+p.cl*.3)+'" stroke-width="'+(.6+p.cl*1.4)+'"/>'});
     h+=fuSvg(P);
-    if(comet){var CO=W+40;h+='<g data-comet="1" style="cursor:pointer"><g class="cm"><g transform="rotate(138)"><defs><linearGradient id="ct" x1="0" x2="1"><stop offset="0" stop-color="#ffb08f" stop-opacity=".9"/><stop offset="1" stop-color="#ffb08f" stop-opacity="0"/></linearGradient></defs><path d="M0 -3 L120 -1 L120 1 L0 3Z" fill="url(#ct)" transform="rotate(180)"/><path d="M0 -6 L70 -1 L70 1 L0 6Z" fill="url(#ct)" opacity=".5" transform="rotate(180) rotate(6)"/></g><circle r="22" fill="transparent"/><circle r="6" fill="#fff3e6"/><circle r="10" fill="#ff8a5b" opacity=".35"/><text y="-14" text-anchor="middle" fill="#ffd9c4" font-size="9.5" font-weight="700" transform="translate(0,0)">@DragonsChain · Partner</text></g></g>'}
     // Ich
     h+='<circle cx="'+cx+'" cy="'+cy+'" r="22" fill="#0b1630" stroke="#f59e0b" stroke-width="2" class="mering"/>'+star(cx,cy,13,'#f59e0b',1)+'<text x="'+cx+'" y="'+(cy+40)+'" text-anchor="middle" fill="#e8edf5" font-size="12" font-weight="700">@'+esc(me)+'</text>';
     P.forEach(function(p,i){var x=c[i],r=5+p.cl*9,col=x.req?'#ff8a5b':x.v?'#ffd45a':'#9fd8ff',op=.35+p.cl*.65;
       if(x.req)h+='<circle class="pl" cx="'+p.x+'" cy="'+p.y+'" r="14" fill="none" stroke="#ff8a5b" stroke-width="2"/>';
-      h+='<g data-i="'+i+'" style="cursor:pointer">'+'<circle cx="'+p.x+'" cy="'+p.y+'" r="'+(r+12)+'" fill="transparent"/>'+(i===sel?'<circle cx="'+p.x+'" cy="'+p.y+'" r="'+(r+7)+'" fill="none" stroke="#22d3ee" stroke-width="1.5"/>':'')+star(p.x,p.y,r,col,op)+
+      h+='<g data-i="'+i+'"'+(i===sel?' class="fs"':'')+' style="cursor:pointer">'+'<circle cx="'+p.x+'" cy="'+p.y+'" r="'+(r+12)+'" fill="transparent"/>'+(i===sel?'<circle cx="'+p.x+'" cy="'+p.y+'" r="'+(r+7)+'" fill="none" stroke="#22d3ee" stroke-width="1.5"/>':'')+star(p.x,p.y,r,col,op)+
         '<text x="'+p.x+'" y="'+(p.y+r+13)+'" text-anchor="middle" fill="#e8edf5" font-size="10.5" opacity="'+(.55+p.cl*.45)+'">'+esc(x.n)+'</text>'+
         (surprise(x)?'<text x="'+(p.x+r+3)+'" y="'+(p.y-r+3)+'" font-size="12">✉️</text>':'')+'</g>'});
     h+='</g></svg>';
     if(!n)h+='<div class="empty"><h3>Dein Universum wartet</h3><p>Noch ist es nur Sternenstaub. Jeder Kontakt, dem du vertraust, wird ein Stern – lade den ersten ein.</p><button class="btn p" id="first">✨ Ersten Stern einladen</button></div>';
     $('sky').innerHTML=h;
     var f=$('first');if(f)f.onclick=function(){$('inv').scrollIntoView({behavior:'smooth',block:'center'})};
+    applyView();edgesBuild(c,P);listBuild(c);
     info();fuUI();
   }
   function info(){
@@ -257,9 +276,10 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
       (x.req?'':'<div class="sendrow"><input id="sendT" type="text" maxlength="60" placeholder="Kurze Nachricht …" aria-label="Nachricht an '+esc(x.n)+'" autocomplete="off"><button class="btn p" id="sendB" type="button">✉️ Senden</button></div><div id="sendS" role="status"></div>')+
       '<div style="margin-top:.7rem"><button class="btn" disabled>Chat öffnen (nur Test)</button></div></div>';
   }
-  $('sky').addEventListener('click',function(ev){if(ev.target.closest&&ev.target.closest('[data-comet]')){cmCard();return}var g=ev.target.closest&&ev.target.closest('[data-i]');if(!g)return;sel=+g.getAttribute('data-i');draw()});
+  $('sky').addEventListener('click',function(ev){if(dragMoved){dragMoved=false;return}if(ev.target.closest&&ev.target.closest('[data-comet]')){cmCard();return}var g=ev.target.closest&&ev.target.closest('[data-i]');if(!g){if(sel>=0&&!ev.target.closest('.empty')){sel=-1;draw()}return}selectStar(+g.getAttribute('data-i'))});
+  $('cmsvg').addEventListener('click',function(ev){if(ev.target.closest('[data-comet]'))cmCard()});
   function chips(){$('scen').innerHTML=Object.keys(SC).map(function(k){return '<button type="button" data-k="'+k+'" class="'+(k===cur?'on':'')+'">'+esc(SC[k].name)+'</button>'}).join('')}
-  $('scen').addEventListener('click',function(ev){var b=ev.target.closest('[data-k]');if(!b)return;cur=b.getAttribute('data-k');sel=-1;fu={step:0,f:-1,n:8,inv:{},msg:''};chips();draw();inv()});
+  $('scen').addEventListener('click',function(ev){var b=ev.target.closest('[data-k]');if(!b)return;cur=b.getAttribute('data-k');sel=-1;fu={step:0,f:-1,n:8,inv:{},msg:''};V=homeV();fly=null;inert=0;chips();draw();inv()});
   function inv(){var n=SC[cur].c.length;$('inv').textContent='✨ @'+me+' sucht Sternenstaub für ein gemeinsames Sternbild'+(n?' – schon '+n+(n===1?' Stern':' Sterne')+' leuchten.':'.')+' Komm in mein Universum.'}
   // Umschlag
   var WAIT=[['evening','🌙 Heute Abend'],['morning','☀️ Morgen früh'],['meet','📍 Beim Treffen'],['year','🎁 In einem Jahr']],wsel=null,left=0,opened=false;
@@ -279,6 +299,91 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
     function replay(){var c=sp.cloneNode(true);sp.parentNode.replaceChild(c,sp);sp=c;c.onclick=replay}
     sp.onclick=replay})();
   $('lpt').textContent='@'+me+' im WeSee.Q-Universum';
+  // ── Raum: frei bewegen ──
+  function vw(){return W/V.z}function vh(){return H/V.z}
+  function clampV(){V.z=Math.max(.5,Math.min(2.2,V.z));V.x=Math.max(0,Math.min(WW-vw(),V.x));V.y=Math.max(0,Math.min(WH-vh(),V.y))}
+  function homeV(){return {x:cx-W*.382,y:cy-H*.382,z:1}}
+  function applyView(){
+    var svg=document.querySelector('#sky svg');if(!svg)return;clampV();
+    svg.setAttribute('viewBox',V.x.toFixed(1)+' '+V.y.toFixed(1)+' '+vw().toFixed(1)+' '+vh().toFixed(1));
+    var ps=svg.querySelectorAll('g.par');for(var i=0;i<ps.length;i++){var f=+ps[i].getAttribute('data-f');ps[i].setAttribute('transform','translate('+(V.x*(1-f)).toFixed(1)+','+(V.y*(1-f)).toFixed(1)+')')}
+    edgesUpdate()}
+  function ease(u){return -(Math.cos(Math.PI*u)-1)/2}
+  function flyToView(t,ms){
+    var tz=Math.max(.5,Math.min(2.2,t.z)),tx=Math.max(0,Math.min(WW-W/tz,t.x)),ty=Math.max(0,Math.min(WH-H/tz,t.y));
+    inert=0;
+    if(rmo()||!ms){V={x:tx,y:ty,z:tz};fly=null;applyView();return}
+    fly={f:{x:V.x,y:V.y,z:V.z},t:{x:tx,y:ty,z:tz},t0:performance.now(),ms:ms};loop()}
+  function flyToStar(i){var p=LP[i];if(!p)return;flyToView({x:p.x-.5*W/V.z,y:p.y-.46*H/V.z,z:V.z},1300)}
+  function selectStar(i){sel=i;draw();flyToStar(i)}
+  var vel={x:0,y:0},looping=false,lt=0;
+  function loop(){if(looping)return;looping=true;lt=performance.now();requestAnimationFrame(tick)}
+  function tick(now){
+    var dt=Math.min(40,now-lt);lt=now;var go=false;
+    if(fly){var u=Math.min(1,(now-fly.t0)/fly.ms),e=ease(u);
+      V.x=fly.f.x+(fly.t.x-fly.f.x)*e;V.y=fly.f.y+(fly.t.y-fly.f.y)*e;V.z=fly.f.z+(fly.t.z-fly.f.z)*e;
+      if(u>=1)fly=null;else go=true;applyView()}
+    else if(inert){V.x+=vel.x*dt;V.y+=vel.y*dt;var k=Math.pow(.94,dt/16.7);vel.x*=k;vel.y*=k;applyView();
+      if(Math.abs(vel.x)+Math.abs(vel.y)<.004){inert=0}else go=true}
+    if(go)requestAnimationFrame(tick);else looping=false}
+  function baseV(){return fly?fly.t:V}
+  function zoomAt(nz,fx,fy){var wx=V.x+fx*vw(),wy=V.y+fy*vh();V.z=Math.max(.5,Math.min(2.2,nz));V.x=wx-fx*vw();V.y=wy-fy*vh();applyView()}
+  var sk=$('sky'),ptrs={},npt=0,drag=null,pinch=null;
+  function rectOf(){return sk.getBoundingClientRect()}
+  sk.addEventListener('pointerdown',function(e){
+    if(e.target.closest&&e.target.closest('button,input,.empty'))return;
+    fly=null;inert=0;if(!ptrs[e.pointerId])npt++;ptrs[e.pointerId]={x:e.clientX,y:e.clientY};
+    if(npt===1)drag={id:e.pointerId,sx:e.clientX,sy:e.clientY,lx:e.clientX,ly:e.clientY,moved:false,h:[]};
+    else if(npt===2){var k=Object.keys(ptrs),a=ptrs[k[0]],b=ptrs[k[1]];pinch={d:Math.hypot(a.x-b.x,a.y-b.y)||1,z:V.z};drag=null;dragMoved=true}});
+  sk.addEventListener('pointermove',function(e){
+    if(!ptrs[e.pointerId])return;ptrs[e.pointerId]={x:e.clientX,y:e.clientY};
+    var r=rectOf();
+    if(npt>=2&&pinch){var k=Object.keys(ptrs),a=ptrs[k[0]],b=ptrs[k[1]],d=Math.hypot(a.x-b.x,a.y-b.y)||1;
+      zoomAt(pinch.z*d/pinch.d,((a.x+b.x)/2-r.left)/r.width,((a.y+b.y)/2-r.top)/r.height);return}
+    if(drag&&e.pointerId===drag.id){
+      if(!drag.moved&&Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>6){drag.moved=true;dragMoved=true;try{sk.setPointerCapture(e.pointerId)}catch(_){}}
+      if(drag.moved){var dx=e.clientX-drag.lx,dy=e.clientY-drag.ly;V.x-=dx*vw()/r.width;V.y-=dy*vh()/r.height;applyView();
+        var n=performance.now();drag.h.push([n,dx*vw()/r.width,dy*vh()/r.height]);while(drag.h.length&&n-drag.h[0][0]>90)drag.h.shift()}
+      drag.lx=e.clientX;drag.ly=e.clientY}});
+  function pend(e){
+    if(!ptrs[e.pointerId])return;delete ptrs[e.pointerId];npt=Math.max(0,npt-1);
+    if(drag&&e.pointerId===drag.id){
+      if(drag.moved&&!rmo()&&drag.h.length>1){var t0=drag.h[0][0],t1=drag.h[drag.h.length-1][0],sx=0,sy=0;drag.h.forEach(function(q){sx+=q[1];sy+=q[2]});var T=Math.max(16,t1-t0);
+        vel={x:-sx/T,y:-sy/T};if(Math.abs(vel.x)+Math.abs(vel.y)>.02){inert=1;loop()}}
+      drag=null;setTimeout(function(){dragMoved=false},60)}
+    if(npt<2)pinch=null;if(npt===0&&!drag)setTimeout(function(){dragMoved=false},60)}
+  sk.addEventListener('pointerup',pend);sk.addEventListener('pointercancel',pend);
+  sk.addEventListener('wheel',function(e){if(!(e.ctrlKey||e.metaKey))return;e.preventDefault();var r=rectOf();zoomAt(V.z*Math.exp(-e.deltaY*.0025),(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height)},{passive:false});
+  function zstep(f){var b=baseV(),cxw=b.x+W/b.z*.5,cyw=b.y+H/b.z*.5,nz=Math.max(.5,Math.min(2.2,b.z*f));flyToView({x:cxw-W/nz*.5,y:cyw-H/nz*.5,z:nz},500)}
+  $('zin').onclick=function(){zstep(1.3)};
+  $('zout').onclick=function(){zstep(1/1.3)};
+  $('zhome').onclick=function(){flyToView(homeV(),1400)};
+  $('skyw').addEventListener('keydown',function(e){
+    if(e.target.closest&&e.target.closest('input,button:not(#zin):not(#zout):not(#zhome)'))return;
+    var st=60/V.z,m={ArrowLeft:[-st,0],ArrowRight:[st,0],ArrowUp:[0,-st],ArrowDown:[0,st]}[e.key];
+    if(m){e.preventDefault();var bb=baseV();flyToView({x:bb.x+m[0],y:bb.y+m[1],z:bb.z},rmo()?0:350);return}
+    if(e.key==='+'||e.key==='='){e.preventDefault();$('zin').click()}
+    else if(e.key==='-'){e.preventDefault();$('zout').click()}
+    else if(e.key==='Home'){e.preventDefault();$('zhome').click()}});
+  // Rand-Pfeile: nur für Anfragen und Überraschungen außerhalb des Bildes
+  var EDG=[];
+  function edgesBuild(c,P){
+    var h='';EDG=[];
+    c.forEach(function(x,i){if(!(x.req||surprise(x)))return;var col=x.req?'#ff8a5b':'#ffd45a';
+      h+='<button type="button" class="edge" data-e="'+i+'" style="--c:'+col+'" aria-label="Zu '+esc(x.n)+(x.req?' (Anfrage)':' (Überraschung)')+'"><i>'+(x.req?'➤':'✉️')+'</i></button>';EDG.push(i)});
+    $('edges').innerHTML=h;edgesUpdate()}
+  function edgesUpdate(){
+    var els=$('edges').children;
+    for(var k=0;k<els.length;k++){var el=els[k],i=+el.getAttribute('data-e'),p=LP[i];if(!p){el.classList.remove('on');continue}
+      var sx=(p.x-V.x)/vw(),sy=(p.y-V.y)/vh();
+      if(sx>.05&&sx<.95&&sy>.05&&sy<.95){el.classList.remove('on');continue}
+      var dx=sx-.5,dy=sy-.5,m=.5-.075,kx=Math.abs(dx)>1e-6?m/Math.abs(dx):1e9,ky=Math.abs(dy)>1e-6?m/Math.abs(dy):1e9,f=Math.min(kx,ky);
+      el.style.left=((.5+dx*f)*100).toFixed(1)+'%';el.style.top=((.5+dy*f)*100).toFixed(1)+'%';el.classList.add('on');
+      var ic=el.firstChild;if(SC[cur].c[i].req)ic.style.transform='rotate('+(Math.atan2(dy*1.12,dx)*180/Math.PI).toFixed(0)+'deg)'}}
+  $('edges').addEventListener('click',function(e){var b=e.target.closest('[data-e]');if(b)selectStar(+b.getAttribute('data-e'))});
+  function listBuild(c){
+    $('lstBody').innerHTML=c.length?c.map(function(x,i){return '<button type="button" data-l="'+i+'"><span>'+esc(x.n)+'</span><span class="fine">'+(x.req?'Anfrage':x.v?'✔ verifiziert':'')+(surprise(x)?' ✉️':'')+'</span></button>'}).join(''):'<p class="fine">Noch keine Sterne.</p>'}
+  $('lstBody').addEventListener('click',function(e){var b=e.target.closest('[data-l]');if(!b)return;selectStar(+b.getAttribute('data-l'));$('sky').scrollIntoView({behavior:rmo()?'auto':'smooth',block:'nearest'})});
   // Sende-Effekt
   function rmo(){return window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches}
   $('info').addEventListener('click',function(ev){if(ev.target.id!=='sendB')return;sendFx()});
@@ -325,9 +430,9 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
   var CL=[3,6,9,4,12];
   function fRnd(seed){var x=seed;return function(){x=(x*9301+49297)%233280;return x/233280}}
   function cluster(P,i,n,seed){ // n<5: nur Sternenstaub-Wolke, keine einzelnen Punkte
-    var q=P[i],a=Math.atan2(q.y-cy,q.x-cx),d=n<5?62:70,ox=Math.max(40,Math.min(W-40,q.x+Math.cos(a)*d)),oy=Math.max(40,Math.min(H-44,q.y+Math.sin(a)*d)),o='';
+    var q=P[i],a=Math.atan2(q.y-cy,q.x-cx),d=n<5?62:70,ox=Math.max(40,Math.min(WW-40,q.x+Math.cos(a)*d)),oy=Math.max(40,Math.min(WH-44,q.y+Math.sin(a)*d)),o='';
     if(n<5){var gid='cg'+seed;return '<defs><radialGradient id="'+gid+'"><stop offset="0" stop-color="#b9a6ff" stop-opacity=".45"/><stop offset="1" stop-color="#b9a6ff" stop-opacity="0"/></radialGradient></defs><circle data-cloud="1" class="tw" cx="'+ox+'" cy="'+oy+'" r="32" fill="url(#'+gid+')"/><text x="'+ox+'" y="'+(oy+4)+'" text-anchor="middle" fill="#cdbfff" font-size="8.5" opacity=".8">Sternenstaub</text>'}
-    var r=fRnd(seed);for(var k=0;k<n;k++){var aa=r()*Math.PI*2,rr=8+r()*34,x=Math.max(14,Math.min(W-14,ox+Math.cos(aa)*rr)),y=Math.max(14,Math.min(H-14,oy+Math.sin(aa)*rr));
+    var r=fRnd(seed);for(var k=0;k<n;k++){var aa=r()*Math.PI*2,rr=8+r()*34,x=Math.max(14,Math.min(WW-14,ox+Math.cos(aa)*rr)),y=Math.max(14,Math.min(WH-14,oy+Math.sin(aa)*rr));
       o+='<line x1="'+q.x+'" y1="'+q.y+'" x2="'+x.toFixed(1)+'" y2="'+y.toFixed(1)+'" stroke="#b9a6ff" stroke-opacity=".12"/>'+'<circle data-anon="1" cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="'+(2+r()*1.8).toFixed(1)+'" fill="#b9a6ff" opacity="'+(.4+r()*.35).toFixed(2)+'"/>'}
     return o}
   function joined(){return Object.keys(fu.inv).filter(function(k){return fu.inv[k]==='y'}).map(Number)}
@@ -374,7 +479,8 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
   function cmCard(){var d=Math.max(0,Math.round((new Date(CM.b)-new Date('2026-11-26'))/864e5));
     $('cmInfo').innerHTML='<div class="card"><h4>☄️ @'+esc(CM.h)+'</h4><div style="margin:.2rem 0"><span class="tag c">Partner · Komet</span></div><p class="fine" style="color:var(--text)">'+esc(CM.t)+'</p><div class="why"><span>Zeitraum</span><b>26.11. – 26.12.2026</b><span>Verbleibend (Beispiel)</span><b>'+d+' Tage</b></div><p class="fine" style="margin-top:.5rem">Du siehst den Komet, er sieht dich nicht: kein Tracking, nur ein anonymer Tipp-Zähler.</p><div style="margin-top:.7rem"><button class="btn p" disabled>Profil ansehen (nur Test)</button></div></div>'}
   $('cmShow').onclick=cmCard;
-  function cmTog(){var t=$('cmTog');t.textContent='☄️ '+(comet?'an':'aus');t.setAttribute('aria-pressed',comet);draw()}
+  function cmDraw(){$('cmsvg').innerHTML=comet?'<g data-comet="1" style="cursor:pointer"><g class="cm"><g transform="rotate(138)"><defs><linearGradient id="ct" x1="0" x2="1"><stop offset="0" stop-color="#ffb08f" stop-opacity=".9"/><stop offset="1" stop-color="#ffb08f" stop-opacity="0"/></linearGradient></defs><path d="M0 -3 L120 -1 L120 1 L0 3Z" fill="url(#ct)" transform="rotate(180)"/><path d="M0 -6 L70 -1 L70 1 L0 6Z" fill="url(#ct)" opacity=".5" transform="rotate(180) rotate(6)"/></g><circle r="22" fill="transparent"/><circle r="6" fill="#fff3e6"/><circle r="10" fill="#ff8a5b" opacity=".35"/><text y="-14" text-anchor="middle" fill="#ffd9c4" font-size="9.5" font-weight="700">@DragonsChain · Partner</text></g></g>':''}
+  function cmTog(){var t=$('cmTog');t.textContent='☄️ '+(comet?'an':'aus');t.setAttribute('aria-pressed',comet);cmDraw()}
   $('cmTog').onclick=function(){comet=!comet;if(!comet)$('cmInfo').innerHTML='';cmTog()};
   var BK=[['2026-11-26','2026-12-26','@DragonsChain']];
   function fd(x){var a=x.split('-');return a[2]+'.'+a[1]+'.'+a[0]}
@@ -392,7 +498,7 @@ h2{font-size:1.25rem;margin:1.8rem 0 .6rem}
     if(t.length<10)return msg('Beschreibe kurz (mind. 10 Zeichen), worum es geht.','err');
     if(!$('cK').checked)return msg('Bitte die Kennzeichnung als Partner bestätigen.','err');
     msg('✅ Bewerbung eingegangen. Das Universum prüft sie. (Test: nichts wurde gesendet)','ok')};
-  chips();wait();env();inv();slots();cmTog();
+  chips();wait();env();inv();slots();draw();cmTog();
 })();
 </script>
 </body>
