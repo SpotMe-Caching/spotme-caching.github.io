@@ -195,7 +195,7 @@ details.lst summary{cursor:pointer;font-weight:600}
 <div class="card">
   <b>Splash</b> <span class="fine">· beim Start (tippen zum Wiederholen)</span>
   <div class="splash" id="splash"><img src="wesee/mark.png" alt=""><div class="t1">we see you …</div><div class="t2">Dein Universum</div></div>
-  <div style="margin-top:.6rem"><button class="btn p" type="button" id="introGo">🚀 Ganzen Start abspielen</button> <span class="fine">Splash → Landung im eigenen Sternbild</span></div>
+  <div style="margin-top:.6rem"><button class="btn p" type="button" id="introGo">🚀 Ganzen Start abspielen</button> <button class="btn" type="button" id="tourU">🧭 Rundgang</button> <span class="fine">Splash → Landung im eigenen Sternbild</span></div>
 </div>
 
 <h2>Wie „nah“ ein Stern ist</h2>
@@ -205,6 +205,7 @@ details.lst summary{cursor:pointer;font-weight:600}
 <p class="fine" style="margin-top:1rem">Zurück zum <a href="./">Messenger</a></p>
 </div>
 
+<script src="wizard.js"></script>
 <script>
 (function(){
   function $(i){return document.getElementById(i)}
@@ -505,6 +506,24 @@ details.lst summary{cursor:pointer;font-weight:600}
     if(!$('cK').checked)return msg('Bitte die Kennzeichnung als Partner bestätigen.','err');
     msg('✅ Bewerbung eingegangen. Das Universum prüft sie. (Test: nichts wurde gesendet)','ok')};
   chips();wait();env();inv();slots();draw();cmTog();
+  // ---- Hilfe-Wizard (Prototyp) ----
+  var panned=false;
+  (function(){var w=$('skyw'),dn=null;w.addEventListener('pointerdown',function(e){dn={x:e.clientX,y:e.clientY}});
+    w.addEventListener('pointermove',function(e){if(dn&&Math.hypot(e.clientX-dn.x,e.clientY-dn.y)>14)panned=true});
+    window.addEventListener('pointerup',function(){dn=null})})();
+  function tourU(){
+    Wiz.rm=rmo;
+    Wiz.run('u',[
+      {title:'Das bist du',text:'Dein Stern ist der Mittelpunkt. Alles andere ordnet sich um dich.',note:'Beispiel-Sterne – es wird nichts gespeichert.',sel:'.mering',pad:10,
+        pre:function(){cur='start';sel=-1;fu={step:0,f:-1,n:8,inv:{},msg:''};V=homeV();fly=null;inert=0;panned=false;chips();draw();inv()}},
+      {title:'Ein Kontakt',text:'Je näher ein Stern, desto lebendiger eure Verbindung. Tippe Gesa an.',sel:'[data-i="0"]',pad:6,wait:function(){return !!document.querySelector('#info .card')}},
+      {title:'Warum so nah?',text:'Die Nähe rechnet nur dein Gerät. ✔ heißt: ihr habt die Sicherheitsnummern verglichen – dann liest garantiert niemand mit.',sel:'#info .card'},
+      {title:'Frei bewegen',text:'Zieh den Himmel, zwei Finger zoomen. ⌖ „Zu mir“ bringt dich zurück.',sel:'#skyw',pad:2,pre:function(){panned=false},wait:function(){return panned},hint:'Zieh einmal über den Himmel.'},
+      {title:'Jemanden einladen',text:'Hier lädst du ein. Jeder entscheidet selbst – ohne Antwort passiert nichts.',sel:'#inv',pad:10}
+    ],{onEnd:function(){var w=$('skyw');if(w&&w.scrollIntoView)w.scrollIntoView({block:'nearest'})}})}
+  $('tourU').onclick=tourU;
+  if(/[?&]wiz=1/.test(location.search))setTimeout(tourU,500);
+  else if(!/[?&](star|from)=/.test(location.search))Wiz.offer('u',{before:$('scen').previousElementSibling,text:'Neu hier? Ein kurzer Rundgang zeigt dir dein Universum – in 5 Schritten, jederzeit überspringbar.',onStart:tourU});
   (function(){var m=location.search.match(/[?&]star=([^&]+)/);if(/[?&]from=/.test(location.search))document.body.classList.add('arrive');if(!m)return;var nm=decodeURIComponent(m[1]);
     cur='voll';chips();draw();var i=SC[cur].c.findIndex(function(x){return x.n===nm});
     if(i<0)i=0;V=homeV();selectStar(i);var w=$('skyw');if(w&&w.scrollIntoView)w.scrollIntoView({block:'center'})})();

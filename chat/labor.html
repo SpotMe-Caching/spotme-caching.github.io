@@ -62,6 +62,7 @@ textarea{width:100%;min-height:56px;resize:vertical;font:inherit;font-size:.92re
     {id:'universum',n:'🌌 Universum, Komet, Fusion',s:'t',d:'Startseite mit frei bewegbarem Raum, Sternen, Umschlag „Zeit als Zutat“, Komet-Werbepartner, Bewerbung, Fusion, Sende-Effekt und nahtloser Start.',u:'universum.html',f:'Universum als Startseite'},
     {id:'fokus',n:'🎬 Fokus-Chat',s:'t',d:'Neueste Nachricht im Fokus, ältere laufen nach hinten. Mit Kopfzeile (✦ Sternbild, ⋮ Menü) und Kontaktkarte.',u:'fokus.html',f:'Fokus-Ansicht im Chat'},
     {id:'intro',n:'🎬 Blockbuster-Intro',s:'t',d:'Sternenflug, Titel und Text, der nach hinten wegläuft. Easter Egg (5× aufs Logo) und gleiche Kapitel als Hilfe.',u:'intro.html'},
+    {id:'wizard',n:'🧭 Hilfe-Wizard',s:'t',d:'Rundgang für Newcomer: 5 Schritte im Universum (mit Beispiel-Sternen), 5 im Chat plus Mikro-Tipps beim ersten Mal. Immer überspringbar.',u:'universum.html?wiz=1',x:[['Chat-Rundgang','fokus.html?wiz=1'],['Newcomer-Modus (Angebot + Tipps)','universum.html']],reset:1},
     {id:'logo',n:'🎨 Logo WeSee.Q',s:'t',d:'Icons, Link-Vorschau und Splash mit dem neuen Zeichen.',u:'universum.html#logo'},
     {id:'eier',n:'🥚 Eiersuche',s:'l',d:'Live in der App: Eier, Lotsen-Ränge und Einstellungen.',u:'eier.html'}
   ];
@@ -71,12 +72,13 @@ textarea{width:100%;min-height:56px;resize:vertical;font:inherit;font-size:.92re
     $('list').innerHTML=ITEMS.map(function(x){var st=ST[x.s];
       return '<div class="card" data-id="'+x.id+'"><div class="top"><h3>'+esc(x.n)+'</h3><span class="tag '+st[1]+'">'+st[0]+'</span></div>'+
       '<p class="fine" style="margin-top:.2rem">'+esc(x.d)+'</p>'+
-      '<div class="row"><a class="btn p" href="'+x.u+'">Öffnen</a><button class="btn wideonly" type="button" data-fr="'+x.u+'" data-t="'+esc(x.n)+'">📱 Im Handy-Rahmen</button></div>'+
+      '<div class="row"><a class="btn p" href="'+x.u+'">Öffnen</a>'+(x.x||[]).map(function(y){return '<a class="btn" href="'+y[1]+'">'+esc(y[0])+'</a>'}).join('')+(x.reset?'<button class="btn" type="button" data-reset="1">↺ Fortschritt zurücksetzen</button>':'')+'<button class="btn wideonly" type="button" data-fr="'+x.u+'" data-t="'+esc(x.n)+'">📱 Im Handy-Rahmen</button></div>'+
       (x.f?'<label class="sw"><input type="checkbox" data-flag="'+x.id+'"'+(flags[x.id]?' checked':'')+'><span>In meiner App an: '+esc(x.f)+'</span></label>':'')+
       '<textarea data-note="'+x.id+'" placeholder="Notiz: was gefällt, was stört …" aria-label="Notiz zu '+esc(x.n)+'">'+esc(notes[x.id]||'')+'</textarea></div>'}).join('')}
   $('list').addEventListener('input',function(e){var id=e.target.getAttribute('data-note');if(!id)return;notes[id]=e.target.value;lset(KN,notes)});
   $('list').addEventListener('change',function(e){var id=e.target.getAttribute('data-flag');if(!id)return;flags[id]=e.target.checked;lset(KF,flags)});
   $('list').addEventListener('click',function(e){var b=e.target.closest('[data-fr]');if(!b)return;$('fr').src=b.getAttribute('data-fr');$('stT').textContent=b.getAttribute('data-t');$('stage').classList.add('on');$('stage').scrollIntoView({behavior:'smooth'})});
+  $('list').addEventListener('click',function(e){if(!e.target.closest('[data-reset]'))return;try{localStorage.removeItem('sm_chat_wiz')}catch(x){}msg('Wizard-Fortschritt zurückgesetzt – beim nächsten Öffnen erscheint wieder das Angebot.')});
   $('stX').onclick=function(){$('stage').classList.remove('on');$('fr').src='about:blank'};
   function msg(t){$('msg').textContent=t}
   $('copy').onclick=function(){

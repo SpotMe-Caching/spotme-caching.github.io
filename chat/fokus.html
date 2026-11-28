@@ -122,6 +122,7 @@ input[type=range]{width:100%;accent-color:var(--cy)}
     <button type="button" role="menuitem" data-act="map"><i>🗺</i>Sternkarte</button>
     <button type="button" role="menuitem" data-act="egg"><i>🥚</i>Eiersuche</button>
     <h6>Hilfe</h6>
+    <button type="button" role="menuitem" data-act="tour"><i>🧭</i>Rundgang</button>
     <button type="button" role="menuitem" data-act="help"><i>📖</i>Kapitel lesen</button>
     <button type="button" role="menuitem" data-act="intro"><i>🎞</i>Intro ansehen</button>
   </div>
@@ -150,6 +151,7 @@ input[type=range]{width:100%;accent-color:var(--cy)}
 <p class="fine" style="margin-top:1rem">Zurück zum <a href="./" style="color:var(--cy)">Messenger</a></p>
 </div>
 
+<script src="wizard.js"></script>
 <script>
 (function(){
   function $(i){return document.getElementById(i)}
@@ -268,8 +270,25 @@ input[type=range]{width:100%;accent-color:var(--cy)}
       toast(lock?'Normale Ansicht (wie gewohnt)':'Fokus-Ansicht an')}
     else if(a==='star'||a==='map')toStar();
     else if(a==='egg')go('eier.html');
+    else if(a==='tour'){closeAll();setTimeout(tourF,60)}
     else if(a==='help')go('intro.html?help=1&from=chat');
     else if(a==='intro')go('intro.html?play=1&from=chat')});
+  // ---- Hilfe-Wizard (Prototyp): Basis bleibt WhatsApp-Stil, Hinweise nur beim ersten Mal ----
+  Wiz.rm=rm;
+  function tourF(){
+    Wiz.run('f',[
+      {title:'Dein Gespräch',text:'So schreibst du wie überall: Text, ➤, fertig. Die neueste Nachricht steht groß im Fokus.',note:'Beispiel-Gespräch – nichts wird gesendet.',sel:'.comp',pad:6},
+      {title:'Zurück zum Sternbild',text:'✦ bringt dich jederzeit in dein Universum.',sel:'#hStar',pad:8},
+      {title:'Das Menü',text:'Öffne das Menü ⋮. Dort liegen Verifizierung, Schlüssel und Hilfe.',sel:'#hMenu',pad:8,wait:function(){return menu.classList.contains('on')},hint:'Tippe auf ⋮.'},
+      {title:'Wie gewohnt, wenn du willst',text:'Die Fokus-Ansicht lässt sich ausschalten – dann ist alles eine normale Liste.',sel:'#menu [data-act="foc"]',pad:4,pre:function(){if(!menu.classList.contains('on'))openMenu()}},
+      {title:'Fertig',text:'Du findest den Rundgang jederzeit unter ⋮ → Rundgang.',sel:null,pre:function(){closeAll()}}
+    ])}
+  if(/[?&]wiz=1/.test(location.search))setTimeout(tourF,500);
+  else{
+    setTimeout(function(){Wiz.tip('f-star','#hStar','✦ bringt dich zurück ins Sternbild.')},1200);
+    $('hMenu').addEventListener('click',function(){setTimeout(function(){if(menu.classList.contains('on'))Wiz.tip('f-foc','#menu [data-act="foc"]','Die Fokus-Ansicht kannst du jederzeit ausschalten – dann ist alles wie gewohnt.')},250)});
+    $('send').addEventListener('click',function(){setTimeout(function(){Wiz.tip('f-id','#hId','Tippe auf den Namen: Kontaktkarte mit Nähe und Verifizierung.')},900)});
+  }
 })();
 </script>
 </body>
